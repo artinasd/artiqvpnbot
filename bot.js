@@ -4,10 +4,10 @@ const http = require('http');
 // --- CONFIGURATION ---
 // These variables should ideally be set as Environment Variables on your host.
 // If testing locally, you can temporarily replace the process.env values with strings.
-const BOT_TOKEN = '8683186346:AAHqc5jA4xaiC8qHmdbPHWadCSVi1OzPBqY';
-const ADMIN_ID = '415981138'; // Your numeric Telegram ID (e.g., 123456789)
+const BOT_TOKEN = process.env.BOT_TOKEN;
+const ADMIN_ID = process.env.ADMIN_ID; // Your numeric Telegram ID (e.g., 123456789)
 const BANK_DETAILS = process.env.BANK_DETAILS || "Bank: ExampleBank\nAccount Number: 1234-5678-9012\nCard Holder: John Doe";
-const SUPPORT_USERNAME = process.env.SUPPORT_USERNAME || "fdsawrcfvg"; // Without the '@'
+const SUPPORT_USERNAME = process.env.SUPPORT_USERNAME || "AdminUsername"; // Without the '@'
 
 if (!BOT_TOKEN || !ADMIN_ID) {
     console.error("CRITICAL ERROR: BOT_TOKEN and ADMIN_ID environment variables must be set!");

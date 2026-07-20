@@ -6,8 +6,8 @@ const http = require('http');
 // If testing locally, you can temporarily replace the process.env values with strings.
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const ADMIN_ID = process.env.ADMIN_ID; // Your numeric Telegram ID (e.g., 123456789)
-const BANK_DETAILS = process.env.BANK_DETAILS || "Bank: ExampleBank\nAccount Number: 1234-5678-9012\nCard Holder: John Doe";
-const SUPPORT_USERNAME = process.env.SUPPORT_USERNAME || "AdminUsername"; // Without the '@'
+const BANK_DETAILS = process.env.BANK_DETAILS || "Bank: بانک سامان\nAccount Number: `6219861947080387`\nCard Holder: آرتین اسعدی";
+const SUPPORT_USERNAME = process.env.SUPPORT_USERNAME || "Your_Personal_ID"; // Without the '@'
 
 if (!BOT_TOKEN || !ADMIN_ID) {
     console.error("CRITICAL ERROR: BOT_TOKEN and ADMIN_ID environment variables must be set!");
@@ -39,7 +39,8 @@ const mainMenu = Markup.keyboard([
 // Start Command
 bot.start((ctx) => {
     delete userStates[ctx.from.id];
-    ctx.reply(`👋 Welcome to our premium VPN service! Protect your privacy with blazing-fast speeds.\n\nPlease choose an option below:`, mainMenu);
+    ctx.reply(`👋 به ربات آرتیک خوش آمدید! با یک اتصال امن، پایدار و پرسرعت از حریم خصوصی خود در اینترنت آزاد محافظت کنید.\\n\\nلطفاً برای شروع، یکی از گزینه‌های زیر را انتخاب کنید:`
+        , mainMenu);
 });
 
 // Main Menu Text Handlers

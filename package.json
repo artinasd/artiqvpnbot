@@ -2,11 +2,23 @@
   "name": "telegram-vpn-bot",
   "version": "1.0.0",
   "description": "Telegram Bot for selling VPN configurations",
-  "main": "bot.js",
+  "main": "bot.local.js",
   "scripts": {
-    "start": "node bot.js"
+    "start": "node bot.local.js"
   },
   "dependencies": {
     "telegraf": "^4.16.3"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/artinasd/artiqvpnbot.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/artinasd/artiqvpnbot/issues"
+  },
+  "homepage": "https://github.com/artinasd/artiqvpnbot#readme"
 }

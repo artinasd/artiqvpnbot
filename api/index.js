@@ -1,10 +1,10 @@
 const { Telegraf, Markup } = require('telegraf');
 
 // --- CONFIGURATION ---
-const BOT_TOKEN = process.env.BOT_TOKEN;
-const ADMIN_ID = process.env.ADMIN_ID;
-const BANK_DETAILS = process.env.BANK_DETAILS || "شماره کارت: `6219861947080387`\nبنام: آرتین اسعدی";
-const SUPPORT_USERNAME = process.env.SUPPORT_USERNAME || "Your_Personal_ID";
+const BOT_TOKEN = "8683186346:AAEf1pOEVVHYog9UrAjN9MDw8Ki-PmoCVts";
+const ADMIN_ID = "1707502454";
+const BANK_DETAILS = "شماره کارت: `6219861947080387`\nبنام: آرتین اسعدی";
+const SUPPORT_USERNAME = "Your_Personal_ID";
 
 if (!BOT_TOKEN || !ADMIN_ID) {
     throw new Error("CRITICAL ERROR: BOT_TOKEN and ADMIN_ID environment variables must be set!");

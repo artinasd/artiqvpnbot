@@ -3,7 +3,7 @@ const { Telegraf, Markup } = require('telegraf');
 // --- CONFIGURATION ---
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const ADMIN_ID = process.env.ADMIN_ID;
-const BANK_DETAILS = process.env.BANK_DETAILS || "شماره کارت: `6219861947080387`\nبه نام: آرتین اسعدی";
+const BANK_DETAILS = process.env.BANK_DETAILS || "شماره کارت: `6219861947080387`\nبنام: آرتین اسعدی";
 const SUPPORT_USERNAME = process.env.SUPPORT_USERNAME || "Your_Personal_ID";
 
 if (!BOT_TOKEN || !ADMIN_ID) {
@@ -13,8 +13,6 @@ if (!BOT_TOKEN || !ADMIN_ID) {
 const bot = new Telegraf(BOT_TOKEN);
 
 // ⚠️ SERVERLESS NOTE: Vercel functions are stateless and sleep between requests.
-// In-memory objects (like these) might reset if there is a long gap between user messages.
-// For a flawless production environment on Vercel, consider replacing these with a free Redis database (like Upstash).
 const userStates = {};
 const adminStates = {};
 
@@ -56,7 +54,7 @@ bot.hears('🎁 دریافت اکانت تست', async (ctx) => {
 });
 
 bot.hears('🛒 خرید اشتراک', async (ctx) => {
-    const buttons = plans.map(plan => [Markup.button.callback(`${plan.name} -${plan.price}`, `select_${plan.id}`)]);
+    const buttons = plans.map(plan => [Markup.button.callback(`${plan.name} - ${plan.price}`, `select_${plan.id}`)]);
     buttons.push([Markup.button.callback('🛠 ساخت بسته دلخواه (حجم و زمان)', 'select_custom')]);
 
     ctx.reply('📋 لطفاً بسته مورد نظر خود را انتخاب کنید:', Markup.inlineKeyboard(buttons));
@@ -81,7 +79,7 @@ bot.on('callback_query', async (ctx) => {
         userStates[ctx.from.id] = { stage: 'AWAITING_RECEIPT', plan: selectedPlan.name };
 
         await ctx.answerCbQuery();
-        await ctx.reply(`💳 *اطلاعات پرداخت*\n\nشما *${selectedPlan.name}* را انتخاب کردید.\n\nمبلغ *${selectedPlan.price}* را به حساب زیر انتقال دهید:\n\n${BANK_DETAILS}\n\n📸 *مهم:* پس از پرداخت، لطفاً عکس رسید یا اسکرین‌شات واریزی خود را مستقیماً در همین چت ارسال کنید.`, { parse_mode: 'Markdown' });
+        await ctx.reply(`💳 *اطلاعات پرداخت*\n\nشما *${selectedPlan.name}* را انتخاب کردید.\n\nلطفاً مبلغ مورد نظر را به حساب زیر انتقال دهید:\n\n${BANK_DETAILS}\n\n📸 *مهم:* پس از پرداخت، لطفاً عکس رسید یا اسکرین‌شات واریزی خود را مستقیماً در همین چت ارسال کنید.`, { parse_mode: 'Markdown' });
     }
 
     if (data === 'select_custom') {
@@ -96,7 +94,7 @@ bot.on('callback_query', async (ctx) => {
         adminStates[adminId] = { action: 'SEND_TEST', targetUser: targetUserId };
 
         await ctx.answerCbQuery();
-        await ctx.reply(`📝 لطفاً *کانفیگ تست* کاربر \`${targetUserId}\` را تایپ یا پیست کنید. پیام بعدی شما مستقیماً برای او ارسال می‌شود.`, { parse_mode: 'Markdown' });
+        await ctx.reply(`📝 لطفاً *کانفیگ تست* (متن، عکس، لینک یا فایل) برای کاربر \`${targetUserId}\` را ارسال کنید. پیام بعدی شما دقیقاً به همان شکلی که هست برای او ارسال می‌شود.`, { parse_mode: 'Markdown' });
     }
 
     if (data.startsWith('approve_buy_')) {
@@ -104,7 +102,7 @@ bot.on('callback_query', async (ctx) => {
         adminStates[adminId] = { action: 'SEND_BUY', targetUser: targetUserId };
 
         await ctx.answerCbQuery();
-        await ctx.reply(`📝 سفارش تایید شد! لطفاً *کانفیگ اصلی* کاربر \`${targetUserId}\` را تایپ یا پیست کنید. پیام بعدی شما مستقیماً برای او ارسال می‌شود.`, { parse_mode: 'Markdown' });
+        await ctx.reply(`📝 سفارش تایید شد! لطفاً *کانفیگ اصلی* (متن، عکس QR، لینک یا فایل) برای کاربر \`${targetUserId}\` را ارسال کنید. پیام بعدی شما دقیقاً به همان شکلی که هست برای او ارسال می‌شود.`, { parse_mode: 'Markdown' });
     }
 
     if (data.startsWith('reject_buy_')) {
@@ -121,24 +119,18 @@ bot.on('message', async (ctx) => {
     const userId = ctx.from.id;
     const username = ctx.from.username ? `@${ctx.from.username}` : 'بدون آیدی';
 
-    // 1. Admin States
+    // 1. Admin States (Delivering configurations unchanged using copyMessage)
     if (Number(userId) === Number(ADMIN_ID) && adminStates[userId]) {
         const state = adminStates[userId];
-        const configMessage = ctx.message.text || (ctx.message.document ? `فایل: ${ctx.message.document.file_id}` : null);
-
-        if (!configMessage) {
-            return ctx.reply('❌ لطفاً کانفیگ را به صورت متن یا یک فایل معتبر ارسال کنید.');
-        }
 
         try {
+            // copyMessage completely mirrors the admin's message (text, photos, documents, captions, etc.)
+            await ctx.telegram.copyMessage(state.targetUser, ctx.chat.id, ctx.message.message_id);
+
             if (state.action === 'SEND_TEST') {
-                await bot.telegram.sendMessage(state.targetUser, `🎁 *اکانت تست شما آماده است!*\n\n\`\`\`\n${ctx.message.text || 'فایل ضمیمه را ذخیره کنید'}\n\`\`\`\n_این اکانت دارای محدودیت زمانی و حجمی است._`, { parse_mode: 'Markdown' });
-                if (ctx.message.document) await bot.telegram.sendDocument(state.targetUser, ctx.message.document.file_id);
-                await ctx.reply('✅ کانفیگ تست با موفقیت برای کاربر ارسال شد.');
+                await ctx.reply('✅ کانفیگ تست دقیقاً همان‌طور که ارسال کردید، به کاربر تحویل داده شد.');
             } else if (state.action === 'SEND_BUY') {
-                await bot.telegram.sendMessage(state.targetUser, `🚀 *سرویس شما فعال شد!*\n\nاز اینکه آرتیک را انتخاب کردید سپاسگزاریم. اطلاعات اتصال شما:\n\n\`\`\`\n${ctx.message.text || 'فایل ضمیمه را ذخیره کنید'}\n\`\`\`\nاز اینترنت آزاد و پایدار خود لذت ببرید!`, { parse_mode: 'Markdown' });
-                if (ctx.message.document) await bot.telegram.sendDocument(state.targetUser, ctx.message.document.file_id);
-                await ctx.reply('✅ کانفیگ اصلی با موفقیت برای کاربر ارسال شد.');
+                await ctx.reply('✅ کانفیگ اصلی دقیقاً همان‌طور که ارسال کردید، به کاربر تحویل داده شد.');
             }
         } catch (err) {
             console.error(err);
@@ -157,7 +149,7 @@ bot.on('message', async (ctx) => {
             const traffic = parseInt(ctx.message.text);
             if (isNaN(traffic) || traffic <= 0) return ctx.reply('❌ مقدار نامعتبر. لطفاً فقط یک عدد به عنوان حجم وارد کنید (مثلاً: 10):');
 
-            const calculatedPrice = traffic * 4000;
+            const calculatedPrice = traffic * 4000; // Fixed: 4000T per GB
             userStates[userId] = { stage: 'AWAITING_CUSTOM_DURATION', traffic: traffic, price: calculatedPrice };
 
             return ctx.reply(`✅ حجم ${traffic} گیگابایت با موفقیت ثبت شد.\n💳 هزینه محاسبه شده: ${calculatedPrice.toLocaleString('en-US')} تومان\n\nلطفاً مدت زمان اعتبار بسته را به صورت متنی وارد کنید (مثلاً: ۱ ماهه، ۴۵ روزه):`);
@@ -167,7 +159,7 @@ bot.on('message', async (ctx) => {
             const duration = ctx.message.text;
             if (!duration) return ctx.reply('❌ لطفاً مدت زمان را به صورت متنی ارسال کنید.');
 
-            const planName = `بسته سفارشی (${state.traffic} گیگابایت \vert{} ${duration})`;
+            const planName = `بسته سفارشی (${state.traffic} گیگابایت | ${duration})`;
             const priceFormatted = `${state.price.toLocaleString('en-US')} تومان`;
 
             userStates[userId] = { stage: 'AWAITING_RECEIPT', plan: planName };
@@ -207,10 +199,8 @@ bot.on('message', async (ctx) => {
 module.exports = async (req, res) => {
     try {
         if (req.method === 'POST') {
-            // Process the incoming update from Telegram
             await bot.handleUpdate(req.body, res);
         } else {
-            // Ping to check if the server is active
             res.status(200).send('ArtiQ Vercel Bot is active and running.');
         }
     } catch (e) {

@@ -199,12 +199,14 @@ bot.on('message', async (ctx) => {
 module.exports = async (req, res) => {
     try {
         if (req.method === 'POST') {
-            await bot.handleUpdate(req.body, res);
+            await bot.handleUpdate(req.body);
+            // Explicitly close the connection so Vercel doesn't hang
+            return res.status(200).send('OK');
         } else {
-            res.status(200).send('ArtiQ Vercel Bot is active and running.');
+            return res.status(200).send('ArtiQ Vercel Bot is active and running.');
         }
     } catch (e) {
         console.error('Webhook Error:', e);
-        res.status(500).send('Server Error');
+        return res.status(500).send('Server Error');
     }
 };

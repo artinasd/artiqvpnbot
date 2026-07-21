@@ -157,7 +157,7 @@ bot.on('message', async (ctx) => {
             const traffic = parseInt(ctx.message.text);
             if (isNaN(traffic) || traffic <= 0) return ctx.reply('❌ مقدار نامعتبر. لطفاً فقط یک عدد به عنوان حجم وارد کنید (مثلاً: 10):');
 
-            const calculatedPrice = traffic * 5000;
+            const calculatedPrice = traffic * 4000;
             userStates[userId] = { stage: 'AWAITING_CUSTOM_DURATION', traffic: traffic, price: calculatedPrice };
 
             return ctx.reply(`✅ حجم ${traffic} گیگابایت با موفقیت ثبت شد.\n💳 هزینه محاسبه شده: ${calculatedPrice.toLocaleString('en-US')} تومان\n\nلطفاً مدت زمان اعتبار بسته را به صورت متنی وارد کنید (مثلاً: ۱ ماهه، ۴۵ روزه):`);

@@ -105,7 +105,6 @@ async function getActiveUsers() {
 
 // Available VPN Plans (ArtiQ Packages)
 const plans = [
-    { id: 'plan_unlimited', name: 'اشتراک نامحدود (۱ ماهه)', price: '٣۰۰,۰۰۰ تومان' },
     { id: 'plan_10g', name: 'اشتراک ۱۰ گیگابایت (۱ ماهه)', price: '٤۰,۰۰۰ تومان' },
     { id: 'plan_20g', name: 'اشتراک ۲۰ گیگابایت (۱ ماهه)', price: '۷۰,۰۰۰ تومان' },
     { id: 'plan_50g', name: 'اشتراک ۵۰ گیگابایت (٢ ماهه)', price: '۱۵۰,۰۰۰ تومان' }
@@ -117,6 +116,18 @@ const mainMenu = Markup.keyboard([
     ['🛒 خرید اشتراک'],
     ['🎯 پشتیبانی']
 ]).resize();
+
+// --- GLOBAL ERROR HANDLER ---
+bot.catch(async (err, ctx) => {
+    console.error(`Error for ${ctx.updateType}`, err);
+
+    // If the error happened because the user blocked the bot, remove them from the active list
+    if (err.description && err.description.includes('bot was blocked by the user')) {
+        if (ctx.from && ctx.from.id) {
+            await trackUser(ctx.from.id, false);
+        }
+    }
+});
 
 // --- USER ACTIONS & TRACKING ---
 
@@ -403,6 +414,7 @@ module.exports = async (req, res) => {
         }
     } catch (e) {
         console.error('Webhook Error:', e);
-        return res.status(500).send('Server Error');
+        // CRITICAL FIX: Always return 200 so Telegram stops the infinite retry loop!
+        return res.status(200).send('OK');
     }
 };

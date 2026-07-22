@@ -24,7 +24,7 @@ function escapeHtml(text) {
         .replace(/"/g, '&quot;');
 }
 
-// --- STATE MANAGEMENT (Upstash Free Tier or In-Memory) ---
+// --- STATE & DATA MANAGEMENT (Upstash Free Tier or In-Memory) ---
 const memoryUserStates = {};
 const memoryAdminStates = {};
 
@@ -76,6 +76,33 @@ async function deleteState(store, key) {
     else delete memoryAdminStates[key];
 }
 
+// User Tracking Logic
+async function trackUser(userId, isActive) {
+    if (!UPSTASH_URL || !UPSTASH_TOKEN) return;
+    try {
+        const endpoint = isActive ? 'sadd' : 'srem';
+        await fetch(`${UPSTASH_URL}/${endpoint}/bot_users/${userId}`, {
+            headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` }
+        });
+    } catch (e) {
+        console.error("Tracking error:", e);
+    }
+}
+
+async function getActiveUsers() {
+    if (!UPSTASH_URL || !UPSTASH_TOKEN) return [];
+    try {
+        const res = await fetch(`${UPSTASH_URL}/smembers/bot_users`, {
+            headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` }
+        });
+        const data = await res.json();
+        return data.result || [];
+    } catch (e) {
+        console.error("Get users error:", e);
+        return [];
+    }
+}
+
 // Available VPN Plans (ArtiQ Packages)
 const plans = [
     { id: 'plan_10g', name: 'اشتراک ۱۰ گیگابایت (۱ ماهه)', price: '٤۰,۰۰۰ تومان' },
@@ -90,16 +117,73 @@ const mainMenu = Markup.keyboard([
     ['🎯 پشتیبانی']
 ]).resize();
 
-// --- USER ACTIONS ---
+// --- USER ACTIONS & TRACKING ---
+
+// Detect if a user blocks or unblocks the bot
+bot.on('my_chat_member', async (ctx) => {
+    const status = ctx.myChatMember.new_chat_member.status;
+    if (status === 'kicked' || status === 'left') {
+        await trackUser(ctx.chat.id, false);
+    } else if (status === 'member') {
+        await trackUser(ctx.chat.id, true);
+    }
+});
 
 // Start Command
 bot.start(async (ctx) => {
     const userId = ctx.from.id;
     await deleteState('user', userId);
+    await trackUser(userId, true); // Mark user as active
     await ctx.reply(`👋 به ربات آرتیک خوش آمدید! با یک اتصال امن، پایدار و پرسرعت از حریم خصوصی خود در اینترنت آزاد محافظت کنید.\n\nلطفاً برای شروع، یکی از گزینه‌های زیر را انتخاب کنید:`, mainMenu);
 });
 
-// Main Menu Text Handlers
+// --- ADMIN COMMANDS ---
+
+bot.command('users', async (ctx) => {
+    if (String(ctx.from.id) !== String(ADMIN_ID)) return;
+    const users = await getActiveUsers();
+    await ctx.reply(`📊 تعداد کاربران فعال ربات: ${users.length} نفر`);
+});
+
+bot.command('broadcast', async (ctx) => {
+    if (String(ctx.from.id) !== String(ADMIN_ID)) return;
+
+    const messageText = ctx.message.text.replace('/broadcast', '').trim();
+
+    if (!messageText && !ctx.message.reply_to_message) {
+        return await ctx.reply('❌ نحوه استفاده:\n/broadcast متن پیام\nیا این دستور را روی پیام مورد نظر ریپلای (Reply) کنید.');
+    }
+
+    const users = await getActiveUsers();
+    if (users.length === 0) return await ctx.reply('❌ هیچ کاربری یافت نشد (آیا دیتابیس متصل است؟).');
+
+    await ctx.reply(`⏳ در حال ارسال پیام به ${users.length} کاربر...\nلطفاً تا دریافت پیام پایان صبر کنید.`);
+
+    let success = 0;
+    let failed = 0;
+
+    for (const targetId of users) {
+        try {
+            if (ctx.message.reply_to_message) {
+                await ctx.telegram.copyMessage(targetId, ctx.chat.id, ctx.message.reply_to_message.message_id);
+            } else {
+                await ctx.telegram.sendMessage(targetId, messageText);
+            }
+            success++;
+            await new Promise(res => setTimeout(res, 50)); // Prevent Telegram spam limits
+        } catch (e) {
+            failed++;
+            if (e.description && e.description.includes('bot was blocked by the user')) {
+                await trackUser(targetId, false);
+            }
+        }
+    }
+
+    await ctx.reply(`✅ عملیات ارسال پایان یافت.\n\nتعداد موفق: ${success}\nتعداد ناموفق (بلاک شده و حذف از لیست): ${failed}`);
+});
+
+// --- MENU HANDLERS ---
+
 bot.hears('🎁 دریافت اکانت تست', async (ctx) => {
     const userId = ctx.from.id;
     const firstName = escapeHtml(ctx.from.first_name);
@@ -147,7 +231,7 @@ bot.hears('🎯 پشتیبانی', async (ctx) => {
     await ctx.reply(`ℹ️ برای هرگونه سوال، راهنمایی در اتصال یا پشتیبانی، مستقیماً با ما در ارتباط باشید:\n\n💬 @${SUPPORT_USERNAME}`);
 });
 
-// Inline Keyboard Callback Handlers
+// --- CALLBACK QUERY HANDLERS ---
 bot.on('callback_query', async (ctx) => {
     const data = ctx.callbackQuery.data;
     const adminId = ctx.from.id;

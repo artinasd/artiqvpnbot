@@ -28,7 +28,8 @@ function escapeHtml(text) {
 const memoryUserStates = {};
 const memoryAdminStates = {};
 
-const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL;
+// Automatically remove any trailing slashes from the URL if accidentally copied from Upstash
+const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL ? process.env.UPSTASH_REDIS_REST_URL.replace(/\/$/, '') : undefined;
 const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
 
 async function getState(store, key) {
@@ -150,6 +151,30 @@ bot.start(async (ctx) => {
 });
 
 // --- ADMIN COMMANDS ---
+
+bot.command('pingdb', async (ctx) => {
+    if (String(ctx.from.id) !== String(ADMIN_ID)) return;
+
+    if (!UPSTASH_URL || !UPSTASH_TOKEN) {
+        return await ctx.reply("❌ متغیرهای Upstash در Vercel یافت نشدند! مطمئن شوید نام آن‌ها دقیقاً درست است.");
+    }
+
+    try {
+        const res = await fetch(`${UPSTASH_URL}/ping`, {
+            headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` }
+        });
+
+        const text = await res.text();
+
+        if (res.ok) {
+            await ctx.reply(`✅ اتصال به دیتابیس برقرار است!\nپاسخ: ${text}`);
+        } else {
+            await ctx.reply(`⚠️ اتصال به سرور دیتابیس انجام شد اما با خطا مواجه شد:\nوضعیت: ${res.status}\nمتن خطا: ${text}`);
+        }
+    } catch (e) {
+        await ctx.reply(`❌ خطای بحرانی در اتصال (شاید مشکل از Fetch یا اینترنت سرور باشد):\n${e.message}`);
+    }
+});
 
 bot.command('users', async (ctx) => {
     if (String(ctx.from.id) !== String(ADMIN_ID)) return;

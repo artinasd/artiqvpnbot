@@ -106,6 +106,7 @@ async function getActiveUsers() {
 
 // Available VPN Plans (ArtiQ Packages)
 const plans = [
+    { id: 'plan_10g', name: 'اشتراک نامحدود (۱ ماهه)', price: '٣۰۰,۰۰۰ تومان' },
     { id: 'plan_10g', name: 'اشتراک ۱۰ گیگابایت (۱ ماهه)', price: '٤۰,۰۰۰ تومان' },
     { id: 'plan_20g', name: 'اشتراک ۲۰ گیگابایت (۱ ماهه)', price: '۷۰,۰۰۰ تومان' },
     { id: 'plan_50g', name: 'اشتراک ۵۰ گیگابایت (٢ ماهه)', price: '۱۵۰,۰۰۰ تومان' }

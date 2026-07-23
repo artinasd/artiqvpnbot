@@ -285,7 +285,7 @@ bot.on('callback_query', async (ctx) => {
         if (selectedPlan) {
             await setState('user', userId, { stage: 'AWAITING_RECEIPT', plan: selectedPlan.name });
             await ctx.reply(
-                `💳 <b>اطلاعات پرداخت</b>\n\nشما <b>${escapeHtml(selectedPlan.name)}</b> را انتخاب کردید.\n\nلطفاً مبلغ مورد نظر را به حساب زیر انتقال دهید:\n\n${BANK_DETAILS}\n\n📸 <b>مهم:</b> پس از پرداخت، لطفاً عکس رسید یا اسکرین‌شات واریزی خود را مستقیماً در همین چت ارسال کنید.`,
+                `💳 <b>اطلاعات پرداخت</b>\n\nشما <b>${escapeHtml(selectedPlan.name)}</b> را انتخاب کردید.\n\nلطفاً مبلغ <b>${escapeHtml((selectedPlan.price))}</b> را به حساب زیر انتقال دهید:\n\n${BANK_DETAILS}\n\n📸 <b>مهم:</b> پس از پرداخت، لطفاً عکس رسید یا اسکرین‌شات واریزی خود را مستقیماً در همین چت ارسال کنید.`,
                 { parse_mode: 'HTML' }
             );
         }

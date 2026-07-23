@@ -372,14 +372,14 @@ bot.on('message', async (ctx) => {
             });
 
             return await ctx.reply(
-                `✅ حجم ${traffic} گیگابایت با موفقیت ثبت شد.\n💳 هزینه محاسبه شده: ${calculatedPrice.toLocaleString('en-US')} تومان\n\nلطفاً مدت زمان اعتبار بسته را به صورت متنی وارد کنید (مثلاً: ۱ ماهه، ۴۵ روزه):`
+                `✅ حجم ${traffic} گیگابایت با موفقیت ثبت شد.\n💳 هزینه محاسبه شده: ${calculatedPrice.toLocaleString('en-US')} تومان\n\nلطفاً مدت زمان اعتبار بسته را به صورت متنی وارد کنید. حداکثر زمان ممکن ٥ ماهه یا ١٥٠ روزه می باشد (مثلاً: ۱ ماهه، ۴۵ روزه):`
             );
         }
 
         if (userState.stage === 'AWAITING_CUSTOM_DURATION') {
             const duration = ctx.message.text;
             if (!duration) {
-                return await ctx.reply('❌ لطفاً مدت زمان را به صورت متنی ارسال کنید. حداکثر زمان ممکن 5 ماه یا 150 روز می باشد');
+                return await ctx.reply('❌ لطفاً مدت زمان را به صورت متنی ارسال کنید.');
             }
 
             const planName = `بسته سفارشی (${userState.traffic} گیگابایت | ${duration})`;

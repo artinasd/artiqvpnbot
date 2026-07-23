@@ -106,8 +106,8 @@ async function getActiveUsers() {
 
 // Available VPN Plans (ArtiQ Packages)
 const plans = [
-    { id: 'plan_10g', name: 'اشتراک نامحدود (۱ ماهه)', price: '٢٥۰,۰۰۰ تومان' },
-    { id: 'plan_10g', name: 'اشتراک نامحدود (٢ ماهه)', price: '٣٥۰,۰۰۰ تومان' },
+    { id: 'plan_1mo', name: 'اشتراک نامحدود (۱ ماهه)', price: '٢٥۰,۰۰۰ تومان' },
+    { id: 'plan_2mo', name: 'اشتراک نامحدود (٢ ماهه)', price: '٣٥۰,۰۰۰ تومان' },
     { id: 'plan_10g', name: 'اشتراک ۱۰ گیگابایت (۱ ماهه)', price: '٤۰,۰۰۰ تومان' },
     { id: 'plan_20g', name: 'اشتراک ۲۰ گیگابایت (۱ ماهه)', price: '۷۰,۰۰۰ تومان' },
     { id: 'plan_50g', name: 'اشتراک ۵۰ گیگابایت (٢ ماهه)', price: '۱۵۰,۰۰۰ تومان' }
@@ -379,7 +379,7 @@ bot.on('message', async (ctx) => {
         if (userState.stage === 'AWAITING_CUSTOM_DURATION') {
             const duration = ctx.message.text;
             if (!duration) {
-                return await ctx.reply('❌ لطفاً مدت زمان را به صورت متنی ارسال کنید.');
+                return await ctx.reply('❌ لطفاً مدت زمان را به صورت متنی ارسال کنید. حداکثر زمان ممکن 5 ماه یا 150 روز می باشد');
             }
 
             const planName = `بسته سفارشی (${userState.traffic} گیگابایت | ${duration})`;

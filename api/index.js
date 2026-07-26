@@ -106,11 +106,15 @@ async function getActiveUsers() {
 
 // Available VPN Plans (ArtiQ Packages)
 const plans = [
-    { id: 'plan_1mo', name: 'اشتراک نامحدود (۱ ماهه)', price: '٢٥۰,۰۰۰ تومان' },
-    { id: 'plan_2mo', name: 'اشتراک نامحدود (٢ ماهه)', price: '٣٥۰,۰۰۰ تومان' },
-    { id: 'plan_10g', name: 'اشتراک ۱۰ گیگابایت (۱ ماهه)', price: '٤۰,۰۰۰ تومان' },
-    { id: 'plan_20g', name: 'اشتراک ۲۰ گیگابایت (۱ ماهه)', price: '۷۰,۰۰۰ تومان' },
-    { id: 'plan_50g', name: 'اشتراک ۵۰ گیگابایت (٢ ماهه)', price: '۱۵۰,۰۰۰ تومان' }
+    { id: 'plan_1mo', name: 'اشتراک نامحدود (1 ماهه)', price: '199,000 تومان' },
+    { id: 'plan_2mo', name: 'اشتراک نامحدود (2 ماهه)', price: '299,000 تومان' },
+    { id: 'plan_10g', name: 'اشتراک 10 گیگابایت (1 ماهه)', price: '40,000 تومان' },
+    { id: 'plan_20g', name: 'اشتراک 20 گیگابایت (1 ماهه)', price: '70,000 تومان' },
+    { id: 'plan_50g', name: 'اشتراک 50 گیگابایت (2 ماهه)', price: '150,000 تومان' },
+    { id: 'plan_200g', name: 'اشتراک 200 گیگابایت (1 ماهه)', price: '200,000 تومان' },
+    { id: 'plan_300g', name: 'اشتراک 300 گیگابایت (1 ماهه)', price: '300,000 تومان' },
+    { id: 'plan_500g', name: 'اشتراک 500 گیگابایت (1 ماهه)', price: '450,000 تومان' },
+    { id: 'plan_1000g', name: 'اشتراک 1000 گیگابایت (1 ماهه)', price: '700,000 تومان' }
 ];
 
 // --- MAIN MENU KEYBOARD ---
@@ -364,7 +368,7 @@ bot.on('message', async (ctx) => {
                 return await ctx.reply('❌ مقدار نامعتبر. لطفاً فقط یک عدد به عنوان حجم وارد کنید (مثلاً: 10):');
             }
 
-            const calculatedPrice = traffic * 4000;
+            const calculatedPrice = traffic > 51 ? traffic * 3000 : traffic * 4000;
             await setState('user', userId, {
                 stage: 'AWAITING_CUSTOM_DURATION',
                 traffic: traffic,

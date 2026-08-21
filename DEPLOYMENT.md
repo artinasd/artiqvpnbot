@@ -2,13 +2,13 @@
 
 ## What changed
 
-The production entrypoint is `api/index.js` for Vercel. `bot.local.js` remains only as a local polling runner. The old manual fulfillment flow has been replaced by persistent orders, receipt-audit records, automatic PasarGuard provisioning, subscription delivery, idempotency locks, and admin invalidation.
+The production entrypoint is `api/index.js` for Vercel. `bot.local.js` remains only as a local polling runner. The old manual fulfillment flow has been replaced by persistent orders, receipt-audit records, automatic PasarGuard provisioning, subscription delivery, idempotency locks, automated test accounts, renewal, and admin invalidation.
 
 The business rule is deliberate: submitting a receipt does **not** mark payment as verified. It changes the order to `RECEIPT_SUBMITTED` and starts provisioning immediately. The administrator receives the receipt and can later invalidate the payment and disable the PasarGuard user.
 
 ## Repository audit
 
-The original repository contains only three application files: `api/index.js`, `bot.local.js`, and `package.json`. Both bot implementations used transient JavaScript state. The Vercel implementation also had a hard-coded bank card and manual `approve_buy_*` / `approve_test_*` callbacks. The local runner had no persistence and duplicated the manual workflow. The new `lib/app.js` is the shared implementation; the local runner and Vercel function are thin wrappers.
+The original repository contains only three application files: `api/index.js`, `bot.local.js`, and `package.json`. Both bot implementations used transient JavaScript state. The Vercel implementation also had a hard-coded bank card and manual `approve_buy_*` / `approve_test_*` callbacks. The local runner had no persistence and duplicated the manual workflow. The new `lib/app.js` is the shared implementation; `lib/renewals.js` adds the persistent renewal workflow; the local runner and Vercel function are thin wrappers.
 
 ## PasarGuard API verified against current source/docs
 
@@ -79,7 +79,7 @@ Order fields include order ID, Telegram ID, plan, bytes, duration, price, curren
 
 If a webhook is duplicated, the persisted order and Redis lock prevent a second fulfillment. If PasarGuard creation succeeds but Redis is updated later, retry first checks the stored username/user ID. If Telegram delivery fails, no second PasarGuard account is created.
 
-The Vercel function uses `@vercel/functions` `waitUntil()` so the webhook can acknowledge Telegram while the fulfillment promise remains attached to the function lifecycle. `vercel.json` allows up to 120 seconds; Vercel Hobby currently permits substantially longer Node.js function durations than the old default limits.
+The Vercel function uses `@vercel/functions` `waitUntil()` so the webhook can acknowledge Telegram while the fulfillment promise remains attached to the function lifecycle. `vercel.json` allows up to 120 seconds; current Vercel Node.js Hobby functions support substantially longer execution windows than the historical defaults.
 
 ## Test accounts
 
@@ -87,7 +87,7 @@ Test accounts are fully automated and persist `test_used`. They use `PASARGUARD_
 
 ## Renewals
 
-The data model and PasarGuard ID-based modification layer are prepared for renewal, but the current lightweight UI intentionally does not expose a renewal checkout button until the exact commercial renewal semantics are confirmed. Do not represent renewal as live automation yet.
+`/renew` finds the customer's latest fulfilled PasarGuard subscription, keeps the immutable PasarGuard user ID/username, creates a separate renewal order, collects a receipt, and then modifies the existing PasarGuard user by ID. The renewal extends expiry from the later of the existing expiry and now, applies the selected plan's traffic limit, and sends the updated subscription URL. It never creates a second PasarGuard account.
 
 ## Admin controls
 
@@ -116,6 +116,7 @@ All admin callbacks verify `ADMIN_ID` before destructive action.
 6. Ensure the PasarGuard base URL is public HTTPS from the Vercel runtime. Do not disable TLS verification.
 7. Configure the PasarGuard user templates and put their IDs in the environment variables.
 8. Send `/start`, buy a plan, submit a test receipt, and verify the order and PasarGuard user.
+9. Test `/renew` after a fulfilled order.
 
 PasarGuard must be reachable over HTTPS from Vercel. If it is private behind a LAN/VPN, the free Vercel function cannot directly reach it; provide a publicly routable HTTPS endpoint or an appropriate network path. Do not solve this by adding a paid VPS or by disabling TLS verification.
 
@@ -141,5 +142,4 @@ A real end-to-end test additionally requires live Telegram, Redis, PasarGuard cr
 - Receipt OCR/verification: explicitly not implemented.
 - Payment verification: not claimed by the bot; receipt submission is an audit event.
 - PasarGuard reachability: infrastructure responsibility.
-- Renewal UI: not exposed until renewal pricing/semantics are confirmed.
 - The exact `TG_@AtiqVPN_XXXX` fallback on a PasarGuard version that rejects consecutive special characters: blocked by the verified validator and must be resolved at the PasarGuard side before that exact format can be live.

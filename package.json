@@ -1,24 +1,21 @@
 {
   "name": "telegram-vpn-bot",
-  "version": "1.0.0",
-  "description": "Telegram Bot for selling VPN configurations",
+  "version": "2.0.0",
+  "description": "Telegram VPN sales and PasarGuard provisioning bot",
   "main": "bot.local.js",
   "scripts": {
-    "start": "node bot.local.js"
+    "start": "node bot.local.js",
+    "test": "node --test"
   },
   "dependencies": {
+    "@vercel/functions": "^3.1.0",
     "telegraf": "^4.16.3"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/artinasd/artiqvpnbot.git"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": ["telegram", "vpn", "pasarguard", "vercel"],
   "license": "ISC",
-  "type": "commonjs",
-  "bugs": {
-    "url": "https://github.com/artinasd/artiqvpnbot/issues"
-  },
-  "homepage": "https://github.com/artinasd/artiqvpnbot#readme"
+  "type": "commonjs"
 }

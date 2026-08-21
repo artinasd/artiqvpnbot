@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { normalizeSubscriptionName, makeUsername } = require('../lib/app');
 
-test('username generation uses TG_ and safe characters', () => {
+test('telegram username generation uses TG_ and safe characters', () => {
   const u = makeUsername({ telegramUsername: 'Ali123' });
   assert.match(u, /^TG_Ali123_[A-Za-z0-9]{4}$/);
 });
@@ -17,10 +17,13 @@ test('unsafe names are rejected', () => {
   assert.equal(normalizeSubscriptionName('My Shop').ok, false);
   assert.equal(normalizeSubscriptionName('My-Shop').ok, false);
   assert.equal(normalizeSubscriptionName('😀').ok, false);
+  assert.equal(normalizeSubscriptionName('My__Shop').ok, false);
+  assert.equal(normalizeSubscriptionName('My_@Shop').ok, false);
 });
 
-test('auto attribution is short and deterministic except suffix', () => {
-  assert.match(makeUsername({}), /^TG_@AtiqVPN_[A-Za-z0-9]{4}$/);
+test('no Telegram username uses the PasarGuard-compatible AtiqVPN fallback', () => {
+  const u = makeUsername({});
+  assert.match(u, /^TG@AtiqVPN_[A-Za-z0-9]{4}$/);
 });
 
 test('custom username cannot become an empty TG marker', () => {

@@ -1,6 +1,6 @@
 const { waitUntil } = require('@vercel/functions');
-const { bot } = require('../lib/app');
-
+const app = require('../lib/renewals');
+const { bot } = app;
 const SECRET = process.env.WEBHOOK_SECRET || '';
 
 module.exports = async function handler(req, res) {

@@ -1,5 +1,6 @@
 const { Telegraf, Markup } = require('telegraf');
-const { PLANS, getPlan, calculateCustomPrice, parseDurationDays, buildCustomPlan } = require('../lib/plans');
+const { calculateCustomPrice, parseDurationDays, buildCustomPlan } = require('../lib/plans');
+const planStore = require('../lib/plan-store');
 const { normalizeSubscriptionName } = require('../lib/username');
 const storage = require('../lib/storage');
 const pasarguard = require('../lib/pasarguard');
@@ -98,6 +99,16 @@ async function showPayment(ctx, order) {
   );
 }
 
+async function sendPlanMenu(ctx, mode = 'buy') {
+  const plans = await planStore.listActive();
+  const buttons = plans.map((plan) => [Markup.button.callback(
+    `${plan.name} - ${Number(plan.price).toLocaleString('en-US')} تومان`,
+    `${mode === 'renew' ? 'renew_plan_' : 'select_plan_'}${plan.id}`
+  )]);
+  if (mode === 'buy') buttons.push([Markup.button.callback('🛠 ساخت بسته دلخواه (حجم و زمان)', 'select_custom')]);
+  await ctx.reply(mode === 'renew' ? '🔄 بسته تمدید را انتخاب کنید:' : '📋 لطفاً بسته مورد نظر خود را انتخاب کنید:', Markup.inlineKeyboard(buttons));
+}
+
 bot.catch((error, ctx) => {
   log('BOT_ERROR', { update_type: ctx?.updateType, error: error?.message || String(error) });
 });
@@ -120,12 +131,7 @@ bot.hears('🎯 پشتیبانی', async (ctx) => {
 
 bot.hears('🛒 خرید اشتراک', async (ctx) => {
   await persistUser(ctx);
-  const buttons = PLANS.map((plan) => [Markup.button.callback(
-    `${plan.name} - ${Number(plan.price).toLocaleString('en-US')} تومان`,
-    `select_plan_${plan.id}`
-  )]);
-  buttons.push([Markup.button.callback('🛠 ساخت بسته دلخواه (حجم و زمان)', 'select_custom')]);
-  await ctx.reply('📋 لطفاً بسته مورد نظر خود را انتخاب کنید:', Markup.inlineKeyboard(buttons));
+  await sendPlanMenu(ctx, 'buy');
 });
 
 bot.hears('👤 حساب من', async (ctx) => {
@@ -160,33 +166,16 @@ bot.hears('🎁 دریافت اکانت تست', async (ctx) => {
   try {
     const refreshed = await storage.getUser(ctx.from.id);
     if (refreshed?.testUsed) return ctx.reply('🎁 شما قبلاً از اکانت تست استفاده کرده‌اید.');
-
     const id = orderId();
     orderIdValue = id;
     const order = {
-      orderId: id,
-      telegramUserId: ctx.from.id,
-      telegramUsername: ctx.from.username || null,
-      firstName: ctx.from.first_name || null,
-      lastName: ctx.from.last_name || null,
-      planId: 'test',
-      planName: 'اکانت تست',
-      trafficLimitBytes: TEST_TRAFFIC_BYTES,
-      durationDays: TEST_DURATION_DAYS,
-      hwidLimit: TEST_HWID_LIMIT,
-      price: 0,
-      currency: 'تومان',
-      requestedName: null,
-      generatedPasarguardUsername: null,
-      pasarguardUserId: null,
-      subscriptionUrl: null,
-      paymentStatus: 'NOT_REQUIRED',
-      fulfillmentStatus: 'RECEIPT_SUBMITTED',
-      deliveryStatus: null,
-      receiptFileId: null,
-      receiptType: null,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      orderId: id, telegramUserId: ctx.from.id, telegramUsername: ctx.from.username || null,
+      firstName: ctx.from.first_name || null, lastName: ctx.from.last_name || null,
+      planId: 'test', planName: 'اکانت تست', trafficLimitBytes: TEST_TRAFFIC_BYTES,
+      durationDays: TEST_DURATION_DAYS, hwidLimit: TEST_HWID_LIMIT, price: 0, currency: 'تومان',
+      requestedName: null, generatedPasarguardUsername: null, pasarguardUserId: null, subscriptionUrl: null,
+      paymentStatus: 'NOT_REQUIRED', fulfillmentStatus: 'RECEIPT_SUBMITTED', deliveryStatus: null,
+      receiptFileId: null, receiptType: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     };
     await storage.createOrder(order);
     await ctx.reply('⏳ اکانت تست شما در حال ساخت خودکار است...');
@@ -194,15 +183,9 @@ bot.hears('🎁 دریافت اکانت تست', async (ctx) => {
     await storage.saveUser({ ...userSnapshot(ctx), testUsed: true, testCreatedAt: new Date().toISOString() });
   } catch (error) {
     await storage.saveUser({ ...userSnapshot(ctx), testUsed: false, testCreatedAt: null });
-    log('TEST_FULFILLMENT_FAILED', {
-      order_id: orderIdValue,
-      telegram_user_id: ctx.from.id,
-      error: error?.message || String(error),
-    });
+    log('TEST_FULFILLMENT_FAILED', { order_id: orderIdValue, telegram_user_id: ctx.from.id, error: error?.message || String(error) });
     await ctx.reply('❌ ساخت اکانت تست انجام نشد. مشکل فنی ثبت شد و می‌توانید دوباره تلاش کنید.');
-  } finally {
-    await storage.releaseLock(lockName);
-  }
+  } finally { await storage.releaseLock(lockName); }
 });
 
 bot.on('callback_query', async (ctx) => {
@@ -210,8 +193,8 @@ bot.on('callback_query', async (ctx) => {
   await ctx.answerCbQuery().catch(() => {});
 
   if (data.startsWith('select_plan_')) {
-    const plan = getPlan(data.slice('select_plan_'.length));
-    if (!plan) return;
+    const plan = await planStore.get(data.slice('select_plan_'.length));
+    if (!plan) return ctx.reply('❌ این پلن دیگر فعال نیست. لطفاً فهرست پلن‌ها را دوباره باز کنید.');
     const order = await createOrderForPlan(ctx, plan);
     await askSubscriptionName(ctx, order);
     return;
@@ -237,18 +220,14 @@ bot.on('callback_query', async (ctx) => {
   if (data === 'renew_choose') {
     const user = await storage.getUser(ctx.from.id);
     if (!user?.currentPasarguardUserId) return ctx.reply('❌ اشتراک فعالی برای تمدید پیدا نشد.');
-    const buttons = PLANS.map((plan) => [Markup.button.callback(
-      `${plan.name} - ${Number(plan.price).toLocaleString('en-US')} تومان`,
-      `renew_plan_${plan.id}`
-    )]);
-    await ctx.reply('🔄 بسته تمدید را انتخاب کنید:', Markup.inlineKeyboard(buttons));
+    await sendPlanMenu(ctx, 'renew');
     return;
   }
 
   if (data.startsWith('renew_plan_')) {
-    const plan = getPlan(data.slice('renew_plan_'.length));
+    const plan = await planStore.get(data.slice('renew_plan_'.length));
     const user = await storage.getUser(ctx.from.id);
-    if (!plan || !user?.currentPasarguardUserId) return;
+    if (!plan || !user?.currentPasarguardUserId) return ctx.reply('❌ این پلن فعال نیست یا اشتراک شما پیدا نشد.');
     const order = await createOrderForPlan(ctx, plan);
     await storage.updateOrder(order.orderId, { renewal: true, renewalPasarguardUserId: user.currentPasarguardUserId });
     await showPayment(ctx, order);
@@ -265,9 +244,7 @@ bot.on('callback_query', async (ctx) => {
       await storage.updateOrder(id, { paymentStatus: 'PAYMENT_LATER_REJECTED', fulfillmentStatus: 'PAYMENT_LATER_REJECTED' });
       await ctx.reply(`❌ اشتراک ${escapeHtml(order.generatedPasarguardUsername)} غیرفعال شد.`, { parse_mode: 'HTML' });
       await bot.telegram.sendMessage(order.telegramUserId, '❌ پرداخت این سفارش بعداً نامعتبر تشخیص داده شد و اشتراک غیرفعال شد. برای پیگیری با پشتیبانی تماس بگیرید.');
-    } catch (error) {
-      await ctx.reply('❌ غیرفعال‌سازی اشتراک انجام نشد؛ لاگ فنی ثبت شد.');
-    }
+    } catch (error) { await ctx.reply('❌ غیرفعال‌سازی اشتراک انجام نشد؛ لاگ فنی ثبت شد.'); }
   }
 });
 
@@ -278,9 +255,7 @@ bot.on('message', async (ctx) => {
 
   if (state.stage === 'AWAITING_CUSTOM_TRAFFIC') {
     const traffic = Number(String(ctx.message.text || '').trim().replace(/[۰-۹]/g, (d) => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)));
-    if (!Number.isInteger(traffic) || traffic < 1 || traffic > 1000) {
-      return ctx.reply('❌ حجم نامعتبر است. عددی بین ۱ تا ۱۰۰۰ گیگابایت وارد کنید.');
-    }
+    if (!Number.isInteger(traffic) || traffic < 1 || traffic > 1000) return ctx.reply('❌ حجم نامعتبر است. عددی بین ۱ تا ۱۰۰۰ گیگابایت وارد کنید.');
     const price = calculateCustomPrice(traffic);
     await storage.setState('user', ctx.from.id, { stage: 'AWAITING_CUSTOM_DURATION', traffic, price });
     return ctx.reply(`✅ حجم ${traffic} گیگابایت ثبت شد.\n💳 قیمت: ${price.toLocaleString('en-US')} تومان\n\nمدت را به صورت «۳۰ روزه» یا «۱ ماهه» وارد کنید. حداکثر ۱۵۰ روز.`);
@@ -298,9 +273,8 @@ bot.on('message', async (ctx) => {
   if (state.stage === 'AWAITING_SUBSCRIPTION_NAME') {
     if (!ctx.message.text) return ctx.reply('❌ لطفاً نام اشتراک را به صورت متن انگلیسی ارسال کنید یا «نام خودکار» را انتخاب کنید.');
     let name;
-    try {
-      name = normalizeSubscriptionName(ctx.message.text);
-    } catch (error) {
+    try { name = normalizeSubscriptionName(ctx.message.text); }
+    catch (error) {
       const messages = {
         USERNAME_ENGLISH_ONLY: '❌ نام اشتراک فقط باید با حروف انگلیسی باشد. حروف فارسی/عربی و ایموجی مجاز نیست.',
         USERNAME_NO_SPACES: '❌ نام اشتراک نباید فاصله داشته باشد.',
@@ -321,39 +295,20 @@ bot.on('message', async (ctx) => {
     const order = await storage.getOrder(state.orderId);
     if (!order || order.telegramUserId !== ctx.from.id) return ctx.reply('❌ سفارش پیدا نشد.');
     if (!['AWAITING_PAYMENT', 'AWAITING_RECEIPT'].includes(order.paymentStatus)) return;
-
-    const receiptFileId = ctx.message.photo
-      ? ctx.message.photo[ctx.message.photo.length - 1].file_id
-      : ctx.message.document.file_id;
+    const receiptFileId = ctx.message.photo ? ctx.message.photo[ctx.message.photo.length - 1].file_id : ctx.message.document.file_id;
     const receiptType = ctx.message.photo ? 'photo' : 'document';
-    const updated = await storage.updateOrder(order.orderId, {
-      receiptFileId,
-      receiptType,
-      receiptTelegramMessageId: ctx.message.message_id,
-      paymentStatus: 'RECEIPT_SUBMITTED',
-      fulfillmentStatus: 'RECEIPT_SUBMITTED',
-    });
+    const updated = await storage.updateOrder(order.orderId, { receiptFileId, receiptType, receiptTelegramMessageId: ctx.message.message_id, paymentStatus: 'RECEIPT_SUBMITTED', fulfillmentStatus: 'RECEIPT_SUBMITTED' });
     await storage.deleteState('user', ctx.from.id);
     log('RECEIPT_SUBMITTED', { order_id: order.orderId, telegram_user_id: ctx.from.id, pasarguard_username: order.generatedPasarguardUsername || null });
-
     const caption = `💰 <b>رسید پرداخت جدید</b>\n\nسفارش: <code>${escapeHtml(updated.orderId)}</code>\nکاربر: ${escapeHtml(updated.firstName)}\nآیدی: ${escapeHtml(updated.telegramUsername ? `@${updated.telegramUsername}` : 'بدون آیدی')}\nشناسه تلگرام: <code>${updated.telegramUserId}</code>\nنام اشتراک درخواستی: <code>${escapeHtml(updated.requestedName || 'خودکار')}</code>\nبسته: <b>${escapeHtml(updated.planName)}</b>\nمبلغ: <b>${Number(updated.price).toLocaleString('en-US')} تومان</b>`;
     const adminButtons = Markup.inlineKeyboard([[Markup.button.callback('❌ پرداخت نامعتبر / غیرفعال کردن', `invalidate_${updated.orderId}`)]]);
     try {
-      if (receiptType === 'photo') {
-        await bot.telegram.sendPhoto(ADMIN_ID, receiptFileId, { caption, parse_mode: 'HTML', ...adminButtons });
-      } else {
-        await bot.telegram.sendDocument(ADMIN_ID, receiptFileId, { caption, parse_mode: 'HTML', ...adminButtons });
-      }
-    } catch (error) {
-      log('ADMIN_RECEIPT_NOTIFICATION_FAILED', { order_id: updated.orderId, error: error.message });
-    }
-
+      if (receiptType === 'photo') await bot.telegram.sendPhoto(ADMIN_ID, receiptFileId, { caption, parse_mode: 'HTML', ...adminButtons });
+      else await bot.telegram.sendDocument(ADMIN_ID, receiptFileId, { caption, parse_mode: 'HTML', ...adminButtons });
+    } catch (error) { log('ADMIN_RECEIPT_NOTIFICATION_FAILED', { order_id: updated.orderId, error: error.message }); }
     await ctx.reply('✅ رسید دریافت شد. اشتراک شما بدون نیاز به تأیید دستی در حال ساخت خودکار است.');
-    try {
-      await fulfillOrder(updated.orderId, bot.telegram);
-    } catch (error) {
-      await ctx.reply('⏳ ساخت اشتراک با مشکل موقت مواجه شد. سفارش شما ثبت شده و امکان تلاش مجدد وجود دارد.');
-    }
+    try { await fulfillOrder(updated.orderId, bot.telegram); }
+    catch (error) { await ctx.reply('⏳ ساخت اشتراک با مشکل موقت مواجه شد. سفارش شما ثبت شده و امکان تلاش مجدد وجود دارد.'); }
   }
 });
 
@@ -385,9 +340,7 @@ bot.command('failed', async (ctx) => {
   if (!isAdmin(ctx)) return;
   const orders = (await storage.listOrders(100)).filter((o) => o.fulfillmentStatus === 'FAILED_RETRYABLE');
   if (!orders.length) return ctx.reply('❌ مورد ناموفقی وجود ندارد.');
-  for (const order of orders.slice(0, 10)) {
-    await ctx.reply(`⚠️ ${order.orderId}\n${order.failureReason || 'unknown'}\n${order.generatedPasarguardUsername || '-'}`);
-  }
+  for (const order of orders.slice(0, 10)) await ctx.reply(`⚠️ ${order.orderId}\n${order.failureReason || 'unknown'}\n${order.generatedPasarguardUsername || '-'}`);
 });
 
 bot.command('users', async (ctx) => {
@@ -413,11 +366,6 @@ bot.command('broadcast', async (ctx) => {
 module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(200).send('ArtiQ VPN Bot is running.');
   if (WEBHOOK_SECRET && req.headers['x-telegram-bot-api-secret-token'] !== WEBHOOK_SECRET) return res.status(403).send('Unauthorized');
-  try {
-    await bot.handleUpdate(req.body);
-    return res.status(200).send('OK');
-  } catch (error) {
-    log('WEBHOOK_ERROR', { error: error.message || String(error) });
-    return res.status(200).send('OK');
-  }
+  try { await bot.handleUpdate(req.body); return res.status(200).send('OK'); }
+  catch (error) { log('WEBHOOK_ERROR', { error: error.message || String(error) }); return res.status(200).send('OK'); }
 };

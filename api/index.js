@@ -10,6 +10,8 @@ const BOT_TOKEN = process.env.BOT_TOKEN;
 const ADMIN_ID = String(process.env.ADMIN_ID || '');
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || '';
 const BANK_DETAILS = process.env.BANK_DETAILS || '';
+const PAYMENT_CARD_NUMBER = process.env.PAYMENT_CARD_NUMBER || '6219861947080387';
+const PAYMENT_CARD_HOLDER = process.env.PAYMENT_CARD_HOLDER || 'اسعدی';
 const SUPPORT_USERNAME = process.env.SUPPORT_USERNAME || 'Your_Personal_ID';
 const TEST_TRAFFIC_BYTES = 150 * 1024 * 1024;
 const TEST_DURATION_DAYS = 1;
@@ -93,10 +95,30 @@ async function showPayment(ctx, order) {
     fulfillmentStatus: 'AWAITING_PAYMENT',
   });
   await storage.setState('user', ctx.from.id, { stage: 'AWAITING_RECEIPT', orderId: order.orderId });
-  await ctx.reply(
-    `💳 <b>اطلاعات پرداخت</b>\n\nسرویس: <b>${escapeHtml(order.planName)}</b>\nمبلغ: <b>${Number(order.price).toLocaleString('en-US')} ${escapeHtml(order.currency)}</b>\n\n${escapeHtml(BANK_DETAILS)}\n\n📸 پس از پرداخت، عکس رسید یا فایل رسید را همینجا ارسال کنید.\n\n⚠️ رسید فقط برای ثبت و بررسی بعدی نگهداری می‌شود؛ پس از ارسال رسید، سفارش به صورت خودکار وارد مرحله ساخت اشتراک می‌شود.`,
-    { parse_mode: 'HTML' }
-  );
+
+  const card = PAYMENT_CARD_NUMBER.replace(/\D/g, '');
+  const formattedCard = card.replace(/(\d{4})(?=\d)/g, '$1 ');
+  const paymentText =
+    `💳 <b>پرداخت اشتراک</b>\n\n` +
+    `📦 <b>سرویس:</b> ${escapeHtml(order.planName)}\n` +
+    `💰 <b>مبلغ قابل پرداخت:</b> ${Number(order.price).toLocaleString('en-US')} ${escapeHtml(order.currency)}\n\n` +
+    `🏦 <b>شماره کارت</b>\n` +
+    `<code>${formattedCard}</code>\n` +
+    `👤 <b>به نام:</b> ${escapeHtml(PAYMENT_CARD_HOLDER)}\n` +
+    (BANK_DETAILS ? `\n${escapeHtml(BANK_DETAILS)}\n` : '') +
+    `\n📸 <b>بعد از پرداخت</b>\n` +
+    `عکس یا فایل رسید پرداخت را همینجا ارسال کنید.\n\n` +
+    `⚡ پس از دریافت رسید، سفارش شما به‌صورت خودکار برای ساخت اشتراک پردازش می‌شود.\n` +
+    `🔒 لطفاً مبلغ و شماره کارت مقصد را قبل از پرداخت بررسی کنید.`;
+
+  await ctx.reply(paymentText, {
+    parse_mode: 'HTML',
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: '📋 کپی شماره کارت', copy_text: { text: card } }],
+      ],
+    },
+  });
 }
 
 async function sendPlanMenu(ctx, mode = 'buy') {

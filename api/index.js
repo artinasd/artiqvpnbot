@@ -10,8 +10,8 @@ const ADMIN_ID = String(process.env.ADMIN_ID || '');
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || '';
 const BANK_DETAILS = process.env.BANK_DETAILS || '';
 const SUPPORT_USERNAME = process.env.SUPPORT_USERNAME || 'Your_Personal_ID';
-const TEST_TRAFFIC_GB = Number(process.env.TEST_TRAFFIC_GB || 1);
-const TEST_DURATION_DAYS = Number(process.env.TEST_DURATION_DAYS || 3);
+const TEST_TRAFFIC_GB = Number(process.env.TEST_TRAFFIC_GB || 0.15);
+const TEST_DURATION_DAYS = Number(process.env.TEST_DURATION_DAYS || 1);
 const TEST_HWID_LIMIT = Number(process.env.TEST_HWID_LIMIT ?? 0);
 
 if (!BOT_TOKEN || !ADMIN_ID) console.error('Missing BOT_TOKEN or ADMIN_ID');
@@ -20,7 +20,7 @@ const bot = new Telegraf(BOT_TOKEN || 'INVALID_TOKEN');
 function escapeHtml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    .replace(/>/g, '&gt;').replace(/\"/g, '&quot;');
 }
 
 function isAdmin(ctx) {

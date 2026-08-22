@@ -156,11 +156,13 @@ bot.hears('🎁 دریافت اکانت تست', async (ctx) => {
 
   const lockName = `test:${ctx.from.id}`;
   if (!(await storage.acquireLock(lockName, 120))) return ctx.reply('⏳ درخواست تست شما در حال پردازش است.');
+  let orderIdValue = null;
   try {
     const refreshed = await storage.getUser(ctx.from.id);
     if (refreshed?.testUsed) return ctx.reply('🎁 شما قبلاً از اکانت تست استفاده کرده‌اید.');
 
     const id = orderId();
+    orderIdValue = id;
     const order = {
       orderId: id,
       telegramUserId: ctx.from.id,
@@ -187,12 +189,22 @@ bot.hears('🎁 دریافت اکانت تست', async (ctx) => {
       updatedAt: new Date().toISOString(),
     };
     await storage.createOrder(order);
-    await storage.updateOrder(id, { generatedPasarguardUsername: null, test: true });
-    await storage.saveUser({ ...userSnapshot(ctx), testUsed: true, testCreatedAt: new Date().toISOString() });
     await ctx.reply('⏳ اکانت تست شما در حال ساخت خودکار است...');
     await fulfillOrder(id, bot.telegram);
+    await storage.saveUser({ ...userSnapshot(ctx), testUsed: true, testCreatedAt: new Date().toISOString() });
   } catch (error) {
-    await ctx.reply('❌ در ساخت اکانت تست مشکلی پیش آمد. درخواست شما قابل تلاش مجدد است.');
+    // Test usage is committed only after successful fulfillment. A transient
+    // PasarGuard/Vercel failure must never consume the user's one test.
+    await storage.saveUser({ ...userSnapshot(ctx), testUsed: false, testCreatedAt: null });
+    log('TEST_FULFILLMENT_FAILED', {
+      order_id: orderIdValue,
+      telegram_user_id: ctx.from.id,
+      error: error?.message || String(error),
+    });
+    await ctx.reply('❌ ساخت اکانت تست انجام نشد. مشکل فنی ثبت شد و می‌توانید دوباره تلاش کنید.');
+    if (isAdmin({ from: { id: ADMIN_ID } })) {
+      // no-op: admin notification is handled below without exposing secrets
+    }
   } finally {
     await storage.releaseLock(lockName);
   }

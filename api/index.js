@@ -193,8 +193,6 @@ bot.hears('🎁 دریافت اکانت تست', async (ctx) => {
     await fulfillOrder(id, bot.telegram);
     await storage.saveUser({ ...userSnapshot(ctx), testUsed: true, testCreatedAt: new Date().toISOString() });
   } catch (error) {
-    // Test usage is committed only after successful fulfillment. A transient
-    // PasarGuard/Vercel failure must never consume the user's one test.
     await storage.saveUser({ ...userSnapshot(ctx), testUsed: false, testCreatedAt: null });
     log('TEST_FULFILLMENT_FAILED', {
       order_id: orderIdValue,
@@ -202,9 +200,6 @@ bot.hears('🎁 دریافت اکانت تست', async (ctx) => {
       error: error?.message || String(error),
     });
     await ctx.reply('❌ ساخت اکانت تست انجام نشد. مشکل فنی ثبت شد و می‌توانید دوباره تلاش کنید.');
-    if (isAdmin({ from: { id: ADMIN_ID } })) {
-      // no-op: admin notification is handled below without exposing secrets
-    }
   } finally {
     await storage.releaseLock(lockName);
   }

@@ -1,0 +1,22 @@
+name: apply-service-flow
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[service-patch]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+      - name: Apply service flow patch
+        run: python3 scripts/service_flow_patch.py
+      - name: Commit service flow
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add api/index.js
+          git diff --cached --quiet || git commit -m 'Implement service selection flow [service-patch]'
+          git push

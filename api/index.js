@@ -1,451 +1,416 @@
 const { Telegraf, Markup } = require('telegraf');
+const { PLANS, getPlan, calculateCustomPrice, parseDurationDays, buildCustomPlan } = require('../lib/plans');
+const { normalizeSubscriptionName } = require('../lib/username');
+const storage = require('../lib/storage');
+const pasarguard = require('../lib/pasarguard');
+const { orderId, fulfillOrder, renewOrder, formatBytes } = require('../lib/fulfillment');
 
-// --- CONFIGURATION ---
 const BOT_TOKEN = process.env.BOT_TOKEN;
-const ADMIN_ID = process.env.ADMIN_ID;
-const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET; // Optional security secret
-const BANK_DETAILS = "شماره کارت: <code>6219861947080387</code>\nبنام: آرتین اسعدی";
-const SUPPORT_USERNAME = process.env.SUPPORT_USERNAME || "Your_Personal_ID";
+const ADMIN_ID = String(process.env.ADMIN_ID || '');
+const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || '';
+const BANK_DETAILS = process.env.BANK_DETAILS || '';
+const SUPPORT_USERNAME = process.env.SUPPORT_USERNAME || 'Your_Personal_ID';
+const TEST_TRAFFIC_GB = Number(process.env.TEST_TRAFFIC_GB || 1);
+const TEST_DURATION_DAYS = Number(process.env.TEST_DURATION_DAYS || 3);
+const TEST_HWID_LIMIT = Number(process.env.TEST_HWID_LIMIT ?? 0);
 
-if (!BOT_TOKEN || !ADMIN_ID) {
-    console.warn("CRITICAL WARNING: BOT_TOKEN and ADMIN_ID environment variables should be set!");
+if (!BOT_TOKEN || !ADMIN_ID) console.error('Missing BOT_TOKEN or ADMIN_ID');
+const bot = new Telegraf(BOT_TOKEN || 'INVALID_TOKEN');
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-const bot = new Telegraf(BOT_TOKEN || "PLACEHOLDER_TOKEN");
-
-// --- HELPER FUNCTIONS ---
-// Escapes HTML characters in user inputs to prevent parser errors
-function escapeHtml(text) {
-    if (!text) return '';
-    return String(text)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
+function isAdmin(ctx) {
+  return String(ctx.from?.id) === ADMIN_ID;
 }
 
-// --- STATE & DATA MANAGEMENT (Upstash Free Tier or In-Memory) ---
-const memoryUserStates = {};
-const memoryAdminStates = {};
-
-// Automatically remove any trailing slashes from the URL if accidentally copied from Upstash
-const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL ? process.env.UPSTASH_REDIS_REST_URL.replace(/\/$/, '') : undefined;
-const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
-
-async function getState(store, key) {
-    if (UPSTASH_URL && UPSTASH_TOKEN) {
-        try {
-            const res = await fetch(`${UPSTASH_URL}/get/${store}:${key}`, {
-                headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` }
-            });
-            const data = await res.json();
-            return data.result ? JSON.parse(data.result) : null;
-        } catch (e) {
-            console.error("State GET error:", e);
-        }
-    }
-    return store === 'user' ? memoryUserStates[key] : memoryAdminStates[key];
+function log(event, fields = {}) {
+  console.log(JSON.stringify({ event, ...fields }));
 }
 
-async function setState(store, key, value) {
-    if (UPSTASH_URL && UPSTASH_TOKEN) {
-        try {
-            await fetch(`${UPSTASH_URL}/set/${store}:${key}/${encodeURIComponent(JSON.stringify(value))}`, {
-                headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` }
-            });
-            return;
-        } catch (e) {
-            console.error("State SET error:", e);
-        }
-    }
-    if (store === 'user') memoryUserStates[key] = value;
-    else memoryAdminStates[key] = value;
+function userSnapshot(ctx) {
+  return {
+    telegramUserId: ctx.from.id,
+    username: ctx.from.username || null,
+    firstName: ctx.from.first_name || null,
+    lastName: ctx.from.last_name || null,
+    updatedAt: new Date().toISOString(),
+  };
 }
 
-async function deleteState(store, key) {
-    if (UPSTASH_URL && UPSTASH_TOKEN) {
-        try {
-            await fetch(`${UPSTASH_URL}/del/${store}:${key}`, {
-                headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` }
-            });
-            return;
-        } catch (e) {
-            console.error("State DEL error:", e);
-        }
-    }
-    if (store === 'user') delete memoryUserStates[key];
-    else delete memoryAdminStates[key];
+async function persistUser(ctx) {
+  return storage.saveUser(userSnapshot(ctx));
 }
 
-// User Tracking Logic
-async function trackUser(userId, isActive) {
-    if (!UPSTASH_URL || !UPSTASH_TOKEN) return;
-    try {
-        const endpoint = isActive ? 'sadd' : 'srem';
-        await fetch(`${UPSTASH_URL}/${endpoint}/bot_users/${userId}`, {
-            headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` }
-        });
-    } catch (e) {
-        console.error("Tracking error:", e);
-    }
+async function createOrderForPlan(ctx, plan) {
+  const id = orderId();
+  const order = {
+    orderId: id,
+    telegramUserId: ctx.from.id,
+    telegramUsername: ctx.from.username || null,
+    firstName: ctx.from.first_name || null,
+    lastName: ctx.from.last_name || null,
+    planId: plan.id,
+    planName: plan.name,
+    trafficLimitBytes: plan.trafficBytes,
+    durationDays: plan.durationDays,
+    hwidLimit: plan.hwidLimit,
+    price: plan.price,
+    currency: plan.currency || 'تومان',
+    requestedName: null,
+    generatedPasarguardUsername: null,
+    pasarguardUserId: null,
+    subscriptionUrl: null,
+    paymentStatus: 'AWAITING_PAYMENT',
+    fulfillmentStatus: 'DRAFT',
+    deliveryStatus: null,
+    receiptFileId: null,
+    receiptType: null,
+    receiptTelegramMessageId: null,
+    failureReason: null,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  await storage.createOrder(order);
+  return order;
 }
 
-async function getActiveUsers() {
-    if (!UPSTASH_URL || !UPSTASH_TOKEN) return [];
-    try {
-        const res = await fetch(`${UPSTASH_URL}/smembers/bot_users`, {
-            headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` }
-        });
-        const data = await res.json();
-        return data.result || [];
-    } catch (e) {
-        console.error("Get users error:", e);
-        return [];
-    }
+async function askSubscriptionName(ctx, order) {
+  await storage.setState('user', ctx.from.id, { stage: 'AWAITING_SUBSCRIPTION_NAME', orderId: order.orderId });
+  await ctx.reply(
+    '👤 نام اشتراک\n\nاگر می‌خواهید نام دلخواهی برای اشتراک خود انتخاب کنید، آن را وارد کنید؛ در غیر این صورت نام به صورت خودکار ساخته می‌شود.\n\nفقط حروف انگلیسی، اعداد، @ و _ مجاز است و نام نباید فاصله یا کاراکتر دیگری داشته باشد.',
+    Markup.inlineKeyboard([[Markup.button.callback('⚡ نام خودکار', `auto_name_${order.orderId}`)]])
+  );
 }
 
-// Available VPN Plans (ArtiQ Packages)
-const plans = [
-    { id: 'plan_1mo', name: 'اشتراک نامحدود (1 ماهه)', price: '199,000 تومان' },
-    { id: 'plan_2mo', name: 'اشتراک نامحدود (2 ماهه)', price: '299,000 تومان' },
-    { id: 'plan_10g', name: 'اشتراک 10 گیگابایت (1 ماهه)', price: '40,000 تومان' },
-    { id: 'plan_20g', name: 'اشتراک 20 گیگابایت (1 ماهه)', price: '70,000 تومان' },
-    { id: 'plan_50g', name: 'اشتراک 50 گیگابایت (2 ماهه)', price: '150,000 تومان' },
-    { id: 'plan_200g', name: 'اشتراک 200 گیگابایت (1 ماهه)', price: '200,000 تومان' },
-    { id: 'plan_300g', name: 'اشتراک 300 گیگابایت (1 ماهه)', price: '300,000 تومان' },
-    { id: 'plan_500g', name: 'اشتراک 500 گیگابایت (1 ماهه)', price: '450,000 تومان' },
-    { id: 'plan_1000g', name: 'اشتراک 1000 گیگابایت (1 ماهه)', price: '700,000 تومان' }
-];
+async function showPayment(ctx, order) {
+  await storage.updateOrder(order.orderId, {
+    paymentStatus: 'AWAITING_PAYMENT',
+    fulfillmentStatus: 'AWAITING_PAYMENT',
+  });
+  await storage.setState('user', ctx.from.id, { stage: 'AWAITING_RECEIPT', orderId: order.orderId });
+  await ctx.reply(
+    `💳 <b>اطلاعات پرداخت</b>\n\nسرویس: <b>${escapeHtml(order.planName)}</b>\nمبلغ: <b>${Number(order.price).toLocaleString('en-US')} ${escapeHtml(order.currency)}</b>\n\n${escapeHtml(BANK_DETAILS)}\n\n📸 پس از پرداخت، عکس رسید یا فایل رسید را همینجا ارسال کنید.\n\n⚠️ رسید فقط برای ثبت و بررسی بعدی نگهداری می‌شود؛ پس از ارسال رسید، سفارش به صورت خودکار وارد مرحله ساخت اشتراک می‌شود.`,
+    { parse_mode: 'HTML' }
+  );
+}
 
-// --- MAIN MENU KEYBOARD ---
-const mainMenu = Markup.keyboard([
+bot.catch((error, ctx) => {
+  log('BOT_ERROR', { update_type: ctx?.updateType, error: error?.message || String(error) });
+});
+
+bot.start(async (ctx) => {
+  await persistUser(ctx);
+  await storage.deleteState('user', ctx.from.id);
+  await ctx.reply('👋 به ربات آرتیک خوش آمدید!\n\nلطفاً یکی از گزینه‌های زیر را انتخاب کنید:', Markup.keyboard([
     ['🎁 دریافت اکانت تست'],
     ['🛒 خرید اشتراک'],
-    ['🎯 پشتیبانی']
-]).resize();
-
-// --- GLOBAL ERROR HANDLER ---
-bot.catch(async (err, ctx) => {
-    console.error(`Error for ${ctx.updateType}`, err);
-
-    // If the error happened because the user blocked the bot, remove them from the active list
-    if (err.description && err.description.includes('bot was blocked by the user')) {
-        if (ctx.from && ctx.from.id) {
-            await trackUser(ctx.from.id, false);
-        }
-    }
-});
-
-// --- USER ACTIONS & TRACKING ---
-
-// Detect if a user blocks or unblocks the bot
-bot.on('my_chat_member', async (ctx) => {
-    const status = ctx.myChatMember.new_chat_member.status;
-    if (status === 'kicked' || status === 'left') {
-        await trackUser(ctx.chat.id, false);
-    } else if (status === 'member') {
-        await trackUser(ctx.chat.id, true);
-    }
-});
-
-// Start Command
-bot.start(async (ctx) => {
-    const userId = ctx.from.id;
-    await deleteState('user', userId);
-    await trackUser(userId, true); // Mark user as active
-    await ctx.reply(`👋 به ربات آرتیک خوش آمدید! با یک اتصال امن، پایدار و پرسرعت از حریم خصوصی خود در اینترنت آزاد محافظت کنید.\n\nلطفاً برای شروع، یکی از گزینه‌های زیر را انتخاب کنید:`, mainMenu);
-});
-
-// --- ADMIN COMMANDS ---
-
-bot.command('pingdb', async (ctx) => {
-    if (String(ctx.from.id) !== String(ADMIN_ID)) return;
-
-    if (!UPSTASH_URL || !UPSTASH_TOKEN) {
-        return await ctx.reply("❌ متغیرهای Upstash در Vercel یافت نشدند! مطمئن شوید نام آن‌ها دقیقاً درست است.");
-    }
-
-    try {
-        const res = await fetch(`${UPSTASH_URL}/ping`, {
-            headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` }
-        });
-
-        const text = await res.text();
-
-        if (res.ok) {
-            await ctx.reply(`✅ اتصال به دیتابیس برقرار است!\nپاسخ: ${text}`);
-        } else {
-            await ctx.reply(`⚠️ اتصال به سرور دیتابیس انجام شد اما با خطا مواجه شد:\nوضعیت: ${res.status}\nمتن خطا: ${text}`);
-        }
-    } catch (e) {
-        await ctx.reply(`❌ خطای بحرانی در اتصال (شاید مشکل از Fetch یا اینترنت سرور باشد):\n${e.message}`);
-    }
-});
-
-bot.command('users', async (ctx) => {
-    if (String(ctx.from.id) !== String(ADMIN_ID)) return;
-    const users = await getActiveUsers();
-    await ctx.reply(`📊 تعداد کاربران فعال ربات: ${users.length} نفر`);
-});
-
-bot.command('broadcast', async (ctx) => {
-    if (String(ctx.from.id) !== String(ADMIN_ID)) return;
-
-    const messageText = ctx.message.text.replace('/broadcast', '').trim();
-
-    if (!messageText && !ctx.message.reply_to_message) {
-        return await ctx.reply('❌ نحوه استفاده:\n/broadcast متن پیام\nیا این دستور را روی پیام مورد نظر ریپلای (Reply) کنید.');
-    }
-
-    const users = await getActiveUsers();
-    if (users.length === 0) return await ctx.reply('❌ هیچ کاربری یافت نشد (آیا دیتابیس متصل است؟).');
-
-    await ctx.reply(`⏳ در حال ارسال پیام به ${users.length} کاربر...\nلطفاً تا دریافت پیام پایان صبر کنید.`);
-
-    let success = 0;
-    let failed = 0;
-
-    for (const targetId of users) {
-        try {
-            if (ctx.message.reply_to_message) {
-                await ctx.telegram.copyMessage(targetId, ctx.chat.id, ctx.message.reply_to_message.message_id);
-            } else {
-                await ctx.telegram.sendMessage(targetId, messageText);
-            }
-            success++;
-            await new Promise(res => setTimeout(res, 50)); // Prevent Telegram spam limits
-        } catch (e) {
-            failed++;
-            if (e.description && e.description.includes('bot was blocked by the user')) {
-                await trackUser(targetId, false);
-            }
-        }
-    }
-
-    await ctx.reply(`✅ عملیات ارسال پایان یافت.\n\nتعداد موفق: ${success}\nتعداد ناموفق (بلاک شده و حذف از لیست): ${failed}`);
-});
-
-// --- MENU HANDLERS ---
-
-bot.hears('🎁 دریافت اکانت تست', async (ctx) => {
-    const userId = ctx.from.id;
-    const firstName = escapeHtml(ctx.from.first_name);
-    const username = ctx.from.username ? `@${escapeHtml(ctx.from.username)}` : 'بدون آیدی';
-
-    await ctx.reply('⏳ درخواست اکانت تست شما برای مدیریت ارسال شد. لطفاً تا زمان تایید منتظر بمانید.');
-
-    try {
-        await bot.telegram.sendMessage(
-            ADMIN_ID,
-            `⚠️ <b>درخواست اکانت تست جدید</b>\n\nکاربر: ${firstName}\nآیدی: ${username}\nشناسه: <code>${userId}</code>`,
-            {
-                parse_mode: 'HTML',
-                ...Markup.inlineKeyboard([
-                    [Markup.button.callback('✅ تایید و ارسال کانفیگ تست', `approve_test_${userId}`)]
-                ])
-            }
-        );
-    } catch (err) {
-        console.error("Failed to notify admin:", err);
-    }
-});
-
-bot.hears('🛒 خرید اشتراک', async (ctx) => {
-    const buttons = plans.map(plan => [Markup.button.callback(`${plan.name} - ${plan.price}`, `select_plan_${plan.id}`)]);
-    buttons.push([Markup.button.callback('🛠 ساخت بسته دلخواه (حجم و زمان)', 'select_custom')]);
-
-    await ctx.reply('📋 لطفاً بسته مورد نظر خود را انتخاب کنید:', Markup.inlineKeyboard(buttons));
-
-    const firstName = escapeHtml(ctx.from.first_name);
-    const username = ctx.from.username ? `@${escapeHtml(ctx.from.username)}` : 'بدون آیدی';
-
-    try {
-        await bot.telegram.sendMessage(
-            ADMIN_ID,
-            `👁‍🗨 <b>اقدام به خرید</b>\nکاربر ${firstName} (${username}) در حال مشاهده لیست قیمت‌ها برای خرید است.`,
-            { parse_mode: 'HTML' }
-        );
-    } catch (err) {
-        console.error("Failed to send admin notification:", err);
-    }
+    ['👤 حساب من'],
+    ['🎯 پشتیبانی'],
+  ]).resize());
 });
 
 bot.hears('🎯 پشتیبانی', async (ctx) => {
-    await ctx.reply(`ℹ️ برای هرگونه سوال، راهنمایی در اتصال یا پشتیبانی، مستقیماً با ما در ارتباط باشید:\n\n💬 @${SUPPORT_USERNAME}`);
+  await persistUser(ctx);
+  await ctx.reply(`ℹ️ برای پشتیبانی و راهنمایی، با ما در ارتباط باشید:\n\n💬 @${escapeHtml(SUPPORT_USERNAME)}`);
 });
 
-// --- CALLBACK QUERY HANDLERS ---
+bot.hears('🛒 خرید اشتراک', async (ctx) => {
+  await persistUser(ctx);
+  const buttons = PLANS.map((plan) => [Markup.button.callback(
+    `${plan.name} - ${Number(plan.price).toLocaleString('en-US')} تومان`,
+    `select_plan_${plan.id}`
+  )]);
+  buttons.push([Markup.button.callback('🛠 ساخت بسته دلخواه (حجم و زمان)', 'select_custom')]);
+  await ctx.reply('📋 لطفاً بسته مورد نظر خود را انتخاب کنید:', Markup.inlineKeyboard(buttons));
+});
+
+bot.hears('👤 حساب من', async (ctx) => {
+  await persistUser(ctx);
+  const user = await storage.getUser(ctx.from.id);
+  if (!user?.currentPasarguardUserId) return ctx.reply('👤 هنوز اشتراک فعالی برای حساب شما ثبت نشده است.');
+  try {
+    const current = await pasarguard.getUserById(user.currentPasarguardUserId);
+    const status = current.status || 'نامشخص';
+    const traffic = current.data_limit === 0 ? 'نامحدود' : formatBytes(Number(current.data_limit || 0));
+    const used = current.used_traffic != null ? formatBytes(Number(current.used_traffic)) : 'در دسترس نیست';
+    await ctx.reply(
+      `👤 <b>حساب من</b>\n\n👤 نام اشتراک: <code>${escapeHtml(current.username || user.currentPasarguardUsername)}</code>\n📊 حجم: ${escapeHtml(traffic)}\n📈 مصرف: ${escapeHtml(used)}\n⏳ انقضا: ${escapeHtml(current.expire || 'نامشخص')}\n📌 وضعیت: ${escapeHtml(status)}`,
+      { parse_mode: 'HTML', reply_markup: { inline_keyboard: [
+        [{ text: '📥 دریافت لینک اشتراک', url: current.subscription_url || user.currentSubscriptionUrl }],
+        [{ text: '🔄 تمدید اشتراک', callback_data: 'renew_choose' }],
+      ] } }
+    );
+  } catch (error) {
+    await ctx.reply('❌ دریافت وضعیت اشتراک در حال حاضر ممکن نیست. لطفاً کمی بعد دوباره تلاش کنید.');
+  }
+});
+
+bot.hears('🎁 دریافت اکانت تست', async (ctx) => {
+  await persistUser(ctx);
+  const user = await storage.getUser(ctx.from.id);
+  if (user?.testUsed) return ctx.reply('🎁 شما قبلاً از اکانت تست استفاده کرده‌اید.');
+
+  const lockName = `test:${ctx.from.id}`;
+  if (!(await storage.acquireLock(lockName, 120))) return ctx.reply('⏳ درخواست تست شما در حال پردازش است.');
+  try {
+    const refreshed = await storage.getUser(ctx.from.id);
+    if (refreshed?.testUsed) return ctx.reply('🎁 شما قبلاً از اکانت تست استفاده کرده‌اید.');
+
+    const id = orderId();
+    const order = {
+      orderId: id,
+      telegramUserId: ctx.from.id,
+      telegramUsername: ctx.from.username || null,
+      firstName: ctx.from.first_name || null,
+      lastName: ctx.from.last_name || null,
+      planId: 'test',
+      planName: 'اکانت تست',
+      trafficLimitBytes: TEST_TRAFFIC_GB * 1024 ** 3,
+      durationDays: TEST_DURATION_DAYS,
+      hwidLimit: TEST_HWID_LIMIT,
+      price: 0,
+      currency: 'تومان',
+      requestedName: null,
+      generatedPasarguardUsername: null,
+      pasarguardUserId: null,
+      subscriptionUrl: null,
+      paymentStatus: 'NOT_REQUIRED',
+      fulfillmentStatus: 'RECEIPT_SUBMITTED',
+      deliveryStatus: null,
+      receiptFileId: null,
+      receiptType: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    await storage.createOrder(order);
+    await storage.updateOrder(id, { generatedPasarguardUsername: null, test: true });
+    await storage.saveUser({ ...userSnapshot(ctx), testUsed: true, testCreatedAt: new Date().toISOString() });
+    await ctx.reply('⏳ اکانت تست شما در حال ساخت خودکار است...');
+    await fulfillOrder(id, bot.telegram);
+  } catch (error) {
+    await ctx.reply('❌ در ساخت اکانت تست مشکلی پیش آمد. درخواست شما قابل تلاش مجدد است.');
+  } finally {
+    await storage.releaseLock(lockName);
+  }
+});
+
 bot.on('callback_query', async (ctx) => {
-    const data = ctx.callbackQuery.data;
-    const adminId = ctx.from.id;
-    const userId = ctx.from.id;
+  const data = ctx.callbackQuery.data || '';
+  await ctx.answerCbQuery().catch(() => {});
 
-    await ctx.answerCbQuery().catch(() => {});
+  if (data.startsWith('select_plan_')) {
+    const plan = getPlan(data.slice('select_plan_'.length));
+    if (!plan) return;
+    const order = await createOrderForPlan(ctx, plan);
+    await askSubscriptionName(ctx, order);
+    return;
+  }
 
-    if (data.startsWith('select_plan_')) {
-        const planId = data.replace('select_plan_', '');
-        const selectedPlan = plans.find(p => p.id === planId);
+  if (data === 'select_custom') {
+    await storage.setState('user', ctx.from.id, { stage: 'AWAITING_CUSTOM_TRAFFIC' });
+    await ctx.reply('🛠 حجم مورد نیاز را فقط به صورت عدد و بر حسب گیگابایت وارد کنید.\n\nمثلاً: 15');
+    return;
+  }
 
-        if (selectedPlan) {
-            await setState('user', userId, { stage: 'AWAITING_RECEIPT', plan: selectedPlan.name });
-            await ctx.reply(
-                `💳 <b>اطلاعات پرداخت</b>\n\nشما <b>${escapeHtml(selectedPlan.name)}</b> را انتخاب کردید.\n\nلطفاً مبلغ <b>${escapeHtml((selectedPlan.price))}</b> را به حساب زیر انتقال دهید:\n\n${BANK_DETAILS}\n\n📸 <b>مهم:</b> پس از پرداخت، لطفاً عکس رسید یا اسکرین‌شات واریزی خود را مستقیماً در همین چت ارسال کنید.`,
-                { parse_mode: 'HTML' }
-            );
-        }
-    } else if (data === 'select_custom') {
-        await setState('user', userId, { stage: 'AWAITING_CUSTOM_TRAFFIC' });
-        await ctx.reply(
-            '🛠 شما ساخت بسته دلخواه را انتخاب کردید.\n\nلطفاً حجم مورد نیاز خود را <b>فقط به صورت عدد و به گیگابایت</b> وارد کنید (مثلاً: 15):',
-            { parse_mode: 'HTML' }
-        );
-    } else if (data.startsWith('approve_test_')) {
-        const targetUserId = data.replace('approve_test_', '');
-        await setState('admin', adminId, { action: 'SEND_TEST', targetUser: targetUserId });
-        await ctx.reply(
-            `📝 لطفاً <b>کانفیگ تست</b> (متن، عکس، لینک یا فایل) برای کاربر <code>${targetUserId}</code> را ارسال کنید. پیام بعدی شما دقیقاً به همان شکلی که هست برای او ارسال می‌شود.`,
-            { parse_mode: 'HTML' }
-        );
-    } else if (data.startsWith('approve_buy_')) {
-        const targetUserId = data.replace('approve_buy_', '');
-        await setState('admin', adminId, { action: 'SEND_BUY', targetUser: targetUserId });
-        await ctx.reply(
-            `📝 سفارش تایید شد! لطفاً <b>کانفیگ اصلی</b> (متن، عکس QR، لینک یا فایل) برای کاربر <code>${targetUserId}</code> را ارسال کنید. پیام بعدی شما دقیقاً به همان شکلی که هست برای او ارسال می‌شود.`,
-            { parse_mode: 'HTML' }
-        );
-    } else if (data.startsWith('reject_buy_')) {
-        const targetUserId = data.replace('reject_buy_', '');
-        try {
-            await bot.telegram.sendMessage(
-                targetUserId,
-                '❌ رسید پرداختی شما توسط مدیریت تایید نشد. اگر فکر می‌کنید اشتباهی رخ داده است، لطفاً با پشتیبانی تماس بگیرید.'
-            );
-            await ctx.reply(`❌ سفارش کاربر <code>${targetUserId}</code> رد شد و به او اطلاع داده شد.`, { parse_mode: 'HTML' });
-        } catch (err) {
-            await ctx.reply(`❌ ارسال پیام به کاربر ناموفق بود (ممکن است ربات را بلاک کرده باشد).`);
-        }
-    }
-});
+  if (data.startsWith('auto_name_')) {
+    const id = data.slice('auto_name_'.length);
+    const state = await storage.getState('user', ctx.from.id);
+    if (!state || state.orderId !== id || state.stage !== 'AWAITING_SUBSCRIPTION_NAME') return;
+    const order = await storage.getOrder(id);
+    if (!order || order.telegramUserId !== ctx.from.id) return;
+    await storage.updateOrder(id, { requestedName: null });
+    await showPayment(ctx, { ...order, requestedName: null });
+    return;
+  }
 
-// --- MESSAGE HANDLING ---
-bot.on('message', async (ctx) => {
-    const userId = ctx.from.id;
-    const firstName = escapeHtml(ctx.from.first_name);
-    const username = ctx.from.username ? `@${escapeHtml(ctx.from.username)}` : 'بدون آیدی';
+  if (data === 'renew_choose') {
+    const user = await storage.getUser(ctx.from.id);
+    if (!user?.currentPasarguardUserId) return ctx.reply('❌ اشتراک فعالی برای تمدید پیدا نشد.');
+    const buttons = PLANS.map((plan) => [Markup.button.callback(
+      `${plan.name} - ${Number(plan.price).toLocaleString('en-US')} تومان`,
+      `renew_plan_${plan.id}`
+    )]);
+    await ctx.reply('🔄 بسته تمدید را انتخاب کنید:', Markup.inlineKeyboard(buttons));
+    return;
+  }
 
-    // 1. Admin States
-    if (Number(userId) === Number(ADMIN_ID)) {
-        const adminState = await getState('admin', userId);
-        if (adminState) {
-            try {
-                await ctx.telegram.copyMessage(adminState.targetUser, ctx.chat.id, ctx.message.message_id);
+  if (data.startsWith('renew_plan_')) {
+    const plan = getPlan(data.slice('renew_plan_'.length));
+    const user = await storage.getUser(ctx.from.id);
+    if (!plan || !user?.currentPasarguardUserId) return;
+    const order = await createOrderForPlan(ctx, plan);
+    await storage.updateOrder(order.orderId, { renewal: true, renewalPasarguardUserId: user.currentPasarguardUserId });
+    await showPayment(ctx, order);
+    return;
+  }
 
-                if (adminState.action === 'SEND_TEST') {
-                    await ctx.reply('✅ کانفیگ تست دقیقاً همان‌طور که ارسال کردید، به کاربر تحویل داده شد.');
-                } else if (adminState.action === 'SEND_BUY') {
-                    await ctx.reply('✅ کانفیگ اصلی دقیقاً همان‌طور که ارسال کردید، به کاربر تحویل داده شد.');
-                }
-            } catch (err) {
-                console.error(err);
-                await ctx.reply('❌ ارسال پیام به کاربر ناموفق بود. ممکن است ربات را بلاک کرده باشد.');
-            }
-
-            await deleteState('admin', userId);
-            return;
-        }
-    }
-
-    // 2. User States
-    const userState = await getState('user', userId);
-    if (userState) {
-        if (userState.stage === 'AWAITING_CUSTOM_TRAFFIC') {
-            if (!ctx.message.text) {
-                return await ctx.reply('❌ لطفاً فقط یک عدد به عنوان حجم وارد کنید.');
-            }
-
-            const traffic = parseInt(ctx.message.text);
-            if (isNaN(traffic) || traffic <= 0) {
-                return await ctx.reply('❌ مقدار نامعتبر. لطفاً فقط یک عدد به عنوان حجم وارد کنید (مثلاً: 10):');
-            }
-
-            const calculatedPrice = traffic > 51 ? traffic * 3000 : traffic * 4000;
-            await setState('user', userId, {
-                stage: 'AWAITING_CUSTOM_DURATION',
-                traffic: traffic,
-                price: calculatedPrice
-            });
-
-            return await ctx.reply(
-                `✅ حجم ${traffic} گیگابایت با موفقیت ثبت شد.\n💳 هزینه محاسبه شده: ${calculatedPrice.toLocaleString('en-US')} تومان\n\nلطفاً مدت زمان اعتبار بسته را به صورت متنی وارد کنید. حداکثر زمان ممکن ٥ ماهه یا ١٥٠ روزه می باشد (مثلاً: ۱ ماهه، ۴۵ روزه):`
-            );
-        }
-
-        if (userState.stage === 'AWAITING_CUSTOM_DURATION') {
-            const duration = ctx.message.text;
-            if (!duration) {
-                return await ctx.reply('❌ لطفاً مدت زمان را به صورت متنی ارسال کنید.');
-            }
-
-            const planName = `بسته سفارشی (${userState.traffic} گیگابایت | ${duration})`;
-            const priceFormatted = `${userState.price.toLocaleString('en-US')} تومان`;
-
-            await setState('user', userId, { stage: 'AWAITING_RECEIPT', plan: planName });
-
-            return await ctx.reply(
-                `💳 <b>اطلاعات پرداخت</b>\n\nشما <b>${escapeHtml(planName)}</b> را انتخاب کردید.\n\nمبلغ <b>${priceFormatted}</b> را به حساب زیر انتقال دهید:\n\n${BANK_DETAILS}\n\n📸 <b>مهم:</b> پس از پرداخت، لطفاً عکس رسید یا اسکرین‌شات واریزی خود را مستقیماً در همین چت ارسال کنید.`,
-                { parse_mode: 'HTML' }
-            );
-        }
-
-        if (userState.stage === 'AWAITING_RECEIPT') {
-            if (ctx.message.photo || ctx.message.document) {
-                const planName = userState.plan;
-                await ctx.reply('✅ رسید شما دریافت شد! سیستم آن را برای مدیریت ارسال کرد. به محض تایید، کانفیگ شما به صورت خودکار همینجا ارسال خواهد شد.');
-
-                const adminCaption = `💰 <b>رسید پرداخت جدید!</b>\n\nکاربر: ${firstName}\nآیدی: ${username}\nشناسه: <code>${userId}</code>\nبسته انتخابی: <b>${escapeHtml(planName)}</b>`;
-                const adminButtons = Markup.inlineKeyboard([
-                    [
-                        Markup.button.callback('✅ تایید سفارش', `approve_buy_${userId}`),
-                        Markup.button.callback('❌ رد سفارش', `reject_buy_${userId}`)
-                    ]
-                ]);
-
-                try {
-                    if (ctx.message.photo) {
-                        const photoId = ctx.message.photo[ctx.message.photo.length - 1].file_id;
-                        await bot.telegram.sendPhoto(ADMIN_ID, photoId, { caption: adminCaption, parse_mode: 'HTML', ...adminButtons });
-                    } else {
-                        await bot.telegram.sendDocument(ADMIN_ID, ctx.message.document.file_id, { caption: adminCaption, parse_mode: 'HTML', ...adminButtons });
-                    }
-                } catch (err) {
-                    console.error("Failed to forward receipt to admin:", err);
-                }
-
-                await deleteState('user', userId);
-            } else {
-                await ctx.reply('❌ فرمت نامعتبر. لطفاً فقط تصویر رسید یا فایل اسکرین‌شات واریزی را ارسال کنید.');
-            }
-            return;
-        }
-    }
-});
-
-// --- VERCEL WEBHOOK HANDLER ---
-module.exports = async (req, res) => {
+  if (data.startsWith('invalidate_')) {
+    if (!isAdmin(ctx)) return;
+    const id = data.slice('invalidate_'.length);
+    const order = await storage.getOrder(id);
+    if (!order || !order.pasarguardUserId) return ctx.reply('❌ سفارش یا کاربر PasarGuard پیدا نشد.');
     try {
-        if (req.method === 'POST') {
-            if (WEBHOOK_SECRET && req.headers['x-telegram-bot-api-secret-token'] !== WEBHOOK_SECRET) {
-                return res.status(403).send('Unauthorized');
-            }
-
-            await bot.handleUpdate(req.body);
-            return res.status(200).send('OK');
-        } else {
-            return res.status(200).send('ArtiQ Vercel Bot is active and running.');
-        }
-    } catch (e) {
-        console.error('Webhook Error:', e);
-        // CRITICAL FIX: Always return 200 so Telegram stops the infinite retry loop!
-        return res.status(200).send('OK');
+      await pasarguard.disableUser(order.pasarguardUserId);
+      await storage.updateOrder(id, { paymentStatus: 'PAYMENT_LATER_REJECTED', fulfillmentStatus: 'PAYMENT_LATER_REJECTED' });
+      await ctx.reply(`❌ اشتراک ${escapeHtml(order.generatedPasarguardUsername)} غیرفعال شد.`, { parse_mode: 'HTML' });
+      await bot.telegram.sendMessage(order.telegramUserId, '❌ پرداخت این سفارش بعداً نامعتبر تشخیص داده شد و اشتراک غیرفعال شد. برای پیگیری با پشتیبانی تماس بگیرید.');
+    } catch (error) {
+      await ctx.reply('❌ غیرفعال‌سازی اشتراک انجام نشد؛ لاگ فنی ثبت شد.');
     }
+  }
+});
+
+bot.on('message', async (ctx) => {
+  await persistUser(ctx);
+  const state = await storage.getState('user', ctx.from.id);
+  if (!state) return;
+
+  if (state.stage === 'AWAITING_CUSTOM_TRAFFIC') {
+    const traffic = Number(String(ctx.message.text || '').trim().replace(/[۰-۹]/g, (d) => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)));
+    if (!Number.isInteger(traffic) || traffic < 1 || traffic > 1000) {
+      return ctx.reply('❌ حجم نامعتبر است. عددی بین ۱ تا ۱۰۰۰ گیگابایت وارد کنید.');
+    }
+    const price = calculateCustomPrice(traffic);
+    await storage.setState('user', ctx.from.id, { stage: 'AWAITING_CUSTOM_DURATION', traffic, price });
+    return ctx.reply(`✅ حجم ${traffic} گیگابایت ثبت شد.\n💳 قیمت: ${price.toLocaleString('en-US')} تومان\n\nمدت را به صورت «۳۰ روزه» یا «۱ ماهه» وارد کنید. حداکثر ۱۵۰ روز.`);
+  }
+
+  if (state.stage === 'AWAITING_CUSTOM_DURATION') {
+    const days = parseDurationDays(ctx.message.text);
+    if (!days || days < 1 || days > 150) return ctx.reply('❌ مدت نامعتبر است. بین ۱ تا ۱۵۰ روز وارد کنید.');
+    const plan = buildCustomPlan(state.traffic, days);
+    const order = await createOrderForPlan(ctx, plan);
+    await askSubscriptionName(ctx, order);
+    return;
+  }
+
+  if (state.stage === 'AWAITING_SUBSCRIPTION_NAME') {
+    if (!ctx.message.text) return ctx.reply('❌ لطفاً نام اشتراک را به صورت متن انگلیسی ارسال کنید یا «نام خودکار» را انتخاب کنید.');
+    let name;
+    try {
+      name = normalizeSubscriptionName(ctx.message.text);
+    } catch (error) {
+      const messages = {
+        USERNAME_ENGLISH_ONLY: '❌ نام اشتراک فقط باید با حروف انگلیسی باشد. حروف فارسی/عربی و ایموجی مجاز نیست.',
+        USERNAME_NO_SPACES: '❌ نام اشتراک نباید فاصله داشته باشد.',
+        USERNAME_INVALID_CHARACTERS: '❌ فقط حروف انگلیسی، اعداد، @ و _ مجاز هستند.',
+        USERNAME_TOO_GENERIC: '❌ این نام برای اشتراک مناسب نیست. یک نام معنادار انگلیسی انتخاب کنید.',
+      };
+      return ctx.reply(messages[error.message] || '❌ نام اشتراک نامعتبر است.');
+    }
+    const order = await storage.getOrder(state.orderId);
+    if (!order || order.telegramUserId !== ctx.from.id) return ctx.reply('❌ سفارش پیدا نشد. لطفاً دوباره از خرید شروع کنید.');
+    const updated = await storage.updateOrder(order.orderId, { requestedName: name });
+    await showPayment(ctx, updated);
+    return;
+  }
+
+  if (state.stage === 'AWAITING_RECEIPT') {
+    if (!ctx.message.photo && !ctx.message.document) return ctx.reply('❌ لطفاً تصویر رسید یا فایل رسید را ارسال کنید.');
+    const order = await storage.getOrder(state.orderId);
+    if (!order || order.telegramUserId !== ctx.from.id) return ctx.reply('❌ سفارش پیدا نشد.');
+    if (!['AWAITING_PAYMENT', 'AWAITING_RECEIPT'].includes(order.paymentStatus)) return;
+
+    const receiptFileId = ctx.message.photo
+      ? ctx.message.photo[ctx.message.photo.length - 1].file_id
+      : ctx.message.document.file_id;
+    const receiptType = ctx.message.photo ? 'photo' : 'document';
+    const updated = await storage.updateOrder(order.orderId, {
+      receiptFileId,
+      receiptType,
+      receiptTelegramMessageId: ctx.message.message_id,
+      paymentStatus: 'RECEIPT_SUBMITTED',
+      fulfillmentStatus: 'RECEIPT_SUBMITTED',
+    });
+    await storage.deleteState('user', ctx.from.id);
+    log('RECEIPT_SUBMITTED', { order_id: order.orderId, telegram_user_id: ctx.from.id, pasarguard_username: order.generatedPasarguardUsername || null });
+
+    const caption = `💰 <b>رسید پرداخت جدید</b>\n\nسفارش: <code>${escapeHtml(updated.orderId)}</code>\nکاربر: ${escapeHtml(updated.firstName)}\nآیدی: ${escapeHtml(updated.telegramUsername ? `@${updated.telegramUsername}` : 'بدون آیدی')}\nشناسه تلگرام: <code>${updated.telegramUserId}</code>\nنام اشتراک درخواستی: <code>${escapeHtml(updated.requestedName || 'خودکار')}</code>\nبسته: <b>${escapeHtml(updated.planName)}</b>\nمبلغ: <b>${Number(updated.price).toLocaleString('en-US')} تومان</b>`;
+    const adminButtons = Markup.inlineKeyboard([[Markup.button.callback('❌ پرداخت نامعتبر / غیرفعال کردن', `invalidate_${updated.orderId}`)]]);
+    try {
+      if (receiptType === 'photo') {
+        await bot.telegram.sendPhoto(ADMIN_ID, receiptFileId, { caption, parse_mode: 'HTML', ...adminButtons });
+      } else {
+        await bot.telegram.sendDocument(ADMIN_ID, receiptFileId, { caption, parse_mode: 'HTML', ...adminButtons });
+      }
+    } catch (error) {
+      log('ADMIN_RECEIPT_NOTIFICATION_FAILED', { order_id: updated.orderId, error: error.message });
+    }
+
+    await ctx.reply('✅ رسید دریافت شد. اشتراک شما بدون نیاز به تأیید دستی در حال ساخت خودکار است.');
+    try {
+      await fulfillOrder(updated.orderId, bot.telegram);
+    } catch (error) {
+      await ctx.reply('⏳ ساخت اشتراک با مشکل موقت مواجه شد. سفارش شما ثبت شده و امکان تلاش مجدد وجود دارد.');
+    }
+  }
+});
+
+bot.command('pingdb', async (ctx) => {
+  if (!isAdmin(ctx)) return;
+  try { await ctx.reply(await storage.ping() ? '✅ Redis: OK' : '⚠️ Redis در حالت حافظه محلی است.'); }
+  catch { await ctx.reply('❌ Redis: ERROR'); }
+});
+
+bot.command('status', async (ctx) => {
+  if (!isAdmin(ctx)) return;
+  const orders = await storage.listOrders(100);
+  const pending = orders.filter((o) => !['FULFILLED', 'PAYMENT_LATER_REJECTED'].includes(o.fulfillmentStatus)).length;
+  const failed = orders.filter((o) => o.fulfillmentStatus === 'FAILED_RETRYABLE').length;
+  let pg = 'ERROR';
+  try { await pasarguard.health(); pg = 'OK'; } catch {}
+  await ctx.reply(`📊 <b>وضعیت سیستم</b>\n\nTelegram Bot: OK\nRedis: ${storage.configured() ? 'OK' : 'MEMORY'}\nPasarGuard: ${pg}\nPending orders: ${pending}\nFailed fulfillments: ${failed}`, { parse_mode: 'HTML' });
+});
+
+bot.command('orders', async (ctx) => {
+  if (!isAdmin(ctx)) return;
+  const orders = await storage.listOrders(20);
+  if (!orders.length) return ctx.reply('سفارشی ثبت نشده است.');
+  const text = orders.map((o) => `${o.orderId} | ${o.planName} | ${o.fulfillmentStatus} | ${o.generatedPasarguardUsername || '-'}`).join('\n');
+  await ctx.reply(`<pre>${escapeHtml(text)}</pre>`, { parse_mode: 'HTML' });
+});
+
+bot.command('failed', async (ctx) => {
+  if (!isAdmin(ctx)) return;
+  const orders = (await storage.listOrders(100)).filter((o) => o.fulfillmentStatus === 'FAILED_RETRYABLE');
+  if (!orders.length) return ctx.reply('❌ مورد ناموفقی وجود ندارد.');
+  for (const order of orders.slice(0, 10)) {
+    await ctx.reply(`⚠️ ${order.orderId}\n${order.failureReason || 'unknown'}\n${order.generatedPasarguardUsername || '-'}`);
+  }
+});
+
+bot.command('users', async (ctx) => {
+  if (!isAdmin(ctx)) return;
+  const users = await storage.smembers('bot_users');
+  await ctx.reply(`📊 تعداد کاربران ثبت‌شده: ${users.length}`);
+});
+
+bot.command('broadcast', async (ctx) => {
+  if (!isAdmin(ctx)) return;
+  const messageText = ctx.message.text.replace(/^\/broadcast\s*/, '').trim();
+  if (!messageText) return ctx.reply('❌ استفاده: /broadcast متن پیام');
+  const users = await storage.smembers('bot_users');
+  let success = 0; let failed = 0;
+  for (const id of users) {
+    try { await bot.telegram.sendMessage(id, messageText); success++; }
+    catch (error) { failed++; if (String(error.description || '').includes('blocked')) await storage.srem('bot_users', id); }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  await ctx.reply(`✅ ارسال پایان یافت. موفق: ${success} | ناموفق: ${failed}`);
+});
+
+module.exports = async (req, res) => {
+  if (req.method !== 'POST') return res.status(200).send('ArtiQ VPN Bot is running.');
+  if (WEBHOOK_SECRET && req.headers['x-telegram-bot-api-secret-token'] !== WEBHOOK_SECRET) return res.status(403).send('Unauthorized');
+  try {
+    await bot.handleUpdate(req.body);
+    return res.status(200).send('OK');
+  } catch (error) {
+    log('WEBHOOK_ERROR', { error: error.message || String(error) });
+    return res.status(200).send('OK');
+  }
 };

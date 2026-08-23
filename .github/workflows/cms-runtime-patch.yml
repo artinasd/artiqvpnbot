@@ -1,0 +1,48 @@
+name: Apply CMS runtime patch
+
+on:
+  push:
+    paths:
+      - '.github/workflows/cms-runtime-patch.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Patch runtime and remove helper workflow
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('api/index.js')
+          s = p.read_text()
+          old = "bot.start(async (ctx) => { await persistUser(ctx); await storage.deleteState('user', ctx.from.id); const message = await getMessage('start'); await ctx.reply(message, Markup.keyboard([['🎁 دریافت اکانت تست'], ['🛒 خرید اشتراک'], ['👤 حساب من'], ['🎯 پشتیبانی']]).resize()); });"
+          new = "bot.start(async (ctx) => { await persistUser(ctx); await storage.deleteState('user', ctx.from.id); const config = await getConfig(); const b = config.buttons || {}; const testText = b.test || '🎁 دریافت اکانت تست'; const buyText = b.buy || '🛒 خرید اشتراک'; const accountText = b.account || '👤 حساب من'; const supportText = b.support || '🎯 پشتیبانی'; const message = await getMessage('start'); await ctx.reply(message, Markup.keyboard([[testText], [buyText], [accountText], [supportText]]).resize()); });"
+          if old not in s:
+              raise SystemExit('start handler target not found; refusing unsafe patch')
+          s = s.replace(old, new, 1)
+          old2 = "bot.hears('🎯 پشتیبانی', async (ctx) => { await persistUser(ctx); const config = await getConfig(); const username = config.payment.supportUsername || SUPPORT_USERNAME; await ctx.reply(await getMessage('support', { support_username: username })); });\nbot.hears('🛒 خرید اشتراک', async (ctx) => { await persistUser(ctx); await sendServiceMenu(ctx, 'buy'); });"
+          new2 = "bot.hears(/.*/, async (ctx, next) => { const config = await getConfig(); const b = config.buttons || {}; const text = ctx.message?.text; if (text === (b.support || '🎯 پشتیبانی')) { await persistUser(ctx); const username = config.payment.supportUsername || SUPPORT_USERNAME; return ctx.reply(await getMessage('support', { support_username: username })); } if (text === (b.buy || '🛒 خرید اشتراک')) { await persistUser(ctx); return sendServiceMenu(ctx, 'buy'); } return next(); });\nbot.hears('🛒 خرید اشتراک', async (ctx) => { await persistUser(ctx); await sendServiceMenu(ctx, 'buy'); });"
+          if old2 not in s:
+              raise SystemExit('support/buy handler target not found; refusing unsafe patch')
+          s = s.replace(old2, new2, 1)
+          old3 = "bot.hears('👤 حساب من', async (ctx) => {"
+          new3 = "bot.hears('👤 حساب من', async (ctx) => {"
+          if old3 not in s:
+              raise SystemExit('account handler target not found; refusing unsafe patch')
+          p.write_text(s)
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add api/index.js
+          git commit -m 'Wire CMS button labels into Telegram runtime'
+          rm -f .github/workflows/cms-runtime-patch.yml
+          git add .github/workflows/cms-runtime-patch.yml
+          git commit -m 'Remove temporary runtime patch workflow'
+          git push origin HEAD:main

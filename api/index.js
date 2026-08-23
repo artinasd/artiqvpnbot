@@ -1,7 +1,7 @@
 const { Telegraf, Markup } = require('telegraf');
 const { calculateCustomPrice, parseDurationDays, buildCustomPlan } = require('../lib/plans');
 const planStore = require('../lib/plan-store');
-const { SERVICES, getService, serviceButtons } = require('../lib/services');
+const { SERVICES, getService, getConfiguredService, serviceLabel, serviceButtons } = require('../lib/services');
 const { normalizeSubscriptionName } = require('../lib/username');
 const storage = require('../lib/storage');
 const pasarguard = require('../lib/pasarguard');
@@ -74,28 +74,27 @@ async function sendServiceMenu(ctx, mode = 'buy') {
   const titleKey = mode === 'test' ? 'serviceSelectionTest' : mode === 'renew' ? 'serviceSelectionRenew' : 'serviceSelectionBuy';
   const title = await getMessage(titleKey);
   const prefix = mode === 'test' ? 'service_test_' : mode === 'renew' ? 'service_renew_' : 'service_buy_';
-  const enabledServices = SERVICES.filter((service) => config.services?.[`${service.id}Enabled`] !== false);
-  const buttons = enabledServices.map((service) => [Markup.button.callback(`${service.label} — ${service.description}`, `${prefix}${service.id}`)]);
-  if (!buttons.length) return ctx.reply('🛠️ در حال حاضر هیچ سرویسی در دسترس نیست.');
+  const buttons = serviceButtons(prefix, config);
+  if (!buttons.length) return ctx.reply(await getMessage('serviceUnavailable'));
   await ctx.reply(title, Markup.inlineKeyboard(buttons));
 }
 
 async function sendPlanMenu(ctx, mode = 'buy', serviceId = 'tunnel') {
   const config = await getConfig();
-  const service = getService(serviceId);
-  if (!service || config.services?.[`${service.id}Enabled`] === false) return ctx.reply(await getMessage('invalidService'));
+  const service = getConfiguredService(serviceId, config);
+  if (!service) return ctx.reply(await getMessage('invalidService'));
   const plans = await planStore.listActiveByService(service.id);
   const buttons = plans.map((plan) => [Markup.button.callback(`${plan.name} - ${Number(plan.price).toLocaleString('en-US')} ${config.payment?.currency || plan.currency || 'تومان'}`, `${mode === 'renew' ? 'renew_plan_' : 'select_plan_'}${plan.id}`)]);
   if (mode === 'buy' && service.id === 'tunnel') buttons.push([Markup.button.callback('🛠 ساخت بسته دلخواه (حجم و زمان)', `select_custom_${service.id}`)]);
-  if (!buttons.length) return ctx.reply(await getMessage('noPlans', { service_name: service.label }));
-  await ctx.reply(`${mode === 'renew' ? '🔄' : '📋'} ${service.label}\n\n${await getMessage('planPrompt')}`, Markup.inlineKeyboard(buttons));
+  if (!buttons.length) return ctx.reply(await getMessage('noPlans', { service_name: serviceLabel(service) }));
+  await ctx.reply(`${mode === 'renew' ? '🔄' : '📋'} ${serviceLabel(service)}\n\n${await getMessage('planPrompt')}`, Markup.inlineKeyboard(buttons));
 }
 
 async function createTestForService(ctx, serviceId) {
   const config = await getConfig();
-  const service = getService(serviceId);
-  if (!service || config.services?.[`${serviceId}Enabled`] === false) return ctx.reply(await getMessage('invalidService'));
-  if (service.id !== 'tunnel') return ctx.reply(`${await getMessage('testUnavailable', { service_name: service.label })}\n\nفعلاً فقط 🛡️ Tunnel امکان ساخت اکانت تست دارد.`);
+  const service = getConfiguredService(serviceId, config);
+  if (!service) return ctx.reply(await getMessage('invalidService'));
+  if (service.id !== 'tunnel') return ctx.reply(await getMessage('testUnavailable', { service_name: serviceLabel(service) }));
   await persistUser(ctx);
   const user = await storage.getUser(ctx.from.id, config.limits.testLimitPerDay);
   if (user?.testUsed) return ctx.reply(await getMessage('testLimitReached'));
@@ -123,6 +122,15 @@ async function createTestForService(ctx, serviceId) {
 
 bot.catch((error, ctx) => { log('BOT_ERROR', { update_type: ctx?.updateType, error: error?.message || String(error) }); });
 
+bot.use(async (ctx, next) => {
+  if (isAdmin(ctx)) return next();
+  const config = await getConfig();
+  if (config.settings?.maintenanceMode) {
+    return ctx.reply(await getMessage('maintenanceMode'));
+  }
+  return next();
+});
+
 bot.start(async (ctx) => { await persistUser(ctx); await storage.deleteState('user', ctx.from.id); const message = await getMessage('start'); await ctx.reply(message, Markup.keyboard([['🎁 دریافت اکانت تست'], ['🛒 خرید اشتراک'], ['👤 حساب من'], ['🎯 پشتیبانی']]).resize()); });
 bot.hears('🎯 پشتیبانی', async (ctx) => { await persistUser(ctx); const config = await getConfig(); const username = config.payment.supportUsername || SUPPORT_USERNAME; await ctx.reply(await getMessage('support', { support_username: username })); });
 bot.hears('🛒 خرید اشتراک', async (ctx) => { await persistUser(ctx); await sendServiceMenu(ctx, 'buy'); });
@@ -148,12 +156,15 @@ bot.on('callback_query', async (ctx) => {
   if (data.startsWith('select_plan_')) {
     const plan = await planStore.get(data.slice('select_plan_'.length));
     if (!plan) return ctx.reply('❌ این پلن دیگر فعال نیست. لطفاً فهرست پلن‌ها را دوباره باز کنید.');
-    if (plan.service !== 'tunnel') return ctx.reply(`🛠️ سرویس ${getService(plan.service)?.label || plan.service} هنوز در حال آماده‌سازی است. فعلاً خرید این سرویس فعال نیست.`);
+    const config = await getConfig(); const service = getConfiguredService(plan.service, config);
+    if (!service) return ctx.reply(await getMessage('invalidService'));
+    if (service.id !== 'tunnel') return ctx.reply(await getMessage('serviceUnavailable', { service_name: serviceLabel(service) }));
     const order = await createOrderForPlan(ctx, plan); await askSubscriptionName(ctx, order); return;
   }
   if (data.startsWith('select_custom_')) {
-    const serviceId = data.slice('select_custom_'.length);
-    if (serviceId !== 'tunnel') return ctx.reply(`🛠️ سرویس ${getService(serviceId)?.label || serviceId} هنوز در حال آماده‌سازی است. فعلاً بسته دلخواه این سرویس فعال نیست.`);
+    const serviceId = data.slice('select_custom_'.length); const config = await getConfig(); const service = getConfiguredService(serviceId, config);
+    if (!service) return ctx.reply(await getMessage('invalidService'));
+    if (service.id !== 'tunnel') return ctx.reply(await getMessage('serviceUnavailable', { service_name: serviceLabel(service) }));
     await storage.setState('user', ctx.from.id, { stage: 'AWAITING_CUSTOM_TRAFFIC', service: serviceId });
     await ctx.reply('🛠 حجم مورد نیاز را فقط به صورت عدد و بر حسب گیگابایت وارد کنید.\n\nمثلاً: 15'); return;
   }
@@ -166,7 +177,9 @@ bot.on('callback_query', async (ctx) => {
   if (data.startsWith('renew_plan_')) {
     const plan = await planStore.get(data.slice('renew_plan_'.length)); const user = await storage.getUser(ctx.from.id);
     if (!plan || !user?.currentPasarguardUserId) return ctx.reply('❌ این پلن فعال نیست یا اشتراک شما پیدا نشد.');
-    if (plan.service !== 'tunnel') return ctx.reply(`🛠️ سرویس ${getService(plan.service)?.label || plan.service} هنوز در حال آماده‌سازی است. فعلاً تمدید این سرویس فعال نیست.`);
+    const config = await getConfig(); const service = getConfiguredService(plan.service, config);
+    if (!service) return ctx.reply(await getMessage('invalidService'));
+    if (service.id !== 'tunnel') return ctx.reply(await getMessage('serviceUnavailable', { service_name: serviceLabel(service) }));
     const order = await createOrderForPlan(ctx, plan); await storage.updateOrder(order.orderId, { renewal: true, renewalPasarguardUserId: user.currentPasarguardUserId }); await showPayment(ctx, order); return;
   }
   if (data.startsWith('invalidate_')) {

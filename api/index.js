@@ -129,8 +129,8 @@ bot.use(async (ctx, next) => {
   return next();
 });
 
-bot.start(async (ctx) => { await persistUser(ctx); await storage.deleteState('user', ctx.from.id); const message = await getMessage('start'); await ctx.reply(message, Markup.keyboard([['🎁 دریافت اکانت تست'], ['🛒 خرید اشتراک'], ['👤 حساب من'], ['🎯 پشتیبانی']]).resize()); });
-bot.hears('🎯 پشتیبانی', async (ctx) => { await persistUser(ctx); const config = await getConfig(); const username = config.payment.supportUsername || SUPPORT_USERNAME; await ctx.reply(await getMessage('support', { support_username: username })); });
+bot.start(async (ctx) => { await persistUser(ctx); await storage.deleteState('user', ctx.from.id); const config = await getConfig(); const b = config.buttons || {}; const testText = b.test || '🎁 دریافت اکانت تست'; const buyText = b.buy || '🛒 خرید اشتراک'; const accountText = b.account || '👤 حساب من'; const supportText = b.support || '🎯 پشتیبانی'; const message = await getMessage('start'); await ctx.reply(message, Markup.keyboard([[testText], [buyText], [accountText], [supportText]]).resize()); });
+bot.hears(/.*/, async (ctx, next) => { const config = await getConfig(); const b = config.buttons || {}; const text = ctx.message?.text; if (text === (b.support || '🎯 پشتیبانی')) { await persistUser(ctx); const username = config.payment.supportUsername || SUPPORT_USERNAME; return ctx.reply(await getMessage('support', { support_username: username })); } if (text === (b.buy || '🛒 خرید اشتراک')) { await persistUser(ctx); return sendServiceMenu(ctx, 'buy'); } return next(); });
 bot.hears('🛒 خرید اشتراک', async (ctx) => { await persistUser(ctx); await sendServiceMenu(ctx, 'buy'); });
 
 bot.hears('👤 حساب من', async (ctx) => {

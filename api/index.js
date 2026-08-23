@@ -6,13 +6,14 @@ const { normalizeSubscriptionName } = require('../lib/username');
 const storage = require('../lib/storage');
 const pasarguard = require('../lib/pasarguard');
 const { orderId, fulfillOrder, renewOrder, formatBytes } = require('../lib/fulfillment');
+const { getConfig, getMessage } = require('../lib/bot-config');
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const ADMIN_ID = String(process.env.ADMIN_ID || '');
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || '';
-const BANK_DETAILS = process.env.BANK_DETAILS || '';
 const PAYMENT_CARD_NUMBER = process.env.PAYMENT_CARD_NUMBER || '6219861947080387';
 const PAYMENT_CARD_HOLDER = process.env.PAYMENT_CARD_HOLDER || 'اسعدی';
+const BANK_DETAILS = process.env.BANK_DETAILS || '';
 const SUPPORT_USERNAME = process.env.SUPPORT_USERNAME || 'Your_Personal_ID';
 const TEST_TRAFFIC_BYTES = 150 * 1024 * 1024;
 const TEST_DURATION_DAYS = 1;
@@ -53,60 +54,77 @@ async function askSubscriptionName(ctx, order) {
 }
 
 async function showPayment(ctx, order) {
+  const config = await getConfig();
   await storage.updateOrder(order.orderId, { paymentStatus: 'AWAITING_PAYMENT', fulfillmentStatus: 'AWAITING_PAYMENT' });
   await storage.setState('user', ctx.from.id, { stage: 'AWAITING_RECEIPT', orderId: order.orderId });
-  const card = PAYMENT_CARD_NUMBER.replace(/\D/g, '');
+  const card = String(config.payment.cardNumber || PAYMENT_CARD_NUMBER).replace(/\D/g, '');
+  const holder = config.payment.cardHolder || PAYMENT_CARD_HOLDER;
+  const bankDetails = config.payment.bankDetails || BANK_DETAILS;
+  const currency = config.payment.currency || order.currency || 'تومان';
   const formattedCard = card.replace(/(\d{4})(?=\d)/g, '$1 ');
-  const paymentText = `💳 <b>پرداخت اشتراک</b>\n\n📦 <b>سرویس:</b> ${escapeHtml(order.planName)}\n💰 <b>مبلغ قابل پرداخت:</b> ${Number(order.price).toLocaleString('en-US')} ${escapeHtml(order.currency)}\n\n🏦 <b>شماره کارت</b>\n<code>${formattedCard}</code>\n👤 <b>به نام:</b> ${escapeHtml(PAYMENT_CARD_HOLDER)}${BANK_DETAILS ? `\n\n${escapeHtml(BANK_DETAILS)}\n` : ''}\n📸 <b>بعد از پرداخت</b>\nعکس یا فایل رسید پرداخت را همینجا ارسال کنید.\n\n⚡ پس از دریافت رسید، سفارش شما به‌صورت خودکار برای ساخت اشتراک پردازش می‌شود.\n🔒 لطفاً مبلغ و شماره کارت مقصد را قبل از پرداخت بررسی کنید.`;
+  const paymentTitle = await getMessage('paymentTitle');
+  const receiptInstructions = await getMessage('receiptInstructions');
+  const paymentFooter = await getMessage('paymentFooter');
+  const paymentText = `${paymentTitle}\n\n📦 <b>سرویس:</b> ${escapeHtml(order.planName)}\n💰 <b>مبلغ قابل پرداخت:</b> ${Number(order.price).toLocaleString('en-US')} ${escapeHtml(currency)}\n\n🏦 <b>شماره کارت</b>\n<code>${formattedCard}</code>\n👤 <b>به نام:</b> ${escapeHtml(holder)}${bankDetails ? `\n\n${escapeHtml(bankDetails)}\n` : ''}\n${receiptInstructions}\n\n${paymentFooter}`;
   await ctx.reply(paymentText, { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: '📋 کپی شماره کارت', copy_text: { text: card } }]] } });
 }
 
 async function sendServiceMenu(ctx, mode = 'buy') {
-  const title = mode === 'test' ? '🎁 سرویس مورد نظر برای اکانت تست را انتخاب کنید:' : mode === 'renew' ? '🔄 سرویس مورد نظر برای تمدید را انتخاب کنید:' : '🛒 ابتدا سرویس مورد نظر را انتخاب کنید:';
+  const config = await getConfig();
+  const titleKey = mode === 'test' ? 'serviceSelectionTest' : mode === 'renew' ? 'serviceSelectionRenew' : 'serviceSelectionBuy';
+  const title = await getMessage(titleKey);
   const prefix = mode === 'test' ? 'service_test_' : mode === 'renew' ? 'service_renew_' : 'service_buy_';
-  await ctx.reply(title, Markup.inlineKeyboard(serviceButtons(prefix)));
+  const enabledServices = SERVICES.filter((service) => config.services?.[`${service.id}Enabled`] !== false);
+  const buttons = enabledServices.map((service) => [Markup.button.callback(`${service.label} — ${service.description}`, `${prefix}${service.id}`)]);
+  if (!buttons.length) return ctx.reply('🛠️ در حال حاضر هیچ سرویسی در دسترس نیست.');
+  await ctx.reply(title, Markup.inlineKeyboard(buttons));
 }
 
 async function sendPlanMenu(ctx, mode = 'buy', serviceId = 'tunnel') {
+  const config = await getConfig();
   const service = getService(serviceId);
-  if (!service) return ctx.reply('❌ سرویس انتخاب‌شده معتبر نیست.');
+  if (!service || config.services?.[`${service.id}Enabled`] === false) return ctx.reply(await getMessage('invalidService'));
   const plans = await planStore.listActiveByService(service.id);
-  const buttons = plans.map((plan) => [Markup.button.callback(`${plan.name} - ${Number(plan.price).toLocaleString('en-US')} تومان`, `${mode === 'renew' ? 'renew_plan_' : 'select_plan_'}${plan.id}`)]);
-  if (mode === 'buy') buttons.push([Markup.button.callback('🛠 ساخت بسته دلخواه (حجم و زمان)', `select_custom_${service.id}`)]);
-  if (!buttons.length) return ctx.reply(`📭 برای سرویس ${service.label} فعلاً پلنی ثبت نشده است.`);
-  await ctx.reply(`${mode === 'renew' ? '🔄' : '📋'} ${service.label}\n\nلطفاً بسته مورد نظر را انتخاب کنید:`, Markup.inlineKeyboard(buttons));
+  const buttons = plans.map((plan) => [Markup.button.callback(`${plan.name} - ${Number(plan.price).toLocaleString('en-US')} ${config.payment?.currency || plan.currency || 'تومان'}`, `${mode === 'renew' ? 'renew_plan_' : 'select_plan_'}${plan.id}`)]);
+  if (mode === 'buy' && service.id === 'tunnel') buttons.push([Markup.button.callback('🛠 ساخت بسته دلخواه (حجم و زمان)', `select_custom_${service.id}`)]);
+  if (!buttons.length) return ctx.reply(await getMessage('noPlans', { service_name: service.label }));
+  await ctx.reply(`${mode === 'renew' ? '🔄' : '📋'} ${service.label}\n\n${await getMessage('planPrompt')}`, Markup.inlineKeyboard(buttons));
 }
 
 async function createTestForService(ctx, serviceId) {
+  const config = await getConfig();
   const service = getService(serviceId);
-  if (!service) return ctx.reply('❌ سرویس انتخاب‌شده معتبر نیست.');
-  if (service.id !== 'tunnel') return ctx.reply(`🛠️ سرویس ${service.label} هنوز در حال آماده‌سازی است.\n\nفعلاً فقط 🛡️ Tunnel امکان ساخت اکانت تست دارد.`);
+  if (!service || config.services?.[`${serviceId}Enabled`] === false) return ctx.reply(await getMessage('invalidService'));
+  if (service.id !== 'tunnel') return ctx.reply(`${await getMessage('testUnavailable', { service_name: service.label })}\n\nفعلاً فقط 🛡️ Tunnel امکان ساخت اکانت تست دارد.`);
   await persistUser(ctx);
-  const user = await storage.getUser(ctx.from.id);
-  if (user?.testUsed) return ctx.reply('🎁 شما قبلاً از اکانت تست استفاده کرده‌اید.');
+  const user = await storage.getUser(ctx.from.id, config.limits.testLimitPerDay);
+  if (user?.testUsed) return ctx.reply(await getMessage('testLimitReached'));
   const lockName = `test:${ctx.from.id}`;
   if (!(await storage.acquireLock(lockName, 120))) return ctx.reply('⏳ درخواست تست شما در حال پردازش است.');
   let orderIdValue = null;
   try {
-    const refreshed = await storage.getUser(ctx.from.id);
-    if (refreshed?.testUsed) return ctx.reply('🎁 شما قبلاً از اکانت تست استفاده کرده‌اید.');
+    const refreshed = await storage.getUser(ctx.from.id, config.limits.testLimitPerDay);
+    if (refreshed?.testUsed) return ctx.reply(await getMessage('testLimitReached'));
     const id = orderId(); orderIdValue = id;
-    const order = { orderId: id, telegramUserId: ctx.from.id, telegramUsername: ctx.from.username || null, firstName: ctx.from.first_name || null, lastName: ctx.from.last_name || null, planId: 'test', planName: 'اکانت تست — Tunnel', service: service.id, trafficLimitBytes: TEST_TRAFFIC_BYTES, durationDays: TEST_DURATION_DAYS, hwidLimit: TEST_HWID_LIMIT, price: 0, currency: 'تومان', requestedName: null, generatedPasarguardUsername: null, pasarguardUserId: null, subscriptionUrl: null, paymentStatus: 'NOT_REQUIRED', fulfillmentStatus: 'RECEIPT_SUBMITTED', deliveryStatus: null, receiptFileId: null, receiptType: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    const trafficBytes = Number(config.limits.testTrafficBytes ?? TEST_TRAFFIC_BYTES);
+    const durationDays = Number(config.limits.testDurationDays ?? TEST_DURATION_DAYS);
+    const hwidLimit = Number(config.limits.testHwidLimit ?? TEST_HWID_LIMIT);
+    const order = { orderId: id, telegramUserId: ctx.from.id, telegramUsername: ctx.from.username || null, firstName: ctx.from.first_name || null, lastName: ctx.from.last_name || null, planId: 'test', planName: `اکانت تست — ${service.name}`, service: service.id, trafficLimitBytes: trafficBytes, durationDays, hwidLimit, price: 0, currency: config.payment?.currency || 'تومان', requestedName: null, generatedPasarguardUsername: null, pasarguardUserId: null, subscriptionUrl: null, paymentStatus: 'NOT_REQUIRED', fulfillmentStatus: 'RECEIPT_SUBMITTED', deliveryStatus: null, receiptFileId: null, receiptType: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
     await storage.createOrder(order);
-    await ctx.reply('⏳ اکانت تست Tunnel شما در حال ساخت خودکار است...');
+    await ctx.reply(await getMessage('testProcessing', { service_name: service.name }));
     await fulfillOrder(id, bot.telegram);
     await storage.saveUser({ ...userSnapshot(ctx), testUsed: true, testCreatedAt: new Date().toISOString() });
   } catch (error) {
     await storage.saveUser({ ...userSnapshot(ctx), testUsed: false, testCreatedAt: null });
     log('TEST_FULFILLMENT_FAILED', { order_id: orderIdValue, telegram_user_id: ctx.from.id, service: service.id, error: error?.message || String(error) });
-    await ctx.reply('❌ ساخت اکانت تست انجام نشد. مشکل فنی ثبت شد و می‌توانید دوباره تلاش کنید.');
+    await ctx.reply(await getMessage('testFailure'));
   } finally { await storage.releaseLock(lockName); }
 }
 
 bot.catch((error, ctx) => { log('BOT_ERROR', { update_type: ctx?.updateType, error: error?.message || String(error) }); });
 
-bot.start(async (ctx) => { await persistUser(ctx); await storage.deleteState('user', ctx.from.id); await ctx.reply('👋 به ربات آرتیک خوش آمدید!\n\nلطفاً یکی از گزینه‌های زیر را انتخاب کنید:', Markup.keyboard([['🎁 دریافت اکانت تست'], ['🛒 خرید اشتراک'], ['👤 حساب من'], ['🎯 پشتیبانی']]).resize()); });
-bot.hears('🎯 پشتیبانی', async (ctx) => { await persistUser(ctx); await ctx.reply(`ℹ️ برای پشتیبانی و راهنمایی، با ما در ارتباط باشید:\n\n💬 @${escapeHtml(SUPPORT_USERNAME)}`); });
+bot.start(async (ctx) => { await persistUser(ctx); await storage.deleteState('user', ctx.from.id); const message = await getMessage('start'); await ctx.reply(message, Markup.keyboard([['🎁 دریافت اکانت تست'], ['🛒 خرید اشتراک'], ['👤 حساب من'], ['🎯 پشتیبانی']]).resize()); });
+bot.hears('🎯 پشتیبانی', async (ctx) => { await persistUser(ctx); const config = await getConfig(); const username = config.payment.supportUsername || SUPPORT_USERNAME; await ctx.reply(await getMessage('support', { support_username: username })); });
 bot.hears('🛒 خرید اشتراک', async (ctx) => { await persistUser(ctx); await sendServiceMenu(ctx, 'buy'); });
 
 bot.hears('👤 حساب من', async (ctx) => {

@@ -1,0 +1,35 @@
+name: Complete CMS main button wiring
+
+on:
+  push:
+    paths:
+      - '.github/workflows/cms-runtime-patch2.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Patch dynamic main buttons
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('api/index.js'); s=p.read_text()
+          old="bot.hears(/.*/, async (ctx, next) => { const config = await getConfig(); const b = config.buttons || {}; const text = ctx.message?.text; if (text === (b.support || '🎯 پشتیبانی')) { await persistUser(ctx); const username = config.payment.supportUsername || SUPPORT_USERNAME; return ctx.reply(await getMessage('support', { support_username: username })); } if (text === (b.buy || '🛒 خرید اشتراک')) { await persistUser(ctx); return sendServiceMenu(ctx, 'buy'); } return next(); });"
+          new="bot.hears(/.*/, async (ctx, next) => { const config = await getConfig(); const b = config.buttons || {}; const text = ctx.message?.text; if (text === (b.support || '🎯 پشتیبانی')) { await persistUser(ctx); const username = config.payment.supportUsername || SUPPORT_USERNAME; return ctx.reply(await getMessage('support', { support_username: username })); } if (text === (b.buy || '🛒 خرید اشتراک')) { await persistUser(ctx); return sendServiceMenu(ctx, 'buy'); } if (text === (b.test || '🎁 دریافت اکانت تست')) { return sendServiceMenu(ctx, 'test'); } if (text === (b.account || '👤 حساب من')) { const user = await storage.getUser(ctx.from.id); if (!user?.currentPasarguardUserId) return ctx.reply('👤 هنوز اشتراک فعالی برای حساب شما ثبت نشده است.'); try { const current = await pasarguard.getUserById(user.currentPasarguardUserId); const status = current.status || 'نامشخص'; const traffic = current.data_limit === 0 ? 'نامحدود' : formatBytes(Number(current.data_limit || 0)); const used = current.used_traffic != null ? formatBytes(Number(current.used_traffic)) : 'در دسترس نیست'; return ctx.reply(`👤 <b>حساب من</b>\\n\\n👤 نام اشتراک: <code>${escapeHtml(current.username || user.currentPasarguardUsername)}</code>\\n📊 حجم: ${escapeHtml(traffic)}\\n📈 مصرف: ${escapeHtml(used)}\\n⏳ انقضا: ${escapeHtml(current.expire || 'نامشخص')}\\n📌 وضعیت: ${escapeHtml(status)}`, { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: '📥 دریافت لینک اشتراک', url: current.subscription_url || user.currentSubscriptionUrl }], [{ text: '🔄 تمدید اشتراک', callback_data: 'renew_choose' }]] } }); } catch (error) { return ctx.reply('❌ دریافت وضعیت اشتراک در حال حاضر ممکن نیست. لطفاً کمی بعد دوباره تلاش کنید.'); } } return next(); });"
+          if old not in s: raise SystemExit('dynamic middleware target not found')
+          s=s.replace(old,new,1)
+          p.write_text(s)
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add api/index.js && git commit -m 'Complete CMS main button routing'
+          rm -f .github/workflows/cms-runtime-patch2.yml
+          git add .github/workflows/cms-runtime-patch2.yml && git commit -m 'Remove temporary CMS runtime patch workflow'
+          git push origin HEAD:main

@@ -96,7 +96,6 @@ async function createTestForService(ctx, serviceId) {
   const config = await getConfig();
   const service = getConfiguredService(serviceId, config);
   if (!service) return ctx.reply(await getMessage('invalidService'));
-  if (service.id !== 'tunnel') return ctx.reply(await getMessage('testUnavailable', { service_name: serviceLabel(service) }));
   await persistUser(ctx);
   const user = await storage.getUser(ctx.from.id, config.limits.testLimitPerDay);
   if (user?.testUsed) return ctx.reply(await getMessage('testLimitReached'));
@@ -159,7 +158,6 @@ bot.on('callback_query', async (ctx) => {
     if (!plan) return ctx.reply('❌ این پلن دیگر فعال نیست. لطفاً فهرست پلن‌ها را دوباره باز کنید.');
     const config = await getConfig(); const service = getConfiguredService(plan.service, config);
     if (!service) return ctx.reply(await getMessage('invalidService'));
-    if (service.id !== 'tunnel') return ctx.reply(await getMessage('serviceUnavailable', { service_name: serviceLabel(service) }));
     const order = await createOrderForPlan(ctx, plan); await askSubscriptionName(ctx, order); return;
   }
   if (data.startsWith('select_custom_')) {
@@ -180,7 +178,6 @@ bot.on('callback_query', async (ctx) => {
     if (!plan || !user?.currentPasarguardUserId) return ctx.reply('❌ این پلن فعال نیست یا اشتراک شما پیدا نشد.');
     const config = await getConfig(); const service = getConfiguredService(plan.service, config);
     if (!service) return ctx.reply(await getMessage('invalidService'));
-    if (service.id !== 'tunnel') return ctx.reply(await getMessage('serviceUnavailable', { service_name: serviceLabel(service) }));
     const order = await createOrderForPlan(ctx, plan); await storage.updateOrder(order.orderId, { renewal: true, renewalPasarguardUserId: user.currentPasarguardUserId }); await showPayment(ctx, order); return;
   }
   if (data.startsWith('invalidate_')) {

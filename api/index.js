@@ -7,6 +7,8 @@ const storage = require('../lib/storage');
 const pasarguard = require('../lib/pasarguard');
 const { orderId, fulfillOrder, renewOrder, formatBytes } = require('../lib/fulfillment');
 const { getConfig, getMessage } = require('../lib/bot-config');
+const accountService = require('../lib/account-service');
+const accountUI = require('../lib/account-ui');
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const ADMIN_ID = String(process.env.ADMIN_ID || '');
@@ -120,6 +122,13 @@ async function createTestForService(ctx, serviceId) {
   } finally { await storage.releaseLock(lockName); }
 }
 
+async function createRenewalOrderForSubscription(ctx, sourceOrder) {
+  const id = orderId();
+  const order = { orderId: id, telegramUserId: ctx.from.id, telegramUsername: ctx.from.username || null, firstName: ctx.from.first_name || null, lastName: ctx.from.last_name || null, planId: sourceOrder.planId || sourceOrder.orderId, planName: sourceOrder.planName || 'اشتراک', service: sourceOrder.service || 'tunnel', trafficLimitBytes: Number(sourceOrder.trafficLimitBytes || sourceOrder.trafficBytes || 0), durationDays: Number(sourceOrder.durationDays || 1), hwidLimit: Number(sourceOrder.hwidLimit || 0), price: Number(sourceOrder.price || 0), currency: sourceOrder.currency || 'تومان', requestedName: null, generatedPasarguardUsername: sourceOrder.generatedPasarguardUsername || null, pasarguardUserId: null, subscriptionUrl: null, paymentStatus: 'AWAITING_PAYMENT', fulfillmentStatus: 'DRAFT', deliveryStatus: null, receiptFileId: null, receiptType: null, receiptTelegramMessageId: null, failureReason: null, renewal: true, renewalSourceOrderId: sourceOrder.orderId, renewalPasarguardUserId: sourceOrder.pasarguardUserId || sourceOrder.renewalPasarguardUserId, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+  if (!order.renewalPasarguardUserId) throw new Error('RENEWAL_TARGET_MISSING');
+  await storage.createOrder(order); return order;
+}
+
 bot.catch((error, ctx) => { log('BOT_ERROR', { update_type: ctx?.updateType, error: error?.message || String(error) }); });
 
 bot.use(async (ctx, next) => {
@@ -130,23 +139,17 @@ bot.use(async (ctx, next) => {
 });
 
 bot.start(async (ctx) => { await persistUser(ctx); await storage.deleteState('user', ctx.from.id); const config = await getConfig(); const b = config.buttons || {}; const testText = b.test || '🎁 دریافت اکانت تست'; const buyText = b.buy || '🛒 خرید اشتراک'; const accountText = b.account || '👤 حساب من'; const supportText = b.support || '🎯 پشتیبانی'; const message = await getMessage('start'); await ctx.reply(message, Markup.keyboard([[testText], [buyText], [accountText], [supportText]]).resize()); });
-bot.hears(/.*/, async (ctx, next) => { const config = await getConfig(); const b = config.buttons || {}; const text = ctx.message?.text; if (text === (b.support || '🎯 پشتیبانی')) { await persistUser(ctx); const username = config.payment.supportUsername || SUPPORT_USERNAME; return ctx.reply(await getMessage('support', { support_username: username })); } if (text === (b.buy || '🛒 خرید اشتراک')) { await persistUser(ctx); return sendServiceMenu(ctx, 'buy'); } if (text === (b.test || '🎁 دریافت اکانت تست')) { return sendServiceMenu(ctx, 'test'); } if (text === (b.account || '👤 حساب من')) { const user = await storage.getUser(ctx.from.id); if (!user?.currentPasarguardUserId) return ctx.reply(await getMessage('accountNoSubscription')); try { const current = await pasarguard.getUserById(user.currentPasarguardUserId); const status = current.status || 'نامشخص'; const traffic = current.data_limit === 0 ? 'نامحدود' : formatBytes(Number(current.data_limit || 0)); const used = current.used_traffic != null ? formatBytes(Number(current.used_traffic)) : 'در دسترس نیست'; return ctx.reply(`👤 <b>حساب من</b>\n\n👤 نام اشتراک: <code>${escapeHtml(current.username || user.currentPasarguardUsername)}</code>\n📊 حجم: ${escapeHtml(traffic)}\n📈 مصرف: ${escapeHtml(used)}\n⏳ انقضا: ${escapeHtml(current.expire || 'نامشخص')}\n📌 وضعیت: ${escapeHtml(status)}`, { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: config.buttons?.openSubscription || '📥 دریافت لینک اشتراک', url: current.subscription_url || user.currentSubscriptionUrl }], [{ text: config.buttons?.renew || '🔄 تمدید اشتراک', callback_data: 'renew_choose' }]] } }); } catch (error) { return ctx.reply(await getMessage('accountStatusFailure')); } } return next(); });
+bot.hears(/.*/, async (ctx, next) => { const config = await getConfig(); const b = config.buttons || {}; const text = ctx.message?.text; if (text === (b.support || '🎯 پشتیبانی')) { await persistUser(ctx); const username = config.payment.supportUsername || SUPPORT_USERNAME; return ctx.reply(await getMessage('support', { support_username: username })); } if (text === (b.buy || '🛒 خرید اشتراک')) { await persistUser(ctx); return sendServiceMenu(ctx, 'buy'); } if (text === (b.test || '🎁 دریافت اکانت تست')) { return sendServiceMenu(ctx, 'test'); } if (text === (b.account || '👤 حساب من')) { await persistUser(ctx); const subscriptions = await accountUI.listForUser(ctx.from.id); if (!subscriptions.length) return ctx.reply(await getMessage('accountNoSubscription')); return ctx.reply('👤 <b>حساب من</b>\n\nاشتراک موردنظر را انتخاب کنید:', { parse_mode: 'HTML', reply_markup: { inline_keyboard: accountUI.subscriptionKeyboard(subscriptions) } }); } return next(); });
 bot.hears('🛒 خرید اشتراک', async (ctx) => { await persistUser(ctx); await sendServiceMenu(ctx, 'buy'); });
-
-bot.hears('👤 حساب من', async (ctx) => {
-  await persistUser(ctx); const user = await storage.getUser(ctx.from.id);
-  if (!user?.currentPasarguardUserId) return ctx.reply(await getMessage('accountNoSubscription'));
-  try {
-    const current = await pasarguard.getUserById(user.currentPasarguardUserId);
-    const status = current.status || 'نامشخص'; const traffic = current.data_limit === 0 ? 'نامحدود' : formatBytes(Number(current.data_limit || 0)); const used = current.used_traffic != null ? formatBytes(Number(current.used_traffic)) : 'در دسترس نیست';
-    await ctx.reply(`👤 <b>حساب من</b>\n\n👤 نام اشتراک: <code>${escapeHtml(current.username || user.currentPasarguardUsername)}</code>\n📊 حجم: ${escapeHtml(traffic)}\n📈 مصرف: ${escapeHtml(used)}\n⏳ انقضا: ${escapeHtml(current.expire || 'نامشخص')}\n📌 وضعیت: ${escapeHtml(status)}`, { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: config.buttons?.openSubscription || '📥 دریافت لینک اشتراک', url: current.subscription_url || user.currentSubscriptionUrl }], [{ text: config.buttons?.renew || '🔄 تمدید اشتراک', callback_data: 'renew_choose' }]] } });
-  } catch (error) { await ctx.reply(await getMessage('accountStatusFailure')); }
-});
 
 bot.hears('🎁 دریافت اکانت تست', async (ctx) => { await sendServiceMenu(ctx, 'test'); });
 
 bot.on('callback_query', async (ctx) => {
   const data = ctx.callbackQuery.data || ''; await ctx.answerCbQuery().catch(() => {});
+  if (data === 'account_list') { const subscriptions = await accountUI.listForUser(ctx.from.id); if (!subscriptions.length) return ctx.reply(await getMessage('accountNoSubscription')); return ctx.reply('👤 <b>حساب من</b>\n\nاشتراک موردنظر را انتخاب کنید:', { parse_mode: 'HTML', reply_markup: { inline_keyboard: accountUI.subscriptionKeyboard(subscriptions) } }); }
+  if (data.startsWith('account_sub:')) { const id = data.slice('account_sub:'.length); const raw = await accountService.getSubscription(ctx.from.id, id); if (!raw) return ctx.reply('❌ این اشتراک پیدا نشد.'); const sub = accountService.summary(raw); return ctx.reply(accountUI.formatDetail(sub), { reply_markup: { inline_keyboard: accountUI.detailKeyboard(sub) } }); }
+  if (data.startsWith('copy_sub:')) { const id = data.slice('copy_sub:'.length); const raw = await accountService.getSubscription(ctx.from.id, id); const url = raw?.subUrl || raw?.subscriptionUrl; if (!url) return ctx.reply('❌ لینک اشتراک در دسترس نیست.'); return ctx.reply('📋 لینک اشتراک:', { reply_markup: { inline_keyboard: [[{ text: '📋 کپی لینک اشتراک', copy_text: { text: url } }], [{ text: '⬅️ بازگشت', callback_data: `account_sub:${id}` }]] } }); }
+  if (data.startsWith('account_renew:')) { const id = data.slice('account_renew:'.length); const raw = await accountService.getSubscription(ctx.from.id, id); if (!raw || !accountService.canRenew(raw)) return ctx.reply('❌ این اشتراک قابل تمدید نیست.'); try { const order = await createRenewalOrderForSubscription(ctx, raw); return showPayment(ctx, order); } catch (error) { log('ACCOUNT_RENEWAL_CREATE_FAILED', { telegram_user_id: ctx.from.id, source_order_id: id, error: error?.message || String(error) }); return ctx.reply('❌ تمدید این اشتراک در حال حاضر ممکن نیست.'); } }
   if (data.startsWith('service_test_')) return createTestForService(ctx, data.slice('service_test_'.length));
   if (data.startsWith('service_buy_')) return sendPlanMenu(ctx, 'buy', data.slice('service_buy_'.length));
   if (data.startsWith('service_renew_')) { const user = await storage.getUser(ctx.from.id); if (!user?.currentPasarguardUserId) return ctx.reply('❌ اشتراک فعالی برای تمدید پیدا نشد.'); return sendPlanMenu(ctx, 'renew', data.slice('service_renew_'.length)); }

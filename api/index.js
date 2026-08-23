@@ -50,7 +50,7 @@ async function createOrderForPlan(ctx, plan) {
 
 async function askSubscriptionName(ctx, order) {
   await storage.setState('user', ctx.from.id, { stage: 'AWAITING_SUBSCRIPTION_NAME', orderId: order.orderId });
-  await ctx.reply('👤 نام اشتراک\n\nاگر می‌خواهید نام دلخواهی برای اشتراک خود انتخاب کنید، آن را وارد کنید؛ در غیر این صورت نام به صورت خودکار ساخته می‌شود.\n\nفقط حروف انگلیسی، اعداد، @ و _ مجاز است و نام نباید فاصله یا کاراکتر دیگری داشته باشد.', Markup.inlineKeyboard([[Markup.button.callback('⚡ نام خودکار', `auto_name_${order.orderId}`)]]));
+  await ctx.reply(await getMessage('subscriptionNamePrompt'), Markup.inlineKeyboard([[Markup.button.callback(await getConfig().then(c => c.buttons?.autoName || '⚡ نام خودکار'), `auto_name_${order.orderId}`)]]));
 }
 
 async function showPayment(ctx, order) {
@@ -65,8 +65,8 @@ async function showPayment(ctx, order) {
   const paymentTitle = await getMessage('paymentTitle');
   const receiptInstructions = await getMessage('receiptInstructions');
   const paymentFooter = await getMessage('paymentFooter');
-  const paymentText = `${paymentTitle}\n\n📦 <b>سرویس:</b> ${escapeHtml(order.planName)}\n💰 <b>مبلغ قابل پرداخت:</b> ${Number(order.price).toLocaleString('en-US')} ${escapeHtml(currency)}\n\n🏦 <b>شماره کارت</b>\n<code>${formattedCard}</code>\n👤 <b>به نام:</b> ${escapeHtml(holder)}${bankDetails ? `\n\n${escapeHtml(bankDetails)}\n` : ''}\n${receiptInstructions}\n\n${paymentFooter}`;
-  await ctx.reply(paymentText, { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: '📋 کپی شماره کارت', copy_text: { text: card } }]] } });
+  const paymentText = `${paymentTitle}\n\n📦 <b>سرویس:</b> ${escapeHtml(order.planName)}\n💰 <b>مبلغ قابل پرداخت:</b> ${Number(order.price).toLocaleString('en-US')} ${escapeHtml(currency)}\n\n🏦 <b>شماره کارت</b>\n<code>${formattedCard}</code>\n👤 <b>به نام:</b> ${escapeHtml(holder)}${bankDetails ? `\n\n${escapeHtml(bankDetails)}\n` : ''}\n${receiptInstructions}\n\n${paymentFooter}`; const copyCardText = (config.buttons?.copyCard || '📋 کپی شماره کارت');
+  await ctx.reply(paymentText, { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: copyCardText, copy_text: { text: card } }]] } });
 }
 
 async function sendServiceMenu(ctx, mode = 'buy') {
@@ -99,7 +99,7 @@ async function createTestForService(ctx, serviceId) {
   const user = await storage.getUser(ctx.from.id, config.limits.testLimitPerDay);
   if (user?.testUsed) return ctx.reply(await getMessage('testLimitReached'));
   const lockName = `test:${ctx.from.id}`;
-  if (!(await storage.acquireLock(lockName, 120))) return ctx.reply('⏳ درخواست تست شما در حال پردازش است.');
+  if (!(await storage.acquireLock(lockName, 120))) return ctx.reply(await getMessage('testProcessingLock'));
   let orderIdValue = null;
   try {
     const refreshed = await storage.getUser(ctx.from.id, config.limits.testLimitPerDay);
@@ -130,17 +130,17 @@ bot.use(async (ctx, next) => {
 });
 
 bot.start(async (ctx) => { await persistUser(ctx); await storage.deleteState('user', ctx.from.id); const config = await getConfig(); const b = config.buttons || {}; const testText = b.test || '🎁 دریافت اکانت تست'; const buyText = b.buy || '🛒 خرید اشتراک'; const accountText = b.account || '👤 حساب من'; const supportText = b.support || '🎯 پشتیبانی'; const message = await getMessage('start'); await ctx.reply(message, Markup.keyboard([[testText], [buyText], [accountText], [supportText]]).resize()); });
-bot.hears(/.*/, async (ctx, next) => { const config = await getConfig(); const b = config.buttons || {}; const text = ctx.message?.text; if (text === (b.support || '🎯 پشتیبانی')) { await persistUser(ctx); const username = config.payment.supportUsername || SUPPORT_USERNAME; return ctx.reply(await getMessage('support', { support_username: username })); } if (text === (b.buy || '🛒 خرید اشتراک')) { await persistUser(ctx); return sendServiceMenu(ctx, 'buy'); } if (text === (b.test || '🎁 دریافت اکانت تست')) { return sendServiceMenu(ctx, 'test'); } if (text === (b.account || '👤 حساب من')) { const user = await storage.getUser(ctx.from.id); if (!user?.currentPasarguardUserId) return ctx.reply('👤 هنوز اشتراک فعالی برای حساب شما ثبت نشده است.'); try { const current = await pasarguard.getUserById(user.currentPasarguardUserId); const status = current.status || 'نامشخص'; const traffic = current.data_limit === 0 ? 'نامحدود' : formatBytes(Number(current.data_limit || 0)); const used = current.used_traffic != null ? formatBytes(Number(current.used_traffic)) : 'در دسترس نیست'; return ctx.reply(`👤 <b>حساب من</b>\n\n👤 نام اشتراک: <code>${escapeHtml(current.username || user.currentPasarguardUsername)}</code>\n📊 حجم: ${escapeHtml(traffic)}\n📈 مصرف: ${escapeHtml(used)}\n⏳ انقضا: ${escapeHtml(current.expire || 'نامشخص')}\n📌 وضعیت: ${escapeHtml(status)}`, { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: '📥 دریافت لینک اشتراک', url: current.subscription_url || user.currentSubscriptionUrl }], [{ text: '🔄 تمدید اشتراک', callback_data: 'renew_choose' }]] } }); } catch (error) { return ctx.reply('❌ دریافت وضعیت اشتراک در حال حاضر ممکن نیست. لطفاً کمی بعد دوباره تلاش کنید.'); } } return next(); });
+bot.hears(/.*/, async (ctx, next) => { const config = await getConfig(); const b = config.buttons || {}; const text = ctx.message?.text; if (text === (b.support || '🎯 پشتیبانی')) { await persistUser(ctx); const username = config.payment.supportUsername || SUPPORT_USERNAME; return ctx.reply(await getMessage('support', { support_username: username })); } if (text === (b.buy || '🛒 خرید اشتراک')) { await persistUser(ctx); return sendServiceMenu(ctx, 'buy'); } if (text === (b.test || '🎁 دریافت اکانت تست')) { return sendServiceMenu(ctx, 'test'); } if (text === (b.account || '👤 حساب من')) { const user = await storage.getUser(ctx.from.id); if (!user?.currentPasarguardUserId) return ctx.reply(await getMessage('accountNoSubscription')); try { const current = await pasarguard.getUserById(user.currentPasarguardUserId); const status = current.status || 'نامشخص'; const traffic = current.data_limit === 0 ? 'نامحدود' : formatBytes(Number(current.data_limit || 0)); const used = current.used_traffic != null ? formatBytes(Number(current.used_traffic)) : 'در دسترس نیست'; return ctx.reply(`👤 <b>حساب من</b>\n\n👤 نام اشتراک: <code>${escapeHtml(current.username || user.currentPasarguardUsername)}</code>\n📊 حجم: ${escapeHtml(traffic)}\n📈 مصرف: ${escapeHtml(used)}\n⏳ انقضا: ${escapeHtml(current.expire || 'نامشخص')}\n📌 وضعیت: ${escapeHtml(status)}`, { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: '📥 دریافت لینک اشتراک', url: current.subscription_url || user.currentSubscriptionUrl }], [{ text: '🔄 تمدید اشتراک', callback_data: 'renew_choose' }]] } }); } catch (error) { return ctx.reply(await getMessage('accountStatusFailure')); } } return next(); });
 bot.hears('🛒 خرید اشتراک', async (ctx) => { await persistUser(ctx); await sendServiceMenu(ctx, 'buy'); });
 
 bot.hears('👤 حساب من', async (ctx) => {
   await persistUser(ctx); const user = await storage.getUser(ctx.from.id);
-  if (!user?.currentPasarguardUserId) return ctx.reply('👤 هنوز اشتراک فعالی برای حساب شما ثبت نشده است.');
+  if (!user?.currentPasarguardUserId) return ctx.reply(await getMessage('accountNoSubscription'));
   try {
     const current = await pasarguard.getUserById(user.currentPasarguardUserId);
     const status = current.status || 'نامشخص'; const traffic = current.data_limit === 0 ? 'نامحدود' : formatBytes(Number(current.data_limit || 0)); const used = current.used_traffic != null ? formatBytes(Number(current.used_traffic)) : 'در دسترس نیست';
     await ctx.reply(`👤 <b>حساب من</b>\n\n👤 نام اشتراک: <code>${escapeHtml(current.username || user.currentPasarguardUsername)}</code>\n📊 حجم: ${escapeHtml(traffic)}\n📈 مصرف: ${escapeHtml(used)}\n⏳ انقضا: ${escapeHtml(current.expire || 'نامشخص')}\n📌 وضعیت: ${escapeHtml(status)}`, { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: '📥 دریافت لینک اشتراک', url: current.subscription_url || user.currentSubscriptionUrl }], [{ text: '🔄 تمدید اشتراک', callback_data: 'renew_choose' }]] } });
-  } catch (error) { await ctx.reply('❌ دریافت وضعیت اشتراک در حال حاضر ممکن نیست. لطفاً کمی بعد دوباره تلاش کنید.'); }
+  } catch (error) { await ctx.reply(await getMessage('accountStatusFailure')); }
 });
 
 bot.hears('🎁 دریافت اکانت تست', async (ctx) => { await sendServiceMenu(ctx, 'test'); });

@@ -86,7 +86,7 @@ async function sendPlanMenu(ctx, mode = 'buy', serviceId = 'tunnel') {
   const service = getConfiguredService(serviceId, config);
   if (!service) return ctx.reply(await getMessage('invalidService'));
   const plans = await planStore.listActiveByService(service.id);
-  const buttons = plans.map((plan) => [Markup.button.callback(`${plan.name} - ${Number(plan.price).toLocaleString('en-US')} ${config.payment?.currency || plan.currency || 'تومان'}`, `${mode === 'renew' ? 'renew_plan_' : 'select_plan_'}${plan.id}`)]);
+  const buttons = plans.map((plan) => [Markup.button.callback(`${plan.buttonText || plan.name} - ${Number(plan.price).toLocaleString('en-US')} ${config.payment?.currency || plan.currency || 'تومان'}`, `${mode === 'renew' ? 'renew_plan_' : 'select_plan_'}${plan.id}`)]);
   if (mode === 'buy' && service.id === 'tunnel') buttons.push([Markup.button.callback('🛠 ساخت بسته دلخواه (حجم و زمان)', `select_custom_${service.id}`)]);
   if (!buttons.length) return ctx.reply(await getMessage('noPlans', { service_name: serviceLabel(service) }));
   await ctx.reply(`${mode === 'renew' ? '🔄' : '📋'} ${serviceLabel(service)}\n\n${await getMessage('planPrompt')}`, Markup.inlineKeyboard(buttons));

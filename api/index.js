@@ -108,7 +108,7 @@ async function createTestForService(ctx, serviceId) {
     const trafficBytes = Number(config.limits.testTrafficBytes ?? TEST_TRAFFIC_BYTES);
     const durationDays = Number(config.limits.testDurationDays ?? TEST_DURATION_DAYS);
     const hwidLimit = Number(config.limits.testHwidLimit ?? TEST_HWID_LIMIT);
-    const order = { orderId: id, telegramUserId: ctx.from.id, telegramUsername: ctx.from.username || null, firstName: ctx.from.first_name || null, lastName: ctx.from.last_name || null, planId: 'test', planName: `اکانت تست — ${service.name}`, service: service.id, trafficLimitBytes: trafficBytes, durationDays, hwidLimit, price: 0, currency: config.payment?.currency || 'تومان', requestedName: null, generatedPasarguardUsername: null, pasarguardUserId: null, subscriptionUrl: null, paymentStatus: 'NOT_REQUIRED', fulfillmentStatus: 'RECEIPT_SUBMITTED', deliveryStatus: null, receiptFileId: null, receiptType: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    const order = { orderId: id, telegramUserId: ctx.from.id, telegramUsername: ctx.from.username || null, firstName: ctx.from.firstName || ctx.from.first_name || null, lastName: ctx.from.lastName || ctx.from.last_name || null, planId: 'test', planName: `اکانت تست — ${service.name}`, service: service.id, trafficLimitBytes: trafficBytes, durationDays, hwidLimit, price: 0, currency: config.payment?.currency || 'تومان', requestedName: null, generatedPasarguardUsername: null, pasarguardUserId: null, subscriptionUrl: null, paymentStatus: 'NOT_REQUIRED', fulfillmentStatus: 'RECEIPT_SUBMITTED', deliveryStatus: null, receiptFileId: null, receiptType: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
     await storage.createOrder(order);
     await ctx.reply(await getMessage('testProcessing', { service_name: service.name }));
     await fulfillOrder(id, bot.telegram);
@@ -125,9 +125,7 @@ bot.catch((error, ctx) => { log('BOT_ERROR', { update_type: ctx?.updateType, err
 bot.use(async (ctx, next) => {
   if (isAdmin(ctx)) return next();
   const config = await getConfig();
-  if (config.settings?.maintenanceMode) {
-    return ctx.reply(await getMessage('maintenanceMode'));
-  }
+  if (config.bot?.maintenanceMode) return ctx.reply(await getMessage('maintenance'));
   return next();
 });
 
@@ -218,7 +216,7 @@ bot.on('message', async (ctx) => {
     const caption = `💰 <b>رسید پرداخت جدید</b>\n\nسفارش: <code>${escapeHtml(updated.orderId)}</code>\nکاربر: ${escapeHtml(updated.firstName)}\nآیدی: ${escapeHtml(updated.telegramUsername ? `@${updated.telegramUsername}` : 'بدون آیدی')}\nشناسه تلگرام: <code>${updated.telegramUserId}</code>\nنام اشتراک درخواستی: <code>${escapeHtml(updated.requestedName || 'خودکار')}</code>\nبسته: <b>${escapeHtml(updated.planName)}</b>\nمبلغ: <b>${Number(updated.price).toLocaleString('en-US')} تومان</b>`;
     const adminButtons = Markup.inlineKeyboard([[Markup.button.callback('❌ پرداخت نامعتبر / غیرفعال کردن', `invalidate_${updated.orderId}`)] ]);
     try { if (receiptType === 'photo') await bot.telegram.sendPhoto(ADMIN_ID, receiptFileId, { caption, parse_mode: 'HTML', ...adminButtons }); else await bot.telegram.sendDocument(ADMIN_ID, receiptFileId, { caption, parse_mode: 'HTML', ...adminButtons }); } catch (error) { log('ADMIN_RECEIPT_NOTIFICATION_FAILED', { order_id: updated.orderId, error: error.message }); }
-    await ctx.reply('✅ رسید دریافت شد. اشتراک شما بدون نیاز به تأیید دستی در حال ساخت خودکار است.'); try { await fulfillOrder(updated.orderId, bot.telegram); } catch (error) { await ctx.reply('⏳ ساخت اشتراک با مشکل موقت مواجه شد. سفارش شما ثبت شده و امکان تلاش مجدد وجود دارد.'); }
+    await ctx.reply(await getMessage('receiptReceived')); try { await fulfillOrder(updated.orderId, bot.telegram); } catch (error) { await ctx.reply(await getMessage('fulfillmentTemporaryFailure')); }
   }
 });
 

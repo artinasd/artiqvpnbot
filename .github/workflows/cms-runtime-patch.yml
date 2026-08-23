@@ -1,0 +1,43 @@
+name: CMS runtime patch
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/cms-runtime-patch.yml']
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[cms-runtime-patch]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch runtime
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('api/index.js')
+          s = p.read_text(encoding='utf-8')
+          old = "reply_markup: { inline_keyboard: [[{ text: '📥 دریافت لینک اشتراک', url: current.subscription_url || user.currentSubscriptionUrl }], [{ text: '🔄 تمدید اشتراک', callback_data: 'renew_choose' }]] }"
+          new = "reply_markup: { inline_keyboard: [[{ text: config.buttons?.openSubscription || '📥 دریافت لینک اشتراک', url: current.subscription_url || user.currentSubscriptionUrl }], [{ text: config.buttons?.renew || '🔄 تمدید اشتراک', callback_data: 'renew_choose' }]] }"
+          if old not in s:
+              raise SystemExit('target account keyboard not found')
+          s = s.replace(old, new, 1)
+          old2 = "reply_markup: { inline_keyboard: [[{ text: '📥 دریافت لینک اشتراک', url: current.subscription_url || user.currentSubscriptionUrl }], [{ text: '🔄 تمدید اشتراک', callback_data: 'renew_choose' }]] }"
+          new2 = "reply_markup: { inline_keyboard: [[{ text: config.buttons?.openSubscription || '📥 دریافت لینک اشتراک', url: current.subscription_url || user.currentSubscriptionUrl }], [{ text: config.buttons?.renew || '🔄 تمدید اشتراک', callback_data: 'renew_choose' }]] }"
+          if old2 not in s:
+              raise SystemExit('target second account keyboard not found')
+          s = s.replace(old2, new2, 1)
+          p.write_text(s, encoding='utf-8')
+      - name: Commit runtime change
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add api/index.js
+          git commit -m 'Wire account action buttons to CMS [cms-runtime-patch]'
+          git push
+      - name: Remove temporary workflow
+        if: success()
+        run: |
+          git rm .github/workflows/cms-runtime-patch.yml
+          git commit -m 'Remove temporary CMS runtime patcher [cms-runtime-patch]'
+          git push

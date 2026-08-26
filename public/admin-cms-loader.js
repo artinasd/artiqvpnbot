@@ -1,1 +1,0 @@
-(function(){'use strict';var core=document.createElement('script');core.src='/admin-cms-original.js';core.onload=function(){var s=document.createElement('script');s.src='/direct-cms.js';document.body.appendChild(s);};document.head.appendChild(core);}());

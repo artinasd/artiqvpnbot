@@ -154,3 +154,5 @@ npm test
 ```
 
 The included tests cover username normalization/generation, fallback naming, invalid names, plan pricing, duration parsing, and HWID rules.
+
+<!-- production redeploy trigger -->

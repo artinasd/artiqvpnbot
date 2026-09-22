@@ -197,58 +197,6 @@ bot.command('status',async(ctx)=>{if(!isAdmin(ctx))return;const orders=await sto
 bot.command('orders',async(ctx)=>{if(!isAdmin(ctx))return;const orders=await storage.listOrders(20);if(!orders.length)return ctx.reply('سفارشی ثبت نشده است.');const text=orders.map(o=>`${o.orderId} | ${o.planName} | ${o.fulfillmentStatus} | ${o.generatedPasarguardUsername||'-'}`).join('\n');await ctx.reply(`<pre>${escapeHtml(text)}</pre>`,{parse_mode:'HTML'});});
 bot.command('failed',async(ctx)=>{if(!isAdmin(ctx))return;const orders=(await storage.listOrders(100)).filter(o=>o.fulfillmentStatus==='FAILED_RETRYABLE');if(!orders.length)return ctx.reply('❌ مورد ناموفقی وجود ندارد.');for(const order of orders.slice(0,10))await ctx.reply(`⚠️ ${order.orderId}\n${order.failureReason||'unknown'}\n${order.generatedPasarguardUsername||'-'}`);});
 bot.command('users',async(ctx)=>{if(!isAdmin(ctx))return;const users=await storage.smembers('bot_users');await ctx.reply(`📊 تعداد کاربران ثبت‌شده: ${users.length}`);});
-async function sendAdminText(ctx, telegramUserId, messageText) {
-  if (!isAdmin(ctx)) return;
-  const id = String(telegramUserId || '').trim();
-  if (!/^\\d+$/.test(id)) return ctx.reply('❌ شناسه تلگرام باید یک عدد باشد.');
-  const text = String(messageText || '').trim();
-  if (!text) return ctx.reply('❌ استفاده: /sendto <telegram_id> <متن پیام>');
-  try {
-    await bot.telegram.sendMessage(id, text);
-    await storage.markUserActive(Number(id));
-    return ctx.reply(`✅ پیام برای کاربر ${id} ارسال شد.`);
-  } catch (error) {
-    const description = String(error?.description || error?.message || error);
-    if (/blocked|chat not found|user is deactivated|bot was blocked/i.test(description)) {
-      await storage.markUserBlocked(Number(id), 'DIRECT_MESSAGE_FAILED');
-    }
-    log('ADMIN_DIRECT_MESSAGE_FAILED', { telegram_user_id: id, error: description });
-    return ctx.reply(`❌ ارسال پیام به ${id} ناموفق بود.\\n\\n${description}`);
-  }
-}
-
-bot.command('sendto', async(ctx) => {
-  if (!isAdmin(ctx)) return;
-  const raw = String(ctx.message?.text || '').replace(/^\\/sendto\\s*/i, '').trim();
-  const match = raw.match(/^(\\d+)\\s+([\\s\\S]+)$/);
-  if (!match) return ctx.reply('❌ استفاده: /sendto <telegram_id> <متن پیام>');
-  return sendAdminText(ctx, match[1], match[2]);
-});
-
-bot.command('broadcast',async(ctx)=>{
-  if(!isAdmin(ctx))return;
-  const messageText=ctx.message.text.replace(/^\\/broadcast\\s*/,'').trim();
-  if(!messageText)return ctx.reply('❌ استفاده: /broadcast متن پیام');
-  const users=await storage.listActiveBotUsers(10000);
-  let success=0;
-  let failed=0;
-  for(const user of users){
-    const id=String(user.telegramUserId||'').trim();
-    if(!/^\\d+$/.test(id))continue;
-    try{
-      await bot.telegram.sendMessage(id,messageText);
-      success++;
-    }catch(error){
-      failed++;
-      const description=String(error?.description||error?.message||error);
-      if(/blocked|chat not found|user is deactivated|bot was blocked/i.test(description)){
-        await storage.markUserBlocked(Number(id), 'BROADCAST_FAILED');
-      }
-      log('BROADCAST_SEND_FAILED',{telegram_user_id:id,error:description});
-    }
-    await new Promise(resolve=>setTimeout(resolve,35));
-  }
-  return ctx.reply(`✅ ارسال به کاربران فعال پایان یافت.\\nموفق: ${success} | ناموفق: ${failed} | هدف: ${users.length}`);
-});
+bot.command('broadcast',async(ctx)=>{if(!isAdmin(ctx))return;const messageText=ctx.message.text.replace(/^\/broadcast\s*/,'').trim();if(!messageText)return ctx.reply('❌ استفاده: /broadcast متن پیام');const users=await storage.smembers('bot_users');let success=0;let failed=0;for(const id of users){try{await bot.telegram.sendMessage(id,messageText);success++;}catch(error){failed++;if(String(error.description||'').includes('blocked'))await storage.srem('bot_users',id);}await new Promise(resolve=>setTimeout(resolve,50));}await ctx.reply(`✅ ارسال پایان یافت. موفق: ${success} | ناموفق: ${failed}`);});
 
 module.exports=async(req,res)=>{if(req.method!=='POST')return res.status(200).send('ArtiQ VPN Bot is running.');if(WEBHOOK_SECRET&&req.headers['x-telegram-bot-api-secret-token']!==WEBHOOK_SECRET)return res.status(403).send('Unauthorized');try{await bot.handleUpdate(req.body);return res.status(200).send('OK');}catch(error){log('WEBHOOK_ERROR',{error:error.message||String(error)});return res.status(200).send('OK');}};

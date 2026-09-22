@@ -10,6 +10,7 @@ const { orderId, fulfillOrder, renewOrder, formatBytes } = require('../lib/fulfi
 const { getConfig, getMessage } = require('../lib/bot-config');
 const accountService = require('../lib/account-service');
 const accountUI = require('../lib/account-ui');
+const { registerAdminMessaging } = require('../lib/admin-messaging');
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const ADMIN_ID = String(process.env.ADMIN_ID || '');
@@ -24,6 +25,7 @@ const TEST_HWID_LIMIT = Number(process.env.TEST_HWID_LIMIT ?? 0);
 
 if (!BOT_TOKEN || !ADMIN_ID) console.error('Missing BOT_TOKEN or ADMIN_ID');
 const bot = new Telegraf(BOT_TOKEN || 'INVALID_TOKEN');
+registerAdminMessaging(bot, { storage, isAdmin, log });
 
 function escapeHtml(value) {
   return String(value ?? '')

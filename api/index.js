@@ -46,7 +46,7 @@ function disabledCallbackMarkup(markup) {
   return {
     ...markup,
     inline_keyboard: markup.inline_keyboard.map((row) => row.map((button) => {
-      if (!button?.callback_data) return button;
+      if (!button) return button;
       return {
         text: button.text,
         ...(button.icon_custom_emoji_id ? { icon_custom_emoji_id: button.icon_custom_emoji_id } : {}),

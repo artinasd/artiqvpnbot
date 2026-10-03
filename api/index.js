@@ -37,6 +37,69 @@ function log(event, fields = {}) { console.log(JSON.stringify({ event, ...fields
 function userSnapshot(ctx) { return { telegramUserId: ctx.from.id, username: ctx.from.username || null, firstName: ctx.from.first_name || null, lastName: ctx.from.last_name || null, updatedAt: new Date().toISOString() }; }
 async function persistUser(ctx) { return storage.saveUser(userSnapshot(ctx)); }
 
+function cloneMarkup(markup) {
+  return markup ? JSON.parse(JSON.stringify(markup)) : null;
+}
+
+function disabledCallbackMarkup(markup) {
+  if (!markup?.inline_keyboard) return null;
+  return {
+    ...markup,
+    inline_keyboard: markup.inline_keyboard.map((row) => row.map((button) => {
+      if (!button?.callback_data) return button;
+      return {
+        text: button.text,
+        ...(button.icon_custom_emoji_id ? { icon_custom_emoji_id: button.icon_custom_emoji_id } : {}),
+        ...(button.style ? { style: button.style } : {}),
+        disabled: {},
+      };
+    })),
+  };
+}
+
+async function beginCallbackFeedback(ctx) {
+  const message = ctx.callbackQuery?.message;
+  const markup = cloneMarkup(message?.reply_markup);
+  if (!message?.chat?.id || !message?.message_id || !markup?.inline_keyboard) return null;
+  const lockName = 'callback:' + message.chat.id + ':' + message.message_id;
+  if (!(await storage.acquireLock(lockName, 120))) return false;
+  try {
+    await ctx.telegram.editMessageReplyMarkup(
+      message.chat.id, message.message_id, undefined, disabledCallbackMarkup(markup)
+    ).catch((error) => log('CALLBACK_DISABLE_FAILED', {
+      telegram_user_id: ctx.from?.id, message_id: message.message_id,
+      error: error?.message || String(error),
+    }));
+    const workingMessage = await ctx.reply('⏳ در حال پردازش درخواست شما...');
+    return { lockName, message, markup, workingMessage };
+  } catch (error) {
+    await storage.releaseLock(lockName).catch(() => {});
+    throw error;
+  }
+}
+
+async function endCallbackFeedback(ctx, feedback) {
+  if (!feedback) return;
+  try {
+    await ctx.telegram.editMessageReplyMarkup(
+      feedback.message.chat.id, feedback.message.message_id, undefined, feedback.markup
+    ).catch((error) => log('CALLBACK_RESTORE_FAILED', {
+      telegram_user_id: ctx.from?.id, message_id: feedback.message.message_id,
+      error: error?.message || String(error),
+    }));
+    if (feedback.workingMessage?.message_id) {
+      await ctx.telegram.deleteMessage(
+        feedback.workingMessage.chat.id, feedback.workingMessage.message_id
+      ).catch((error) => log('CALLBACK_WORKING_MESSAGE_DELETE_FAILED', {
+        telegram_user_id: ctx.from?.id, message_id: feedback.workingMessage.message_id,
+        error: error?.message || String(error),
+      }));
+    }
+  } finally {
+    await storage.releaseLock(feedback.lockName).catch(() => {});
+  }
+}
+
 async function createOrderForPlan(ctx, plan) {
   const id = orderId();
   const order = {
@@ -163,7 +226,11 @@ bot.hears('🛒 خرید اشتراک',async(ctx)=>{await persistUser(ctx);await
 bot.hears('🎁 دریافت اکانت تست',async(ctx)=>{await sendServiceMenu(ctx,'test');});
 
 bot.on('callback_query',async(ctx)=>{
-  const data=ctx.callbackQuery.data||'';await ctx.answerCbQuery().catch(()=>{});
+  const data=ctx.callbackQuery.data||'';
+  await ctx.answerCbQuery().catch(()=>{});
+  const callbackFeedback = await beginCallbackFeedback(ctx);
+  if (callbackFeedback === false) return;
+  try {
   if(data.startsWith('wallet_charge_')){const id=data.slice('wallet_charge_'.length);const order=await storage.getOrder(id);if(!order||String(order.telegramUserId)!==String(ctx.from.id))return ctx.reply('❌ سفارش پیدا نشد.');await storage.setState('user',ctx.from.id,{stage:'AWAITING_WALLET_AMOUNT',orderId:id,requiredAmount:Number(order.price||0),balance:await wallet.getBalance(ctx.from.id)});return ctx.reply('💳 مبلغ شارژ کیف پول را به تومان وارد کنید:');}
   if(data.startsWith('wallet_approve_')){if(!isAdmin(ctx))return;const id=data.slice('wallet_approve_'.length);const topup=await storage.getOrder(id);if(!topup||topup.orderType!=='wallet_topup'||topup.paymentStatus!=='RECEIPT_SUBMITTED')return ctx.reply('❌ این درخواست قبلاً پردازش شده یا معتبر نیست.');await wallet.credit(topup.telegramUserId,Number(topup.topupAmount||0),{walletLastCredit:`topup:${id}`,walletLastCreditAt:new Date().toISOString()});await storage.updateOrder(id,{paymentStatus:'APPROVED',fulfillmentStatus:'WALLET_CREDITED',approvedAt:new Date().toISOString()});await ctx.reply(`✅ شارژ ${Number(topup.topupAmount||0).toLocaleString('en-US')} تومان تأیید شد.`);if(topup.linkedOrderId){const pending=await storage.getOrder(topup.linkedOrderId);if(pending)await activateWalletOrder(pending);}return;}
   if(data.startsWith('wallet_reject_')){if(!isAdmin(ctx))return;const id=data.slice('wallet_reject_'.length);const topup=await storage.getOrder(id);if(!topup||topup.orderType!=='wallet_topup'||topup.paymentStatus!=='RECEIPT_SUBMITTED')return ctx.reply('❌ این درخواست قبلاً پردازش شده یا معتبر نیست.');await storage.updateOrder(id,{paymentStatus:'REJECTED',fulfillmentStatus:'WALLET_TOPUP_REJECTED',rejectedAt:new Date().toISOString()});await bot.telegram.sendMessage(topup.telegramUserId,'❌ رسید شارژ کیف پول شما تأیید نشد. در صورت نیاز، دوباره تلاش کنید.').catch(()=>{});return ctx.reply('❌ درخواست شارژ رد شد.');}
@@ -181,8 +248,10 @@ bot.on('callback_query',async(ctx)=>{
   if(data==='renew_choose'){const user=await storage.getUser(ctx.from.id);if(!user?.currentPasarguardUserId)return ctx.reply('❌ اشتراک فعالی برای تمدید پیدا نشد.');return sendServiceMenu(ctx,'renew');}
   if(data.startsWith('renew_plan_')){const plan=await planStore.get(data.slice('renew_plan_'.length));const user=await storage.getUser(ctx.from.id);if(!plan||!user?.currentPasarguardUserId)return ctx.reply('❌ این پلن فعال نیست یا اشتراک شما پیدا نشد.');const config=await getConfig();const service=getConfiguredService(plan.service,config);if(!service)return ctx.reply(await getMessage('invalidService'));const order=await createOrderForPlan(ctx,plan);await storage.updateOrder(order.orderId,{renewal:true,renewalPasarguardUserId:user.currentPasarguardUserId});return showWalletCheckout(ctx,order);}
   if(data.startsWith('invalidate_')){if(!isAdmin(ctx))return;const id=data.slice('invalidate_'.length);const order=await storage.getOrder(id);if(!order||!order.pasarguardUserId)return ctx.reply('❌ سفارش یا کاربر PasarGuard پیدا نشد.');try{await pasarguard.disableUser(order.pasarguardUserId);await storage.updateOrder(id,{paymentStatus:'PAYMENT_LATER_REJECTED',fulfillmentStatus:'PAYMENT_LATER_REJECTED'});await ctx.reply(`❌ اشتراک ${escapeHtml(order.generatedPasarguardUsername)} غیرفعال شد.`,{parse_mode:'HTML'});await bot.telegram.sendMessage(order.telegramUserId,'❌ پرداخت این سفارش بعداً نامعتبر تشخیص داده شد و اشتراک غیرفعال شد.');}catch(error){await ctx.reply('❌ غیرفعال‌سازی اشتراک انجام نشد؛ لاگ فنی ثبت شد.');}}
+  } finally {
+    await endCallbackFeedback(ctx, callbackFeedback);
+  }
 });
-
 bot.on('message',async(ctx)=>{
   await persistUser(ctx);const state=await storage.getState('user',ctx.from.id);if(!state)return;
   if(state.stage==='AWAITING_WALLET_AMOUNT'){const amount=Number(String(ctx.message.text||'').trim().replace(/[۰-۹]/g,d=>'۰۱۲۳۴۵۶۷۸۹'.indexOf(d)));const required=Number(state.requiredAmount||0);const minimum=state.orderId?Math.max(0,required-Number(state.balance||0)):1;if(!Number.isInteger(amount)||amount<1)return ctx.reply('❌ مبلغ نامعتبر است. یک عدد مثبت به تومان وارد کنید.');if(amount<minimum)return ctx.reply(`❌ این مبلغ کافی نیست. حداقل ${minimum.toLocaleString('en-US')} تومان لازم است.`);await createWalletTopup(ctx,amount,state.orderId||null);return;}

@@ -67,8 +67,13 @@ async function showWalletCheckout(ctx, order) {
     try {
       const freshBalance = await wallet.getBalance(ctx.from.id);
       if (freshBalance < price) return showWalletCheckout(ctx, order);
-      await wallet.debit(ctx.from.id, price, { walletLastTransaction: `purchase:${order.orderId}` });
       await storage.updateOrder(order.orderId, { paymentStatus: 'WALLET_PAID', fulfillmentStatus: 'RECEIPT_SUBMITTED', walletCharged: true, walletChargedAmount: price, walletChargedAt: new Date().toISOString() });
+      try {
+        await wallet.debit(ctx.from.id, price, { walletLastTransaction: `purchase:${order.orderId}` });
+      } catch (error) {
+        await storage.updateOrder(order.orderId, { paymentStatus: 'WALLET_REQUIRED', fulfillmentStatus: 'DRAFT', walletCharged: false });
+        throw error;
+      }
       await storage.deleteState('user', ctx.from.id);
       await ctx.reply(`✅ مبلغ ${price.toLocaleString('en-US')} تومان از کیف پول شما کسر شد.\n\n⏳ در حال ساخت اشتراک...`);
       await fulfillOrder(order.orderId, bot.telegram);
@@ -109,8 +114,13 @@ async function activateWalletOrder(order) {
     if (!current || current.walletCharged || current.fulfillmentStatus === 'FULFILLED') return { already: true, order: current };
     const balance = await wallet.getBalance(current.telegramUserId);
     if (balance < price) return { insufficient: true, balance };
-    await wallet.debit(current.telegramUserId, price, { walletLastTransaction: `purchase:${current.orderId}` });
     const paid = await storage.updateOrder(current.orderId, { paymentStatus: 'WALLET_PAID', fulfillmentStatus: 'RECEIPT_SUBMITTED', walletCharged: true, walletChargedAmount: price, walletChargedAt: new Date().toISOString() });
+    try {
+      await wallet.debit(current.telegramUserId, price, { walletLastTransaction: `purchase:${current.orderId}` });
+    } catch (error) {
+      await storage.updateOrder(current.orderId, { paymentStatus: 'WALLET_REQUIRED', fulfillmentStatus: 'DRAFT', walletCharged: false });
+      throw error;
+    }
     await storage.deleteState('user', current.telegramUserId);
     await bot.telegram.sendMessage(current.telegramUserId, `✅ شارژ کیف پول تأیید شد و ${price.toLocaleString('en-US')} تومان بابت سفارش ${current.planName} کسر شد.\n\n⏳ اشتراک شما در حال ساخت است...`).catch(() => {});
     await fulfillOrder(current.orderId, bot.telegram);

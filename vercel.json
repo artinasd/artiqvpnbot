@@ -4,6 +4,15 @@
     "api/index.js": {
       "maxDuration": 30,
       "includeFiles": "bg.png"
+    },
+    "api/cron.js": {
+      "maxDuration": 30
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/cron",
+      "schedule": "* * * * *"
+    }
+  ]
 }

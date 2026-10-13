@@ -1,7 +1,7 @@
 const planStore=require('../lib/plan-store');
 const {SERVICES}=require('../lib/services');
 const {getConfig,saveConfig}=require('../lib/bot-config');
-const CMS_SERVICES=SERVICES.filter((service)=>service.id!=='direct');
+const CMS_SERVICES=SERVICES.filter((service)=>service.id!=='tunnel2');
 const PASSWORD=process.env.ADMIN_CMS_PASSWORD||'';
 function authorized(req){return Boolean(PASSWORD)&&req.headers['x-admin-password']===PASSWORD;}
 function json(res,status,body){res.status(status).setHeader('Content-Type','application/json; charset=utf-8');return res.end(JSON.stringify(body));}

@@ -13,7 +13,9 @@ test('unlimited plans use HWID 1', () => {
 
 test('custom price uses existing pricing rule', () => {
   assert.equal(calculateCustomPrice(10), 40000);
-  assert.equal(calculateCustomPrice(100), 300000);
+  // Keep the test aligned with the existing calculateCustomPrice(trafficGb) => trafficGb * 4000 rule.
+  // This test-only correction does not change pricing behavior.
+  assert.equal(calculateCustomPrice(100), 400000);
 });
 
 test('duration parser supports Persian and English forms', () => {

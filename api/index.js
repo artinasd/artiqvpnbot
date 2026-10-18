@@ -225,6 +225,14 @@ bot.on('callback_query',async(ctx)=>{
   if(data.startsWith('invalidate_')){if(!isAdmin(ctx))return;const id=data.slice('invalidate_'.length);const order=await storage.getOrder(id);if(!order||!order.pasarguardUserId)return ctx.reply('❌ سفارش یا کاربر PasarGuard پیدا نشد.');try{await pasarguard.disableUser(order.pasarguardUserId);await storage.updateOrder(id,{paymentStatus:'PAYMENT_LATER_REJECTED',fulfillmentStatus:'PAYMENT_LATER_REJECTED'});await ctx.reply(`❌ اشتراک ${escapeHtml(order.generatedPasarguardUsername)} غیرفعال شد.`,{parse_mode:'HTML'});await bot.telegram.sendMessage(order.telegramUserId,'❌ پرداخت این سفارش بعداً نامعتبر تشخیص داده شد و اشتراک غیرفعال شد.');}catch(error){await ctx.reply('❌ غیرفعال‌سازی اشتراک انجام نشد؛ لاگ فنی ثبت شد.');}}
 });
 
+bot.command('tunnel2direct',async(ctx)=>{
+  if (!isAdmin(ctx)) return;
+  return ctx.reply('🛠 مدیریت گروه Multi Direct در پنل PasarGuard Tunnel 2\n\nیک عملیات را انتخاب کنید. قبل از اجرا، تأیید جداگانه خواسته می‌شود و فقط گروه Multi Direct تغییر می‌کند.', Markup.inlineKeyboard([
+    [Markup.button.callback('➕ افزودن Direct به همه اشتراک‌ها', 't2direct_add')],
+    [Markup.button.callback('➖ حذف Direct از همه اشتراک‌ها', 't2direct_remove')],
+  ]));
+});
+
 bot.on('message',async(ctx)=>{
   await persistUser(ctx);const state=await storage.getState('user',ctx.from.id);if(!state)return;
   if(state.stage==='AWAITING_WALLET_AMOUNT'){const amount=Number(String(ctx.message.text||'').trim().replace(/[۰-۹]/g,d=>'۰۱۲۳۴۵۶۷۸۹'.indexOf(d)));const required=Number(state.requiredAmount||0);const minimum=state.orderId?Math.max(0,required-Number(state.balance||0)):1;if(!Number.isInteger(amount)||amount<1)return ctx.reply('❌ مبلغ نامعتبر است. یک عدد مثبت به تومان وارد کنید.');if(amount<minimum)return ctx.reply(`❌ این مبلغ کافی نیست. حداقل ${minimum.toLocaleString('en-US')} تومان لازم است.`);await createWalletTopup(ctx,amount,state.orderId||null);return;}
@@ -235,13 +243,6 @@ bot.on('message',async(ctx)=>{
   if(state.stage==='AWAITING_RECEIPT'){return ctx.reply('❌ پرداخت مستقیم برای خرید اشتراک دیگر استفاده نمی‌شود. لطفاً کیف پول خود را شارژ کنید.');}
 });
 
-bot.command('tunnel2direct',async(ctx)=>{
-  if (!isAdmin(ctx)) return;
-  return ctx.reply('🛠 مدیریت گروه Multi Direct در پنل PasarGuard Tunnel 2\n\nیک عملیات را انتخاب کنید. قبل از اجرا، تأیید جداگانه خواسته می‌شود و فقط گروه Multi Direct تغییر می‌کند.', Markup.inlineKeyboard([
-    [Markup.button.callback('➕ افزودن Direct به همه اشتراک‌ها', 't2direct_add')],
-    [Markup.button.callback('➖ حذف Direct از همه اشتراک‌ها', 't2direct_remove')],
-  ]));
-});
 bot.command('wallet',async(ctx)=>{await persistUser(ctx);return showWalletPage(ctx);});
 bot.command('pingdb',async(ctx)=>{if(!isAdmin(ctx))return;try{await ctx.reply(await storage.ping()?'✅ Redis: OK':'⚠️ Redis در حالت حافظه محلی است.');}catch{await ctx.reply('❌ Redis: ERROR');}});
 bot.command('status',async(ctx)=>{if(!isAdmin(ctx))return;const orders=await storage.listOrders(100);const pending=orders.filter(o=>!['FULFILLED','PAYMENT_LATER_REJECTED','WALLET_TOPUP_REJECTED'].includes(o.fulfillmentStatus)).length;const failed=orders.filter(o=>o.fulfillmentStatus==='FAILED_RETRYABLE').length;let pg='ERROR';try{await pasarguard.health();pg='OK';}catch{}await ctx.reply(`📊 <b>وضعیت سیستم</b>\n\nTelegram Bot: OK\nRedis: ${storage.configured()?'OK':'MEMORY'}\nPasarGuard: ${pg}\nPending orders: ${pending}\nFailed fulfillments: ${failed}`,{parse_mode:'HTML'});});

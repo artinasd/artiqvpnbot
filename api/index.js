@@ -198,7 +198,7 @@ bot.on('callback_query',async(ctx)=>{
         log('TUNNEL2_BULK_DIRECT_GROUP_CHANGE_COMPLETED', { action, group_id: result.groupId, panel_count: Number.isFinite(reportedCount) ? reportedCount : null });
         return ctx.reply(`✅ عملیات ${action === 'add' ? 'افزودن' : 'حذف'} گروه Multi Direct ارسال شد.\nشناسه فعلی گروه: ${result.groupId}\n${countText}`);
       } catch (error) {
-        log('TUNNEL2_BULK_DIRECT_GROUP_CHANGE_FAILED', { action, error: error?.message || String(error), status: error?.status || 0 });
+        log('TUNNEL2_BULK_DIRECT_GROUP_CHANGE_FAILED', { action, operation: error?.operation || 'unknown', error: error?.message || String(error), status: error?.status || 0 });
         return ctx.reply(`❌ تغییر گروه Multi Direct انجام نشد.\nخطا: ${error?.message || 'UNKNOWN_ERROR'}`);
       } finally {
         await storage.releaseLock(lockName);

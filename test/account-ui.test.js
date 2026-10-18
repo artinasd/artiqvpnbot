@@ -4,12 +4,12 @@ const assert = require('node:assert/strict');
 const accountService = require('../lib/account-service');
 const accountUI = require('../lib/account-ui');
 
-test('account list titles show only the subscription username when available', async () => {
+test('account list titles show the saved PasarGuard username when available', async () => {
   const originalListSubscriptions = accountService.listSubscriptions;
   const originalSummary = accountService.summary;
   const order = {
     orderId: 'order-username-only',
-    username: 'customer_tunnel_123',
+    generatedPasarguardUsername: 'customer_tunnel_123',
     planName: 'اشتراک آزمایشی',
     serviceName: 'Tunnel 2',
   };

@@ -190,7 +190,7 @@ bot.on('callback_query',async(ctx)=>{
         const result = await pasarguardTunnel2.changeGroupForAllUsers(action);
         const panelResult = result?.response;
         const reportedCount = Number(panelResult?.count);
-        const countText = Number.isFinite(reportedCount) && reportedCount >= 0
+        const countText = panelResult?.count !== undefined && panelResult?.count !== null && Number.isFinite(reportedCount) && reportedCount >= 0
           ? `تعداد گزارش‌شده توسط پنل: ${reportedCount}`
           : Array.isArray(panelResult?.users)
             ? `تعداد کاربران گزارش‌شده توسط پنل: ${panelResult.users.length}`

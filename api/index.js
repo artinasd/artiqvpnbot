@@ -6,6 +6,7 @@ const { normalizeSubscriptionName } = require('../lib/username');
 const storage = require('../lib/storage');
 const wallet = require('../lib/wallet');
 const pasarguard = require('../lib/pasarguard');
+const pasarguardTunnel2 = require('../lib/pasarguard-tunnel2');
 const { orderId, fulfillOrder, renewOrder, formatBytes } = require('../lib/fulfillment');
 const { getConfig, getMessage } = require('../lib/bot-config');
 const accountService = require('../lib/account-service');
@@ -164,6 +165,47 @@ bot.hears('🎁 دریافت اکانت تست',async(ctx)=>{await sendServiceMe
 
 bot.on('callback_query',async(ctx)=>{
   const data=ctx.callbackQuery.data||'';await ctx.answerCbQuery().catch(()=>{});
+  if(data.startsWith('t2direct_')) {
+    if (!isAdmin(ctx)) return;
+    if (data === 't2direct_cancel') {
+      await ctx.editMessageText('عملیات لغو شد.').catch(() => {});
+      return;
+    }
+    if (data === 't2direct_add' || data === 't2direct_remove') {
+      const action = data.slice('t2direct_'.length);
+      const label = action === 'add' ? 'اضافه کردن گروه Multi Direct' : 'حذف گروه Multi Direct';
+      return ctx.reply(`⚠️ تأیید عملیات گروه Direct 2 / Tunnel 2\n\nقرار است ${label} برای همه کاربران موجود در پنل PasarGuard Tunnel 2 اجرا شود. سایر گروه‌ها حفظ می‌شوند.\n\nآیا ادامه می‌دهید؟`, Markup.inlineKeyboard([
+        [Markup.button.callback('✅ بله، اجرا کن', `t2direct_confirm_${action}`)],
+        [Markup.button.callback('❌ لغو', 't2direct_cancel')],
+      ]));
+    }
+    if (data.startsWith('t2direct_confirm_')) {
+      const action = data.slice('t2direct_confirm_'.length);
+      if (action !== 'add' && action !== 'remove') return;
+      await ctx.editMessageReplyMarkup({ inline_keyboard: [] }).catch(() => {});
+      const lockName = 'tunnel2-direct-group-bulk';
+      if (!(await storage.acquireLock(lockName, 90))) return ctx.reply('⏳ تغییر گروه‌ها در حال اجراست. کمی بعد دوباره بررسی کنید.');
+      try {
+        await ctx.reply('⏳ در حال اجرای تغییر گروه Multi Direct برای همه کاربران پنل...');
+        const result = await pasarguardTunnel2.changeGroupForAllUsers(action);
+        const panelResult = result?.response;
+        const reportedCount = Number(panelResult?.count);
+        const countText = Number.isFinite(reportedCount) && reportedCount >= 0
+          ? `تعداد گزارش‌شده توسط پنل: ${reportedCount}`
+          : Array.isArray(panelResult?.users)
+            ? `تعداد کاربران گزارش‌شده توسط پنل: ${panelResult.users.length}`
+            : 'درخواست با موفقیت به پنل ارسال شد.';
+        log('TUNNEL2_BULK_DIRECT_GROUP_CHANGE_COMPLETED', { action, group_id: result.groupId, panel_count: Number.isFinite(reportedCount) ? reportedCount : null });
+        return ctx.reply(`✅ عملیات ${action === 'add' ? 'افزودن' : 'حذف'} گروه Multi Direct ارسال شد.\nشناسه فعلی گروه: ${result.groupId}\n${countText}`);
+      } catch (error) {
+        log('TUNNEL2_BULK_DIRECT_GROUP_CHANGE_FAILED', { action, error: error?.message || String(error), status: error?.status || 0 });
+        return ctx.reply(`❌ تغییر گروه Multi Direct انجام نشد.\nخطا: ${error?.message || 'UNKNOWN_ERROR'}`);
+      } finally {
+        await storage.releaseLock(lockName);
+      }
+    }
+    return;
+  }
   if(data.startsWith('wallet_charge_')){const id=data.slice('wallet_charge_'.length);const order=await storage.getOrder(id);if(!order||String(order.telegramUserId)!==String(ctx.from.id))return ctx.reply('❌ سفارش پیدا نشد.');await storage.setState('user',ctx.from.id,{stage:'AWAITING_WALLET_AMOUNT',orderId:id,requiredAmount:Number(order.price||0),balance:await wallet.getBalance(ctx.from.id)});return ctx.reply('💳 مبلغ شارژ کیف پول را به تومان وارد کنید:');}
   if(data.startsWith('wallet_approve_')){if(!isAdmin(ctx))return;const id=data.slice('wallet_approve_'.length);const topup=await storage.getOrder(id);if(!topup||topup.orderType!=='wallet_topup'||topup.paymentStatus!=='RECEIPT_SUBMITTED')return ctx.reply('❌ این درخواست قبلاً پردازش شده یا معتبر نیست.');await wallet.credit(topup.telegramUserId,Number(topup.topupAmount||0),{walletLastCredit:`topup:${id}`,walletLastCreditAt:new Date().toISOString()});await storage.updateOrder(id,{paymentStatus:'APPROVED',fulfillmentStatus:'WALLET_CREDITED',approvedAt:new Date().toISOString()});await ctx.reply(`✅ شارژ ${Number(topup.topupAmount||0).toLocaleString('en-US')} تومان تأیید شد.`);if(topup.linkedOrderId){const pending=await storage.getOrder(topup.linkedOrderId);if(pending)await activateWalletOrder(pending);}return;}
   if(data.startsWith('wallet_reject_')){if(!isAdmin(ctx))return;const id=data.slice('wallet_reject_'.length);const topup=await storage.getOrder(id);if(!topup||topup.orderType!=='wallet_topup'||topup.paymentStatus!=='RECEIPT_SUBMITTED')return ctx.reply('❌ این درخواست قبلاً پردازش شده یا معتبر نیست.');await storage.updateOrder(id,{paymentStatus:'REJECTED',fulfillmentStatus:'WALLET_TOPUP_REJECTED',rejectedAt:new Date().toISOString()});await bot.telegram.sendMessage(topup.telegramUserId,'❌ رسید شارژ کیف پول شما تأیید نشد. در صورت نیاز، دوباره تلاش کنید.').catch(()=>{});return ctx.reply('❌ درخواست شارژ رد شد.');}
@@ -193,6 +235,13 @@ bot.on('message',async(ctx)=>{
   if(state.stage==='AWAITING_RECEIPT'){return ctx.reply('❌ پرداخت مستقیم برای خرید اشتراک دیگر استفاده نمی‌شود. لطفاً کیف پول خود را شارژ کنید.');}
 });
 
+bot.command('tunnel2direct',async(ctx)=>{
+  if (!isAdmin(ctx)) return;
+  return ctx.reply('🛠 مدیریت گروه Multi Direct در پنل PasarGuard Tunnel 2\n\nیک عملیات را انتخاب کنید. قبل از اجرا، تأیید جداگانه خواسته می‌شود و فقط گروه Multi Direct تغییر می‌کند.', Markup.inlineKeyboard([
+    [Markup.button.callback('➕ افزودن Direct به همه اشتراک‌ها', 't2direct_add')],
+    [Markup.button.callback('➖ حذف Direct از همه اشتراک‌ها', 't2direct_remove')],
+  ]));
+});
 bot.command('wallet',async(ctx)=>{await persistUser(ctx);return showWalletPage(ctx);});
 bot.command('pingdb',async(ctx)=>{if(!isAdmin(ctx))return;try{await ctx.reply(await storage.ping()?'✅ Redis: OK':'⚠️ Redis در حالت حافظه محلی است.');}catch{await ctx.reply('❌ Redis: ERROR');}});
 bot.command('status',async(ctx)=>{if(!isAdmin(ctx))return;const orders=await storage.listOrders(100);const pending=orders.filter(o=>!['FULFILLED','PAYMENT_LATER_REJECTED','WALLET_TOPUP_REJECTED'].includes(o.fulfillmentStatus)).length;const failed=orders.filter(o=>o.fulfillmentStatus==='FAILED_RETRYABLE').length;let pg='ERROR';try{await pasarguard.health();pg='OK';}catch{}await ctx.reply(`📊 <b>وضعیت سیستم</b>\n\nTelegram Bot: OK\nRedis: ${storage.configured()?'OK':'MEMORY'}\nPasarGuard: ${pg}\nPending orders: ${pending}\nFailed fulfillments: ${failed}`,{parse_mode:'HTML'});});

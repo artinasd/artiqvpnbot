@@ -12,6 +12,7 @@ const { getConfig, getMessage } = require('../lib/bot-config');
 const accountService = require('../lib/account-service');
 const accountUI = require('../lib/account-ui');
 const { registerAdminMessaging } = require('../lib/admin-messaging');
+const userReport = require('../lib/user-report');
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const ADMIN_ID = String(process.env.ADMIN_ID || '');
@@ -158,7 +159,7 @@ async function showWalletPage(ctx) {
 
 bot.catch((error,ctx)=>{log('BOT_ERROR',{update_type:ctx?.updateType,error:error?.message||String(error)});});
 bot.use(async(ctx,next)=>{if(isAdmin(ctx))return next();const config=await getConfig();if(config.bot?.maintenanceMode)return ctx.reply(await getMessage('maintenance'));return next();});
-bot.start(async(ctx)=>{await persistUser(ctx);await storage.deleteState('user',ctx.from.id);const config=await getConfig();const b=config.buttons||{};const testText=b.test||'🎁 دریافت اکانت تست';const buyText=b.buy||'🛒 خرید اشتراک';const accountText=b.account||'👤 حساب من';const walletText=b.wallet||'💰 کیف پول من';const supportText=b.support||'🎯 پشتیبانی';const message=await getMessage('start');await ctx.reply(message,Markup.keyboard([[testText],[buyText],[walletText],[accountText],[supportText]]).resize());});
+bot.start(async(ctx)=>{let newUserReport=null;try{newUserReport=await userReport.recordFirstStart(storage,ctx.from);}catch(error){log('NEW_USER_REPORT_FAILED',{telegram_user_id:ctx.from?.id,error:error?.message||String(error)});}await persistUser(ctx);if(newUserReport)await bot.telegram.sendMessage(ADMIN_ID,newUserReport,{parse_mode:'HTML'}).catch(error=>log('NEW_USER_REPORT_SEND_FAILED',{telegram_user_id:ctx.from?.id,error:error?.message||String(error)}));await storage.deleteState('user',ctx.from.id);const config=await getConfig();const b=config.buttons||{};const testText=b.test||'🎁 دریافت اکانت تست';const buyText=b.buy||'🛒 خرید اشتراک';const accountText=b.account||'👤 حساب من';const walletText=b.wallet||'💰 کیف پول من';const supportText=b.support||'🎯 پشتیبانی';const message=await getMessage('start');await ctx.reply(message,Markup.keyboard([[testText],[buyText],[walletText],[accountText],[supportText]]).resize());});
 bot.hears(/.*/,async(ctx,next)=>{const config=await getConfig();const b=config.buttons||{};const text=ctx.message?.text;if(text===(b.support||'🎯 پشتیبانی')){await persistUser(ctx);const username=config.payment.supportUsername||SUPPORT_USERNAME;return ctx.reply(await getMessage('support',{support_username:username}));}if(text===(b.buy||'🛒 خرید اشتراک')){await persistUser(ctx);return sendServiceMenu(ctx,'buy');}if(text===(b.test||'🎁 دریافت اکانت تست')){return sendServiceMenu(ctx,'test');}if(text===(b.wallet||'💰 کیف پول من')){await persistUser(ctx);return showWalletPage(ctx);}if(text===(b.account||'👤 حساب من')){await persistUser(ctx);const subscriptions=await accountUI.listForUser(ctx.from.id);if(!subscriptions.length)return ctx.reply(await getMessage('accountNoSubscription'));return ctx.reply('👤 <b>حساب من</b>\n\nاشتراک موردنظر را انتخاب کنید:',{parse_mode:'HTML',reply_markup:{inline_keyboard:accountUI.subscriptionKeyboard(subscriptions)}});}return next();});
 bot.hears('🛒 خرید اشتراک',async(ctx)=>{await persistUser(ctx);await sendServiceMenu(ctx,'buy');});
 bot.hears('🎁 دریافت اکانت تست',async(ctx)=>{await sendServiceMenu(ctx,'test');});

@@ -51,14 +51,12 @@ test('account list falls back to the stored subscription name when no username e
   }
 });
 
-
-test('account list rows provide username, quick-renew, and remove actions', () => {
+test('account list rows provide username, quick-renew, and remove actions on one row', () => {
   const rows = accountUI.subscriptionKeyboard([{ id: 'order-1', title: 'customer_name' }]);
-  assert.equal(rows.length, 2);
-  assert.deepEqual(rows[0].map((button) => button.text), ['customer_name']);
-  assert.deepEqual(rows[0].map((button) => button.callback_data), ['account_sub:order-1']);
-  assert.deepEqual(rows[1].map((button) => button.text), ['🔁', '❌']);
-  assert.deepEqual(rows[1].map((button) => button.callback_data), [
+  assert.equal(rows.length, 1);
+  assert.deepEqual(rows[0].map((button) => button.text), ['customer_name', '🔁', '❌']);
+  assert.deepEqual(rows[0].map((button) => button.callback_data), [
+    'account_sub:order-1',
     'account_renew:order-1',
     'account_remove:order-1',
   ]);

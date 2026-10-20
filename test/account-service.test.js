@@ -45,3 +45,70 @@ test('listSubscriptions uses stored orders without making live PasarGuard reques
     });
   }
 });
+
+
+test('listSubscriptions hides account-removed records without deleting order history', async () => {
+  const originalListUserOrders = storage.listUserOrders;
+  storage.listUserOrders = async () => [
+    { orderId: 'visible', pasarguardUserId: 'pg-1' },
+    { orderId: 'removed', pasarguardUserId: 'pg-2', accountRemovedAt: '2026-10-20T00:00:00.000Z' },
+  ];
+  try {
+    const result = await accountService.listSubscriptions(12345);
+    assert.deepEqual(result.map((order) => order.orderId), ['visible']);
+  } finally {
+    storage.listUserOrders = originalListUserOrders;
+  }
+});
+
+test('removeSubscriptionFromAccount deletes panel user and marks Redis record removed', async () => {
+  const originalGetOrder = storage.getOrder;
+  const originalUpdateOrder = storage.updateOrder;
+  const originalGet = pasarguardPanel2.getUserById;
+  const originalDelete = pasarguardPanel2.deleteUserById;
+  let updatedPatch;
+  const order = {
+    orderId: 'remove-me',
+    telegramUserId: 12345,
+    provider: 'pasarguard-panel2',
+    pasarguardUserId: 'pg-user-1',
+    generatedPasarguardUsername: 'customer_name',
+    paymentStatus: 'APPROVED',
+  };
+  storage.getOrder = async () => order;
+  storage.updateOrder = async (id, patch) => {
+    assert.equal(id, 'remove-me');
+    updatedPatch = patch;
+    return { ...order, ...patch };
+  };
+  pasarguardPanel2.getUserById = async (id) => ({ id });
+  pasarguardPanel2.deleteUserById = async (id) => {
+    assert.equal(id, 'pg-user-1');
+    return { success: true };
+  };
+  try {
+    const result = await accountService.removeSubscriptionFromAccount(12345, 'remove-me');
+    assert.equal(result.order.accountRemoved, true);
+    assert.equal(result.order.paymentStatus, 'APPROVED');
+    assert.equal(updatedPatch.accountRemovalPanelStatus, 'REMOVED');
+    assert.ok(updatedPatch.accountRemovedAt);
+  } finally {
+    storage.getOrder = originalGetOrder;
+    storage.updateOrder = originalUpdateOrder;
+    pasarguardPanel2.getUserById = originalGet;
+    pasarguardPanel2.deleteUserById = originalDelete;
+  }
+});
+
+test('removeSubscriptionFromAccount rejects a different Telegram owner', async () => {
+  const originalGetOrder = storage.getOrder;
+  storage.getOrder = async () => ({ orderId: 'private', telegramUserId: 99999 });
+  try {
+    await assert.rejects(
+      accountService.removeSubscriptionFromAccount(12345, 'private'),
+      (error) => error.code === 'SUBSCRIPTION_NOT_FOUND'
+    );
+  } finally {
+    storage.getOrder = originalGetOrder;
+  }
+});

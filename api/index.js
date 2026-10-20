@@ -210,6 +210,33 @@ bot.on('callback_query',async(ctx)=>{
   if(data.startsWith('wallet_approve_')){if(!isAdmin(ctx))return;const id=data.slice('wallet_approve_'.length);const topup=await storage.getOrder(id);if(!topup||topup.orderType!=='wallet_topup'||topup.paymentStatus!=='RECEIPT_SUBMITTED')return ctx.reply('❌ این درخواست قبلاً پردازش شده یا معتبر نیست.');await wallet.credit(topup.telegramUserId,Number(topup.topupAmount||0),{walletLastCredit:`topup:${id}`,walletLastCreditAt:new Date().toISOString()});await storage.updateOrder(id,{paymentStatus:'APPROVED',fulfillmentStatus:'WALLET_CREDITED',approvedAt:new Date().toISOString()});await ctx.reply(`✅ شارژ ${Number(topup.topupAmount||0).toLocaleString('en-US')} تومان تأیید شد.`);if(topup.linkedOrderId){const pending=await storage.getOrder(topup.linkedOrderId);if(pending)await activateWalletOrder(pending);}return;}
   if(data.startsWith('wallet_reject_')){if(!isAdmin(ctx))return;const id=data.slice('wallet_reject_'.length);const topup=await storage.getOrder(id);if(!topup||topup.orderType!=='wallet_topup'||topup.paymentStatus!=='RECEIPT_SUBMITTED')return ctx.reply('❌ این درخواست قبلاً پردازش شده یا معتبر نیست.');await storage.updateOrder(id,{paymentStatus:'REJECTED',fulfillmentStatus:'WALLET_TOPUP_REJECTED',rejectedAt:new Date().toISOString()});await bot.telegram.sendMessage(topup.telegramUserId,'❌ رسید شارژ کیف پول شما تأیید نشد. در صورت نیاز، دوباره تلاش کنید.').catch(()=>{});return ctx.reply('❌ درخواست شارژ رد شد.');}
   if(data==='account_list'){const subscriptions=await accountUI.listForUser(ctx.from.id);if(!subscriptions.length)return ctx.reply(await getMessage('accountNoSubscription'));return ctx.reply('👤 <b>حساب من</b>\n\nاشتراک موردنظر را انتخاب کنید:',{parse_mode:'HTML',reply_markup:{inline_keyboard:accountUI.subscriptionKeyboard(subscriptions)}});}
+  if(data.startsWith('account_remove_confirm:')) {
+    const id = data.slice('account_remove_confirm:'.length);
+    const lockName = `account-remove:${id}`;
+    if (!(await storage.acquireLock(lockName, 90))) return ctx.reply('⏳ حذف این اشتراک در حال پردازش است. کمی بعد دوباره بررسی کنید.');
+    try {
+      const result = await accountService.removeSubscriptionFromAccount(ctx.from.id, id);
+      await ctx.editMessageReplyMarkup({ inline_keyboard: [] }).catch(() => {});
+      const note = result.alreadyRemoved ? 'این اشتراک قبلاً از فهرست حساب حذف شده بود.' : result.alreadyAbsent ? 'کاربر در پنل از قبل وجود نداشت؛ رکورد حساب پاک‌سازی شد.' : 'اشتراک از پنل PasarGuard و فهرست حساب شما حذف شد.';
+      await ctx.reply(`✅ ${note}`);
+      const subscriptions = await accountUI.listForUser(ctx.from.id);
+      if (subscriptions.length) await ctx.reply('👤 <b>حساب من</b>\n\nاشتراک موردنظر را انتخاب کنید:', { parse_mode: 'HTML', reply_markup: { inline_keyboard: accountUI.subscriptionKeyboard(subscriptions) } });
+      return;
+    } catch (error) {
+      log('ACCOUNT_REMOVAL_FAILED', { telegram_user_id: ctx.from.id, source_order_id: id, error: error?.message || String(error), status: error?.status || 0 });
+      if (error.code === 'SUBSCRIPTION_NOT_FOUND') return ctx.reply('❌ این اشتراک پیدا نشد یا متعلق به حساب شما نیست.');
+      return ctx.reply('❌ حذف از پنل کامل نشد. اشتراک در فهرست شما باقی مانده است تا بتوانید دوباره تلاش کنید.');
+    } finally {
+      await storage.releaseLock(lockName).catch(() => {});
+    }
+  }
+  if(data.startsWith('account_remove:')) {
+    const id = data.slice('account_remove:'.length);
+    const order = await storage.getOrder(id);
+    if (!order || String(order.telegramUserId) !== String(ctx.from.id) || order.accountRemovedAt || order.accountRemoved === true) return ctx.reply('❌ این اشتراک پیدا نشد یا قبلاً حذف شده است.');
+    const username = order.generatedPasarguardUsername || order.username || order.pasarguardUsername || order.subscriptionUsername || 'این اشتراک';
+    return ctx.reply(`⚠️ حذف اشتراک ${escapeHtml(username)}\n\nاین کار کاربر را از پنل PasarGuard حذف می‌کند و اشتراک را از فهرست حساب شما پنهان می‌کند. سابقه سفارش و پرداخت برای سوابق مالی حفظ می‌شود.\n\nآیا مطمئن هستید؟`, { parse_mode: 'HTML', reply_markup: { inline_keyboard: accountUI.removeConfirmationKeyboard(id) } });
+  }
   if(data.startsWith('account_sub:')){const id=data.slice('account_sub:'.length);const raw=await accountService.getSubscription(ctx.from.id,id);if(!raw)return ctx.reply('❌ این اشتراک پیدا نشد.');const sub=accountService.summary(raw);return ctx.reply(accountUI.formatDetail(sub),{reply_markup:{inline_keyboard:accountUI.detailKeyboard(sub)}});}
   if(data.startsWith('copy_sub:')){const id=data.slice('copy_sub:'.length);const raw=await accountService.getSubscription(ctx.from.id,id);const url=raw?.subUrl||raw?.subscriptionUrl;if(!url)return ctx.reply('❌ لینک اشتراک در دسترس نیست.');return ctx.reply('📋 لینک اشتراک:',{reply_markup:{inline_keyboard:[[{text:'📋 کپی لینک اشتراک',copy_text:{text:url}}],[{text:'⬅️ بازگشت',callback_data:`account_sub:${id}`}]]}});}
   if(data.startsWith('account_renew:')){const id=data.slice('account_renew:'.length);const raw=await accountService.getSubscription(ctx.from.id,id);if(!raw||!accountService.canRenew(raw))return ctx.reply('❌ این اشتراک قابل تمدید نیست.');try{const order=await createRenewalOrderForSubscription(ctx,raw);return showWalletCheckout(ctx,order);}catch(error){log('ACCOUNT_RENEWAL_CREATE_FAILED',{telegram_user_id:ctx.from.id,source_order_id:id,error:error?.message||String(error)});return ctx.reply('❌ تمدید این اشتراک در حال حاضر ممکن نیست.');}}

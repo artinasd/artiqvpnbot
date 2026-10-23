@@ -182,6 +182,8 @@
         byId('panel-id').value = '';
         byId('panel-username').placeholder = 'username';
         byId('panel-password').placeholder = 'برای پنل جدید یا جایگزینی رمز';
+        // Saving a panel is followed by a fresh connection test. Until that succeeds,
+        // status stays pending and the panel is not selectable for new sales.
         message(byId('panel-message'), 'پنل ذخیره شد. اکنون «تست اتصال» را بزنید.', true);
         await refresh();
       } catch (error) { message(byId('panel-message'), 'ذخیره ناموفق: ' + error.message, false); }

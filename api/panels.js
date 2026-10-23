@@ -24,8 +24,16 @@ module.exports = async function panelsApi(req, res) {
     if (req.method !== 'POST') return json(res, 405, { error: 'METHOD_NOT_ALLOWED' });
     const body = req.body || {};
     if (body.action === 'save_pricing') {
+      const panelId = String(body.panelId || '');
+      if (!panelId) return json(res, 400, { error: 'PANEL_REQUIRED' });
+      const panel = await registry.getById(panelId);
+      if (!panel) return json(res, 404, { error: 'PANEL_NOT_FOUND' });
       const pricing = body.pricing || {};
-      return json(res, 200, { config: await saveConfig({ pricing: { normalPerGb: pricing.normalPerGb, resellerPerGb: pricing.resellerPerGb } }) });
+      const normal = Number(pricing.normalPerGb);
+      const reseller = pricing.resellerPerGb === null || pricing.resellerPerGb === undefined || pricing.resellerPerGb === '' ? null : Number(pricing.resellerPerGb);
+      if (!Number.isFinite(normal) || normal < 0) return json(res, 400, { error: 'INVALID_NORMAL_PRICE_PER_GB' });
+      if (reseller !== null && (!Number.isFinite(reseller) || reseller < 0)) return json(res, 400, { error: 'INVALID_RESELLER_PRICE_PER_GB' });
+      return json(res, 200, { config: await saveConfig({ pricingByPanel: { [panelId]: { normalPerGb: normal, resellerPerGb: reseller } } }) });
     }
     if (body.action === 'save') return json(res, 200, { panel: await registry.save(body.panel || {}) });
     if (body.action === 'save_plan') {

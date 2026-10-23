@@ -45,7 +45,7 @@ test('connection test rejects redirects and failed authentication', async () => 
     name: 'Test panel', type: 'pasarguard', baseUrl: 'https://panel.example.com',
     credentials: { username: 'admin', password: 'secret' },
   }, {
-    lookup: async () => [{ address: '203.0.113.20', family: 4 }],
+    lookup: async () => [{ address: '8.8.8.8', family: 4 }],
     fetchImpl: async () => new Response('', { status: 302, headers: { location: 'http://127.0.0.1/' } }),
   }), /PANEL_REDIRECT_NOT_ALLOWED/);
 
@@ -53,7 +53,7 @@ test('connection test rejects redirects and failed authentication', async () => 
     name: 'Test panel', type: 'pasarguard', baseUrl: 'https://panel.example.com',
     credentials: { username: 'admin', password: 'secret' },
   }, {
-    lookup: async () => [{ address: '203.0.113.20', family: 4 }],
+    lookup: async () => [{ address: '8.8.8.8', family: 4 }],
     fetchImpl: async () => new Response('{}', { status: 401 }),
   }), /PANEL_AUTHENTICATION_FAILED/);
 });

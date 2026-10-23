@@ -132,6 +132,10 @@
   async function refresh() {
     var result = await api('list');
     renderPanels(byId('panel-list'), result.panels || []);
+    if (result.config && result.config.pricing) {
+      byId('pricing-normal-per-gb').value = result.config.pricing.normalPerGb ?? 4000;
+      byId('pricing-reseller-per-gb').value = result.config.pricing.resellerPerGb == null ? '' : result.config.pricing.resellerPerGb;
+    }
   }
   function mount() {
     var app = byId('app');

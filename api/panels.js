@@ -1,5 +1,6 @@
 const registry = require('../lib/panel-registry');
 const { testPasarGuardConnection } = require('../lib/panel-connection');
+const planStore = require('../lib/plan-store');
 
 const PASSWORD = process.env.ADMIN_CMS_PASSWORD || '';
 function authorized(req) {
@@ -13,10 +14,24 @@ function json(res, status, body) {
 module.exports = async function panelsApi(req, res) {
   if (!authorized(req)) return json(res, 401, { error: 'UNAUTHORIZED' });
   try {
-    if (req.method === 'GET') return json(res, 200, { panels: await registry.list() });
+    if (req.method === 'GET') {
+      const panels = await registry.list();
+      const panelId = String(req.query?.panelId || '');
+      if (panelId) return json(res, 200, { panels, plans: await planStore.listActiveByPanel(panelId) });
+      return json(res, 200, { panels });
+    }
     if (req.method !== 'POST') return json(res, 405, { error: 'METHOD_NOT_ALLOWED' });
     const body = req.body || {};
     if (body.action === 'save') return json(res, 200, { panel: await registry.save(body.panel || {}) });
+    if (body.action === 'save_plan') {
+      const plan = { ...(body.plan || {}), panelId: String(body.panelId || '') };
+      if (!plan.panelId) return json(res, 400, { error: 'PANEL_REQUIRED' });
+      return json(res, 200, { plan: await planStore.save(plan) });
+    }
+    if (body.action === 'disable_plan') {
+      await planStore.remove(String(body.id || ''));
+      return json(res, 200, { ok: true });
+    }
     if (body.action === 'disable') return json(res, 200, { panel: await registry.setStatus(String(body.id || ''), 'disabled') });
     if (body.action === 'enable') {
       const current = await registry.getById(String(body.id || ''));
@@ -41,7 +56,7 @@ module.exports = async function panelsApi(req, res) {
     }
     return json(res, 400, { error: 'UNKNOWN_ACTION' });
   } catch (error) {
-    const allowed = new Set(['INVALID_PANEL', 'INVALID_PANEL_ID', 'INVALID_PANEL_NAME', 'INVALID_PANEL_URL', 'PANEL_URL_HOST_NOT_ALLOWED', 'UNSUPPORTED_PANEL_TYPE', 'PANEL_CREDENTIAL_REQUIRED', 'PANEL_ENCRYPTION_KEY_MUST_BE_32_BYTES', 'PANEL_NOT_FOUND', 'INVALID_PANEL_STATUS', 'INVALID_PANEL_REGISTRY']);
+    const allowed = new Set(['INVALID_PANEL', 'INVALID_PANEL_ID', 'INVALID_PANEL_NAME', 'INVALID_PANEL_URL', 'PANEL_URL_HOST_NOT_ALLOWED', 'UNSUPPORTED_PANEL_TYPE', 'PANEL_CREDENTIAL_REQUIRED', 'PANEL_ENCRYPTION_KEY_MUST_BE_32_BYTES', 'PANEL_NOT_FOUND', 'PANEL_NOT_ACTIVE', 'PANEL_REQUIRED', 'INVALID_PANEL_STATUS', 'INVALID_PANEL_REGISTRY']);
     return json(res, 400, { error: allowed.has(error.message) ? error.message : 'PANEL_REQUEST_FAILED' });
   }
 };

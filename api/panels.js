@@ -24,8 +24,11 @@ module.exports = async function panelsApi(req, res) {
     const body = req.body || {};
     if (body.action === 'save') return json(res, 200, { panel: await registry.save(body.panel || {}) });
     if (body.action === 'save_plan') {
-      const plan = { ...(body.plan || {}), panelId: String(body.panelId || '') };
-      if (!plan.panelId) return json(res, 400, { error: 'PANEL_REQUIRED' });
+      const panelId = String(body.panelId || '');
+      if (!panelId) return json(res, 400, { error: 'PANEL_REQUIRED' });
+      const panel = await registry.getById(panelId);
+      if (!panel) return json(res, 404, { error: 'PANEL_NOT_FOUND' });
+      const plan = { ...(body.plan || {}), panelId, panelName: panel.name };
       return json(res, 200, { plan: await planStore.save(plan) });
     }
     if (body.action === 'disable_plan') {

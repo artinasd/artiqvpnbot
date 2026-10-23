@@ -6,7 +6,7 @@ The CMS panel registry is stored separately from plans under the Redis key `cms:
 
 Plans can be assigned to a panel through the CMS. Their global plan ID remains unique; plan names may repeat across panels. Orders created from these plans persist `panelId`, the dynamic service ID (`panel_<id>`), the display name, and the provider ID (`panel:<id>`). This lets later account operations find the same panel even if its display name changes.
 
-The old fixed services and legacy plans remain available. They are intentionally not automatically migrated: the existing providers use different environment-variable and authentication arrangements, and guessing which credentials belong to which registry record could misroute existing subscriptions.
+The Telegram purchase/test service menus now expose only active CMS-registered panels, and empty plan storage is no longer populated from hardcoded defaults. Existing stored orders and old provider modules are not migrated or deleted by this change; old subscriptions are outside the new CMS-managed catalog and may no longer be manageable through the new panel flow. Verify the business impact before production cutover.
 
 ## Required environment configuration
 

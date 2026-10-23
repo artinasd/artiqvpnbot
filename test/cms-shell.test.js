@@ -10,7 +10,7 @@ function source(file) {
 }
 
 test('CMS presentation scripts have valid JavaScript syntax', () => {
-  for (const file of ['public/admin-cms.js', 'public/admin-shell.js', 'public/panels-cms.js']) {
+  for (const file of ['api/admin.js', 'public/admin-cms.js', 'public/admin-shell.js', 'public/panels-cms.js']) {
     assert.doesNotThrow(() => new vm.Script(source(file), { filename: file }), file);
   }
 });
@@ -19,6 +19,7 @@ test('professional shell loads after existing CMS feature modules', () => {
   const loader = source('public/admin-cms.js');
   assert.match(loader, /load\('\/panels-cms\.js',function\(\)\{load\('\/admin-shell\.js'\);\}\)/);
   assert.ok(fs.existsSync(path.join(root, 'public/admin-shell.css')));
+  assert.match(source('api/admin.js'), /id=\\?"cms-shell-styles\\?"/);
 });
 
 test('shell routes existing CMS features without replacing their API modules', () => {

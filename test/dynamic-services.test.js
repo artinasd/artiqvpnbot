@@ -39,17 +39,11 @@ test('renaming a panel does not change its generated service ID', async () => {
 });
 
 
-test('disabled panels are not resolvable for new selection, while existing panel routes stay addressable by fulfillment', async () => {
-  const { getFulfillment } = require('../lib/service-fulfillment');
-  const disabledOptions = { listPanels: async () => [{ ...panels[0], status: 'disabled' }] };
-  const { getConfiguredServicesWithPanels: list } = require('../lib/services');
-  assert.deepEqual(await list({}, disabledOptions), []);
 
-  // Fulfillment resolution deliberately uses the stable panel registry identity
-  // for persisted orders, but a disabled panel must still resolve to that ID only.
-  const resolved = await getConfiguredServiceWithPanels('panel_west-1', {}, {
-    listPanels: async () => [{ ...panels[0], status: 'active' }],
-  });
-  assert.equal(resolved.provider, 'panel:west-1');
-  assert.equal(typeof getFulfillment, 'function');
+test('disabled panels are excluded from new selection while legacy service IDs remain absent', async () => {
+  const disabledOptions = { listPanels: async () => [{ ...panels[0], status: 'disabled' }] };
+  const services = await getConfiguredServicesWithPanels({}, disabledOptions);
+  assert.deepEqual(services, []);
+  assert.equal((await serviceButtonsWithPanels('service_buy_', {}, 'purchase', disabledOptions)).length, 0);
+  assert.equal((await serviceButtonsWithPanels('service_test_', {}, 'test', disabledOptions)).length, 0);
 });

@@ -62,3 +62,35 @@ test('registry rejects duplicate IDs only by updating the existing record and re
   assert.equal(two.id, one.id);
   assert.equal(stored.length, 1);
 });
+
+
+test('editing with an unknown explicit panel ID is rejected instead of creating that ID', async () => {
+  let stored = [];
+  const registry = createPanelRegistry({
+    get: async () => stored,
+    set: async (_key, value) => { stored = structuredClone(value); return 'OK'; },
+    encryptionKey: key,
+  });
+  const created = await registry.save(valid);
+  await assert.rejects(
+    registry.save({ ...valid, id: 'does-not-exist', name: 'Accidental overwrite' }),
+    /PANEL_NOT_FOUND/,
+  );
+  assert.equal(stored.length, 1);
+  assert.equal(stored[0].id, created.id);
+  assert.equal(stored[0].name, 'Reseller West');
+});
+
+test('panel URL validation rejects local hostnames and accepts only HTTPS without URL credentials', () => {
+  for (const baseUrl of [
+    'http://panel.example.com',
+    'https://localhost',
+    'https://node.local',
+    'https://inside.localhost',
+    'https://user:pass@panel.example.com',
+    'https://panel.example.com/?token=x',
+    'https://panel.example.com/#fragment',
+  ]) {
+    assert.throws(() => validatePanelInput({ ...valid, baseUrl }), /INVALID_PANEL_URL|PANEL_URL_HOST_NOT_ALLOWED/);
+  }
+});

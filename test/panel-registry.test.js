@@ -6,7 +6,7 @@ const {
 } = require('../lib/panel-registry');
 
 const key = crypto.randomBytes(32);
-const valid = { name: 'Reseller West', type: 'pasarguard', baseUrl: 'https://panel.example.com/', credentials: 'secret-api-token' };
+const valid = { name: 'Reseller West', type: 'pasarguard', baseUrl: 'https://panel.example.com/', credentials: { username: 'panel-admin', password: 'secret-api-token' } };
 
 test('panel input accepts HTTPS URLs and normalizes trailing slash', () => {
   assert.equal(validatePanelInput(valid).baseUrl, 'https://panel.example.com');
@@ -39,14 +39,14 @@ test('registry saves stable IDs, hides credentials from list responses, and pres
   assert.equal('credentials' in created, false);
   assert.equal((await registry.list()).length, 1);
   assert.equal('credentials' in (await registry.list())[0], false);
-  assert.equal(await registry.getCredentials(created.id), 'secret-api-token');
+  assert.deepEqual(await registry.getCredentials(created.id), { username: 'panel-admin', password: 'secret-api-token' });
 
   await registry.setStatus(created.id, 'active');
   const edited = await registry.save({ ...valid, id: created.id, name: 'Renamed panel', credentials: '' });
   assert.equal(edited.id, created.id);
   assert.equal(edited.name, 'Renamed panel');
   assert.equal(edited.status, 'active');
-  assert.equal(await registry.getCredentials(created.id), 'secret-api-token');
+  assert.deepEqual(await registry.getCredentials(created.id), { username: 'panel-admin', password: 'secret-api-token' });
 });
 
 test('registry rejects duplicate IDs only by updating the existing record and rejects missing credentials', async () => {

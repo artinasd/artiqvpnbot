@@ -149,8 +149,7 @@
       wrap.appendChild(label); wrap.appendChild(input); form.appendChild(wrap);
       return input;
     }
-    field('شناسه داخلی (فقط برای ویرایش)', 'panel-id', 'برای پنل جدید خالی بگذارید');
-    byId('panel-id').readOnly = true;
+    field('شناسه داخلی (فقط برای ویرایش)', 'panel-id', 'برای پنل جدید خالی بگذارید').readOnly = true;
     field('نام نمایشی', 'panel-name', 'مثلاً Reseller West');
     field('آدرس پنل HTTPS', 'panel-url', 'https://panel.example.com');
     field('نام کاربری مدیر پنل', 'panel-username', 'username');

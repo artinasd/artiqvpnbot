@@ -77,14 +77,15 @@
   var refresh = element('button', 'cms-refresh', '↻ بروزرسانی');
   refresh.type = 'button';
   refresh.addEventListener('click', function () {
-    var originalRefresh = document.getElementById('refreshBtn');
-    if (originalRefresh) originalRefresh.click();
-    var panelList = document.getElementById('panel-list');
-    if (panelList) {
-      var test = panelList.querySelector('button');
-      if (test && test.textContent.indexOf('تست اتصال') !== -1) test.blur();
+    if (currentPage === 'panels') {
+      window.dispatchEvent(new CustomEvent('artiq-cms-refresh'));
+    } else if (currentPage === 'users') {
+      var usersRefresh = document.getElementById('refreshActiveUsers');
+      if (usersRefresh) usersRefresh.click();
+      else updateStats();
+    } else {
+      updateStats();
     }
-    window.dispatchEvent(new CustomEvent('artiq-cms-refresh'));
   });
   topActions.appendChild(refresh);
   topbar.appendChild(topActions);
@@ -164,7 +165,6 @@
       button.appendChild(element('span', 'cms-nav-icon', def.icon));
       button.appendChild(element('span', '', def.label));
       button.setAttribute('aria-controls', 'cms-page-' + def.id);
-      button.addEventListener('click', function () { navigate(def.id, true); });
       groupWrap.appendChild(button);
     });
     nav.appendChild(groupWrap);
@@ -205,6 +205,7 @@
       moveCard(child);
     });
     updateStats();
+    watchStatsTargets();
   }
   function updateStats() {
     var panels = document.querySelectorAll('#panel-list > .plan').length;
@@ -252,14 +253,17 @@
   });
   observer.observe(app, { childList: true, subtree: false });
   var overviewObserver = new MutationObserver(updateStats);
-  var panelList = document.getElementById('panel-list');
-  var planList = document.getElementById('panel-plan-list');
-  var userList = document.getElementById('activeUsersList');
-  [panelList, planList, userList].forEach(function (node) {
-    if (node) overviewObserver.observe(node, { childList: true, subtree: true });
-  });
+  var watchedStatsTargets = [];
+  function watchStatsTargets() {
+    ['panel-list', 'panel-plan-list', 'activeUsersList'].forEach(function (id) {
+      var target = document.getElementById(id);
+      if (target && watchedStatsTargets.indexOf(target) === -1) {
+        watchedStatsTargets.push(target);
+        overviewObserver.observe(target, { childList: true, subtree: true });
+      }
+    });
+  }
   document.addEventListener('artiq-cms-refresh', updateStats);
   placeDirectCards();
   navigate((window.location.hash || '').slice(1) || 'overview', false);
-  setInterval(placeDirectCards, 1200);
 }());

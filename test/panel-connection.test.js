@@ -12,7 +12,7 @@ test('public-address guard rejects private and special-use IP ranges', () => {
 
 test('DNS guard rejects a hostname resolving to a private address', async () => {
   await assert.rejects(
-    assertPublicHttpsUrl('https://panel.example.com', async () => [{ address: '203.0.113.5', family: 4 }, { address: '10.0.0.2', family: 4 }]),
+    assertPublicHttpsUrl('https://panel.example.com', async () => [{ address: '8.8.8.8', family: 4 }, { address: '10.0.0.2', family: 4 }]),
     /PANEL_URL_HOST_NOT_ALLOWED/,
   );
 });
@@ -30,7 +30,7 @@ test('connection test authenticates and performs only a read-only groups request
     name: 'Test panel', type: 'pasarguard', baseUrl: 'https://panel.example.com',
     credentials: { username: 'admin', password: 'secret' },
   }, {
-    lookup: async () => [{ address: '203.0.113.20', family: 4 }],
+    lookup: async () => [{ address: '8.8.8.8', family: 4 }],
     fetchImpl,
   });
   assert.equal(result.ok, true);

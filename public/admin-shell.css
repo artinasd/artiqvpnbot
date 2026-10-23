@@ -27,7 +27,7 @@ main {
   margin: 0 !important;
   padding: 0 !important;
 }
-.cms-legacy-brand { display: none !important; }
+.cms-legacy-brand, main > .card:first-child { display: none !important; }
 #login {
   width: min(440px, calc(100% - 32px)) !important;
   margin: 8vh auto !important;

@@ -10,10 +10,9 @@ const panels = [
 
 const options = { listPanels: async () => panels };
 
-test('active registry panels become independent selectable services without changing legacy IDs', async () => {
+test('active registry panels become the only selectable services', async () => {
   const services = await getConfiguredServicesWithPanels({}, options);
-  assert.ok(services.some((service) => service.id === 'tunnel'));
-  assert.ok(services.some((service) => service.id === 'gaming'));
+  assert.equal(services.some((service) => ['tunnel', 'gaming', 'tunnel2', 'direct2'].includes(service.id)), false);
   const dynamic = services.find((service) => service.id === 'panel_west-1');
   assert.equal(dynamic.name, 'Reseller West');
   assert.equal(dynamic.panelId, 'west-1');

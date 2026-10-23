@@ -49,6 +49,20 @@
         } finally { test.disabled = false; }
       });
       actions.appendChild(test);
+      var edit = node('button', 'ویرایش', 'secondary');
+      edit.type = 'button';
+      edit.addEventListener('click', function () {
+        byId('panel-id').value = panel.id;
+        byId('panel-name').value = panel.name;
+        byId('panel-url').value = panel.baseUrl;
+        byId('panel-type').value = panel.type;
+        byId('panel-username').value = '';
+        byId('panel-password').value = '';
+        byId('panel-username').placeholder = 'برای حفظ اطلاعات فعلی خالی بگذارید';
+        byId('panel-password').placeholder = 'برای حفظ رمز فعلی خالی بگذارید';
+        byId('panel-name').focus();
+      });
+      actions.appendChild(edit);
       var toggle = node('button', panel.status === 'disabled' ? 'فعال‌سازی مجدد' : 'غیرفعال‌سازی', 'secondary');
       toggle.type = 'button';
       toggle.addEventListener('click', async function () {
@@ -87,6 +101,8 @@
       wrap.appendChild(label); wrap.appendChild(input); form.appendChild(wrap);
       return input;
     }
+    field('شناسه داخلی (فقط برای ویرایش)', 'panel-id', 'برای پنل جدید خالی بگذارید');
+    byId('panel-id').readOnly = true;
     field('نام نمایشی', 'panel-name', 'مثلاً Reseller West');
     field('آدرس پنل HTTPS', 'panel-url', 'https://panel.example.com');
     field('نام کاربری مدیر پنل', 'panel-username', 'username');
@@ -106,13 +122,18 @@
       save.disabled = true;
       try {
         var payload = {
+          id: byId('panel-id').value.trim() || undefined,
           name: byId('panel-name').value.trim(),
           baseUrl: byId('panel-url').value.trim(),
           type: byId('panel-type').value,
-          credentials: { username: byId('panel-username').value.trim(), password: byId('panel-password').value },
+          credentials: (byId('panel-username').value.trim() && byId('panel-password').value) ? { username: byId('panel-username').value.trim(), password: byId('panel-password').value } : undefined,
         };
         var result = await api('save', { panel: payload });
         byId('panel-password').value = '';
+        byId('panel-username').value = '';
+        byId('panel-id').value = '';
+        byId('panel-username').placeholder = 'username';
+        byId('panel-password').placeholder = 'برای پنل جدید یا جایگزینی رمز';
         message(byId('panel-message'), 'پنل ذخیره شد. اکنون «تست اتصال» را بزنید.', true);
         await refresh();
       } catch (error) { message(byId('panel-message'), 'ذخیره ناموفق: ' + error.message, false); }

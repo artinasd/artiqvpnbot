@@ -23,6 +23,7 @@
     target.replaceChildren(node('div', text, good ? 'ok' : 'error'));
   }
   var selectedPanelId = '';
+  var selectedPricingPanelId = '';
   function renderPanels(container, panels) {
     var list = byId('panel-list');
     list.replaceChildren();
@@ -83,6 +84,19 @@
         byId('panel-plan-manager').scrollIntoView({ behavior: 'smooth', block: 'start' });
       });
       actions.appendChild(managePlans);
+      var pricingButton = node('button', 'قیمت‌گذاری', 'secondary');
+      pricingButton.type = 'button';
+      pricingButton.addEventListener('click', function () {
+        selectedPricingPanelId = panel.id;
+        byId('pricing-panel-title').textContent = 'پنل انتخاب‌شده: ' + panel.name;
+        api('list').then(function (result) {
+          var pricing = result.config?.pricingByPanel?.[panel.id] || { normalPerGb: 4000, resellerPerGb: null };
+          byId('pricing-normal-per-gb').value = pricing.normalPerGb ?? 4000;
+          byId('pricing-reseller-per-gb').value = pricing.resellerPerGb == null ? '' : pricing.resellerPerGb;
+        }).catch(function (error) { message(byId('panel-pricing-message'), error.message, false); });
+        byId('panel-pricing-box').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+      actions.appendChild(pricingButton);
       var toggle = node('button', panel.status === 'disabled' ? 'فعال‌سازی مجدد' : 'غیرفعال‌سازی', 'secondary');
       toggle.type = 'button';
       toggle.addEventListener('click', async function () {
@@ -132,9 +146,12 @@
   async function refresh() {
     var result = await api('list');
     renderPanels(byId('panel-list'), result.panels || []);
-    if (result.config && result.config.pricing) {
-      byId('pricing-normal-per-gb').value = result.config.pricing.normalPerGb ?? 4000;
-      byId('pricing-reseller-per-gb').value = result.config.pricing.resellerPerGb == null ? '' : result.config.pricing.resellerPerGb;
+    if (result.config) {
+      var panelPricing = selectedPricingPanelId && result.config.pricingByPanel ? result.config.pricingByPanel[selectedPricingPanelId] : null;
+      var pricing = panelPricing || { normalPerGb: 4000, resellerPerGb: null };
+      byId('pricing-normal-per-gb').value = pricing.normalPerGb ?? 4000;
+      byId('pricing-reseller-per-gb').value = pricing.resellerPerGb == null ? '' : pricing.resellerPerGb;
+      byId('pricing-panel-title').textContent = selectedPricingPanelId ? 'پنل انتخاب‌شده: ' + (((result.panels || []).find(function (p) { return p.id === selectedPricingPanelId; }) || {}).name || selectedPricingPanelId) : 'ابتدا از کارت پنل، گزینه «قیمت‌گذاری» را انتخاب کنید.';
     }
   }
   function mount() {
@@ -145,8 +162,11 @@
     card.appendChild(node('h3', '🧩 مدیریت پنل‌ها'));
     card.appendChild(node('p', 'هر پنل را جداگانه ثبت کنید. پنل جدید تا زمان موفقیت تست اتصال آماده فروش نیست.', 'muted'));
     var pricingBox = node('section', null, 'card');
-    pricingBox.appendChild(node('h4', '💰 قیمت‌گذاری پیش‌فرض هر گیگابایت'));
-    pricingBox.appendChild(node('p', 'برای پلن‌های حجمی که قیمت اختصاصی ندارند استفاده می‌شود. قیمت اختصاصی هر پلن بر این نرخ‌ها اولویت دارد. پلن نامحدود همچنان به قیمت اختصاصی نیاز دارد.', 'muted'));
+    pricingBox.id = 'panel-pricing-box';
+    pricingBox.appendChild(node('h4', '💰 قیمت‌گذاری پیش‌فرض هر گیگابایت برای هر پنل'));
+    pricingBox.appendChild(node('p', 'نرخ‌ها فقط برای پنل انتخاب‌شده اعمال می‌شوند. برای پلن‌های حجمی بدون قیمت اختصاصی استفاده می‌شود؛ قیمت اختصاصی پلن اولویت دارد. پلن نامحدود همچنان به قیمت اختصاصی نیاز دارد.', 'muted'));
+    pricingBox.appendChild(node('p', 'ابتدا روی «قیمت‌گذاری» در کارت پنل موردنظر کلیک کنید.', 'muted'));
+    var pricingTitle = node('div', 'ابتدا پنلی انتخاب نشده است.', 'title'); pricingTitle.id = 'pricing-panel-title'; pricingBox.appendChild(pricingTitle);
     var pricingGrid = node('div', null, 'grid');
     function pricingField(labelText, id, value, placeholder) {
       var wrap = node('div'); var label = node('label', labelText); label.htmlFor = id;
@@ -165,8 +185,9 @@
         var resellerText = byId('pricing-reseller-per-gb').value.trim();
         if (normalText === '' || !Number.isFinite(Number(normalText)) || Number(normalText) < 0) throw new Error('INVALID_NORMAL_PRICE_PER_GB');
         if (resellerText !== '' && (!Number.isFinite(Number(resellerText)) || Number(resellerText) < 0)) throw new Error('INVALID_RESELLER_PRICE_PER_GB');
-        await api('save_pricing', { pricing: { normalPerGb: Number(normalText), resellerPerGb: resellerText === '' ? null : Number(resellerText) } });
-        message(byId('panel-pricing-message'), 'نرخ‌های پیش‌فرض ذخیره شد.', true);
+        if (!selectedPricingPanelId) throw new Error('ابتدا پنل موردنظر را انتخاب کنید.');
+        await api('save_pricing', { panelId: selectedPricingPanelId, pricing: { normalPerGb: Number(normalText), resellerPerGb: resellerText === '' ? null : Number(resellerText) } });
+        message(byId('panel-pricing-message'), 'نرخ‌های پیش‌فرض این پنل ذخیره شد.', true);
       } catch (error) { message(byId('panel-pricing-message'), 'ذخیره نرخ ناموفق: ' + error.message, false); }
       finally { pricingSave.disabled = false; }
     });

@@ -1,3 +1,6 @@
+/* Vazirmatn Persian typeface; falls back gracefully if the font CDN is unavailable. */
+@import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800;900&display=swap');
+
 /* Artiq CMS — presentation layer only. Business logic remains in the existing CMS scripts. */
 :root {
   --cms-bg: #f4f7fb;

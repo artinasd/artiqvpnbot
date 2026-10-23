@@ -308,6 +308,13 @@
     app.insertBefore(card, app.firstChild);
     refresh().catch(function (e) { message(status, 'بارگذاری پنل‌ها ناموفق بود: ' + e.message, false); });
   }
+  window.addEventListener('artiq-cms-refresh', function () {
+    if (!byId('panel-list')) return;
+    refresh().catch(function (error) {
+      var target = byId('panel-message');
+      if (target) message(target, 'بروزرسانی پنل‌ها ناموفق بود: ' + error.message, false);
+    });
+  });
   var timer = setInterval(mount, 300);
   document.addEventListener('visibilitychange', function () { if (!document.hidden) mount(); });
 }());

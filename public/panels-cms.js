@@ -90,7 +90,7 @@
         selectedPricingPanelId = panel.id;
         byId('pricing-panel-title').textContent = 'پنل انتخاب‌شده: ' + panel.name;
         api('list').then(function (result) {
-          var pricing = result.config?.pricingByPanel?.[panel.id] || { normalPerGb: 4000, resellerPerGb: null };
+          var pricing = result.config?.pricingByPanel?.[panel.id] || result.config?.pricing || { normalPerGb: 4000, resellerPerGb: null };
           byId('pricing-normal-per-gb').value = pricing.normalPerGb ?? 4000;
           byId('pricing-reseller-per-gb').value = pricing.resellerPerGb == null ? '' : pricing.resellerPerGb;
         }).catch(function (error) { message(byId('panel-pricing-message'), error.message, false); });
@@ -148,7 +148,7 @@
     renderPanels(byId('panel-list'), result.panels || []);
     if (result.config) {
       var panelPricing = selectedPricingPanelId && result.config.pricingByPanel ? result.config.pricingByPanel[selectedPricingPanelId] : null;
-      var pricing = panelPricing || { normalPerGb: 4000, resellerPerGb: null };
+      var pricing = panelPricing || result.config.pricing || { normalPerGb: 4000, resellerPerGb: null };
       byId('pricing-normal-per-gb').value = pricing.normalPerGb ?? 4000;
       byId('pricing-reseller-per-gb').value = pricing.resellerPerGb == null ? '' : pricing.resellerPerGb;
       byId('pricing-panel-title').textContent = selectedPricingPanelId ? 'پنل انتخاب‌شده: ' + (((result.panels || []).find(function (p) { return p.id === selectedPricingPanelId; }) || {}).name || selectedPricingPanelId) : 'ابتدا از کارت پنل، گزینه «قیمت‌گذاری» را انتخاب کنید.';

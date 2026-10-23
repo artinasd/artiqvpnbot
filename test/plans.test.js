@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { PLANS, getPlan, calculateCustomPrice, parseDurationDays, buildCustomPlan } = require('../lib/plans');
+const { applyViewerPrice } = require('../lib/plan-store');
 
 test('traffic plans use HWID 0', () => {
   for (const plan of PLANS.filter((p) => p.type === 'traffic')) assert.equal(plan.hwidLimit, 0);
@@ -32,4 +33,20 @@ test('custom plans are centrally validated', () => {
   assert.equal(plan.hwidLimit, 0);
   assert.throws(() => buildCustomPlan(0, 30), /CUSTOM_TRAFFIC_OUT_OF_RANGE/);
   assert.throws(() => buildCustomPlan(20, 151), /CUSTOM_DURATION_OUT_OF_RANGE/);
+});
+
+test('default per-GB pricing applies only when a plan-specific price is absent', () => {
+  const trafficBytes = 10 * 1024 ** 3;
+  const automatic = { id: 'auto10', type: 'traffic', trafficBytes, price: null, resellerPrice: null };
+  assert.equal(applyViewerPrice(automatic, false, { normalPerGb: 4000, resellerPerGb: 2500 }).price, 40000);
+  assert.equal(applyViewerPrice({ ...automatic, price: 55000 }, false, { normalPerGb: 4000 }).price, 55000);
+  assert.equal(applyViewerPrice({ ...automatic, price: 55000 }, true, { normalPerGb: 4000, resellerPerGb: 2500 }).price, 25000);
+  assert.equal(applyViewerPrice({ ...automatic, price: 55000, resellerPrice: 20000 }, true, { normalPerGb: 4000, resellerPerGb: 2500 }).price, 20000);
+  assert.equal(applyViewerPrice({ ...automatic, price: 55000 }, true, { normalPerGb: 4000, resellerPerGb: null }).price, 55000);
+});
+
+test('unlimited plans keep their explicit prices rather than using per-GB rates', () => {
+  const unlimited = { id: 'unlimited', type: 'unlimited', trafficBytes: 0, price: 120000, resellerPrice: null };
+  assert.equal(applyViewerPrice(unlimited, false, { normalPerGb: 4000, resellerPerGb: 2500 }).price, 120000);
+  assert.equal(applyViewerPrice(unlimited, true, { normalPerGb: 4000, resellerPerGb: 2500 }).price, 120000);
 });

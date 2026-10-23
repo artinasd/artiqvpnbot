@@ -107,13 +107,14 @@
     (result.plans || []).forEach(function (plan) {
       var row = node('div', null, 'plan');
       var details = node('div');
-      details.appendChild(node('div', plan.name + ' · ' + Number(plan.price).toLocaleString('en-US'), 'title'));
+      var priceLabel = plan.priceOverride === null || plan.priceOverride === undefined ? 'قیمت خودکار: ' + Number(plan.price).toLocaleString('en-US') : 'قیمت اختصاصی: ' + Number(plan.price).toLocaleString('en-US');
+      details.appendChild(node('div', plan.name + ' · ' + priceLabel, 'title'));
       details.appendChild(node('div', 'ID: ' + plan.id + ' · ' + (plan.trafficBytes ? (plan.trafficBytes / (1024 ** 3)) + ' GB' : 'نامحدود') + ' · ' + (plan.durationDays || 'بدون انقضا') + ' روز', 'meta'));
       var actions = node('div', null, 'actions');
       var editPlan = node('button', 'ویرایش', 'secondary'); editPlan.type = 'button';
       editPlan.addEventListener('click', function () {
         byId('panel-plan-id').value = plan.id; byId('panel-plan-name').value = plan.name;
-        byId('panel-plan-price').value = plan.price; byId('panel-plan-traffic').value = Math.round(Number(plan.trafficBytes || 0) / (1024 ** 3));
+        byId('panel-plan-price').value = plan.priceOverride === null || plan.priceOverride === undefined ? '' : plan.priceOverride; byId('panel-plan-traffic').value = Math.round(Number(plan.trafficBytes || 0) / (1024 ** 3));
         byId('panel-plan-duration').value = plan.durationDays || 0; byId('panel-plan-reseller-price').value = plan.resellerPrice == null ? '' : plan.resellerPrice;
         byId('panel-plan-hwid').value = plan.hwidLimit || 0; byId('panel-plan-type').value = plan.type || 'traffic';
       });
@@ -131,6 +132,10 @@
   async function refresh() {
     var result = await api('list');
     renderPanels(byId('panel-list'), result.panels || []);
+    if (result.config && result.config.pricing) {
+      byId('pricing-normal-per-gb').value = result.config.pricing.normalPerGb ?? 4000;
+      byId('pricing-reseller-per-gb').value = result.config.pricing.resellerPerGb == null ? '' : result.config.pricing.resellerPerGb;
+    }
   }
   function mount() {
     var app = byId('app');
@@ -139,6 +144,35 @@
     card.id = 'panels-cms-card';
     card.appendChild(node('h3', '🧩 مدیریت پنل‌ها'));
     card.appendChild(node('p', 'هر پنل را جداگانه ثبت کنید. پنل جدید تا زمان موفقیت تست اتصال آماده فروش نیست.', 'muted'));
+    var pricingBox = node('section', null, 'card');
+    pricingBox.appendChild(node('h4', '💰 قیمت‌گذاری پیش‌فرض هر گیگابایت'));
+    pricingBox.appendChild(node('p', 'برای پلن‌های حجمی که قیمت اختصاصی ندارند استفاده می‌شود. قیمت اختصاصی هر پلن بر این نرخ‌ها اولویت دارد. پلن نامحدود همچنان به قیمت اختصاصی نیاز دارد.', 'muted'));
+    var pricingGrid = node('div', null, 'grid');
+    function pricingField(labelText, id, value, placeholder) {
+      var wrap = node('div'); var label = node('label', labelText); label.htmlFor = id;
+      var input = node('input'); input.id = id; input.type = 'number'; input.min = '0'; input.value = value; input.placeholder = placeholder || '';
+      wrap.appendChild(label); wrap.appendChild(input); pricingGrid.appendChild(wrap); return input;
+    }
+    pricingField('قیمت هر گیگابایت برای مشتری عادی (تومان)', 'pricing-normal-per-gb', '4000', 'مثلاً 4000');
+    pricingField('قیمت هر گیگابایت برای ریسلر (تومان)', 'pricing-reseller-per-gb', '', 'خالی = استفاده از قیمت عادی');
+    pricingBox.appendChild(pricingGrid);
+    var pricingActions = node('div', null, 'actions');
+    var pricingSave = node('button', 'ذخیره نرخ‌ها'); pricingSave.type = 'button';
+    pricingSave.addEventListener('click', async function () {
+      pricingSave.disabled = true;
+      try {
+        var normalText = byId('pricing-normal-per-gb').value.trim();
+        var resellerText = byId('pricing-reseller-per-gb').value.trim();
+        if (normalText === '' || !Number.isFinite(Number(normalText)) || Number(normalText) < 0) throw new Error('INVALID_NORMAL_PRICE_PER_GB');
+        if (resellerText !== '' && (!Number.isFinite(Number(resellerText)) || Number(resellerText) < 0)) throw new Error('INVALID_RESELLER_PRICE_PER_GB');
+        await api('save_pricing', { pricing: { normalPerGb: Number(normalText), resellerPerGb: resellerText === '' ? null : Number(resellerText) } });
+        message(byId('panel-pricing-message'), 'نرخ‌های پیش‌فرض ذخیره شد.', true);
+      } catch (error) { message(byId('panel-pricing-message'), 'ذخیره نرخ ناموفق: ' + error.message, false); }
+      finally { pricingSave.disabled = false; }
+    });
+    pricingActions.appendChild(pricingSave); pricingBox.appendChild(pricingActions);
+    var pricingMessage = node('div'); pricingMessage.id = 'panel-pricing-message'; pricingBox.appendChild(pricingMessage);
+    card.appendChild(pricingBox);
     var form = node('div', null, 'grid');
     function field(labelText, id, placeholder, type) {
       var wrap = node('div');
@@ -227,9 +261,10 @@
         var trafficGb = Number(byId('panel-plan-traffic').value || 0);
         var days = Number(byId('panel-plan-duration').value || 0);
         var resellerText = byId('panel-plan-reseller-price').value.trim();
+        var priceText = byId('panel-plan-price').value.trim();
         var plan = {
           id: byId('panel-plan-id').value.trim(), name: byId('panel-plan-name').value.trim(),
-          buttonText: byId('panel-plan-name').value.trim(), price: Number(byId('panel-plan-price').value),
+          buttonText: byId('panel-plan-name').value.trim(), price: priceText === '' ? null : Number(priceText),
           resellerPrice: resellerText === '' ? null : Number(resellerText), service: 'tunnel',
           type: byId('panel-plan-type').value, trafficBytes: trafficGb * (1024 ** 3),
           durationDays: days === 0 ? null : days, hwidLimit: Number(byId('panel-plan-hwid').value || 0),

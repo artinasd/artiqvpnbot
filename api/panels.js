@@ -1,6 +1,7 @@
 const registry = require('../lib/panel-registry');
 const { testPasarGuardConnection } = require('../lib/panel-connection');
 const planStore = require('../lib/plan-store');
+const { getConfig, saveConfig } = require('../lib/bot-config');
 
 const PASSWORD = process.env.ADMIN_CMS_PASSWORD || '';
 function authorized(req) {
@@ -18,10 +19,14 @@ module.exports = async function panelsApi(req, res) {
       const panels = await registry.list();
       const panelId = String(req.query?.panelId || '');
       if (panelId) return json(res, 200, { panels, plans: await planStore.listActiveByPanel(panelId) });
-      return json(res, 200, { panels });
+      return json(res, 200, { panels, config: await getConfig() });
     }
     if (req.method !== 'POST') return json(res, 405, { error: 'METHOD_NOT_ALLOWED' });
     const body = req.body || {};
+    if (body.action === 'save_pricing') {
+      const pricing = body.pricing || {};
+      return json(res, 200, { config: await saveConfig({ pricing: { normalPerGb: pricing.normalPerGb, resellerPerGb: pricing.resellerPerGb } }) });
+    }
     if (body.action === 'save') return json(res, 200, { panel: await registry.save(body.panel || {}) });
     if (body.action === 'save_plan') {
       const panelId = String(body.panelId || '');

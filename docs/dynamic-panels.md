@@ -46,9 +46,10 @@ These checks are defense-in-depth. Before broad production use, review DNS behav
 
 1. Review this PR and its CI checks.
 2. Set the encryption key in the appropriate Vercel environment before using the CMS panel form.
-3. Test in a preview/staging environment with a separate test panel and non-customer test accounts.
-4. Verify independent plan lists, purchase, test account, renewal, account details/removal, and reseller pricing for at least two panels with overlapping plan names.
-5. Keep existing fixed services enabled during rollout. Do not migrate legacy orders or plans in place without a separately reviewed mapping and backup.
-6. If a newly added panel misbehaves, disable it in the CMS. This prevents new purchases while preserving records for investigation.
+3. Prefer testing in a preview/staging environment with a separate test panel and non-customer test accounts. If no separate panel is available, treat the first real-panel test as a controlled cutover and schedule a maintenance window.
+4. Before cutover, record the current panel URLs, credential ownership, plan names/prices, and required service names outside the repository. Do not copy passwords into issues, commits, or logs.
+5. Recreate panels through the CMS one at a time and test each connection before adding plans. Verify plan lists, purchase, test account, renewal targeting, account details/removal, and reseller pricing before opening purchases broadly.
+6. Only after the new panels are confirmed should the hardcoded service/provider definitions be removed in a separately reviewed cutover change. No legacy subscription migration is planned; customers may need to buy new subscriptions after the cutover.
+7. If a newly added panel misbehaves, disable it in the CMS. This prevents new purchases while preserving records for investigation. Keep a rollback path until the first panel's full workflow succeeds.
 
 This feature does not run a Redis migration at deploy time. Opening the panel registry itself is read-only; creating or editing panels/plans writes only the corresponding CMS records.

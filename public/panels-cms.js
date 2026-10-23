@@ -2,7 +2,8 @@
   'use strict';
   function byId(id) { return document.getElementById(id); }
   function api(action, data) {
-    return fetch('/api/panels', {
+    var endpoint = action === 'list' && data && data.panelId ? '/api/panels?panelId=' + encodeURIComponent(data.panelId) : '/api/panels';
+    return fetch(endpoint, {
       method: action === 'list' ? 'GET' : 'POST',
       headers: { 'Content-Type': 'application/json', 'x-admin-password': window.__artiqCmsPassword || '' },
       body: action === 'list' ? undefined : JSON.stringify({ action: action, ...(data || {}) }),
@@ -21,6 +22,7 @@
   function message(target, text, good) {
     target.replaceChildren(node('div', text, good ? 'ok' : 'error'));
   }
+  var selectedPanelId = '';
   function renderPanels(container, panels) {
     var list = byId('panel-list');
     list.replaceChildren();
@@ -63,6 +65,24 @@
         byId('panel-name').focus();
       });
       actions.appendChild(edit);
+      var managePlans = node('button', 'مدیریت پلن‌ها', 'secondary');
+      managePlans.type = 'button';
+      managePlans.addEventListener('click', function () {
+        selectedPanelId = panel.id;
+        byId('panel-plan-title').textContent = 'پلن‌های پنل: ' + panel.name;
+        byId('panel-plan-id').value = '';
+        byId('panel-plan-name').value = '';
+        byId('panel-plan-price').value = '';
+        byId('panel-plan-traffic').value = '10';
+        byId('panel-plan-duration').value = '30';
+        byId('panel-plan-reseller-price').value = '';
+        byId('panel-plan-hwid').value = '0';
+        byId('panel-plan-type').value = 'traffic';
+        loadPlans(panel.id).catch(function (e) { message(byId('panel-plan-message'), e.message, false); });
+        byId('panel-plan-manager').classList.remove('hidden');
+        byId('panel-plan-manager').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+      actions.appendChild(managePlans);
       var toggle = node('button', panel.status === 'disabled' ? 'فعال‌سازی مجدد' : 'غیرفعال‌سازی', 'secondary');
       toggle.type = 'button';
       toggle.addEventListener('click', async function () {
@@ -79,6 +99,34 @@
       card.appendChild(actions);
       list.appendChild(card);
     });
+  }
+  async function loadPlans(panelId) {
+    var result = await api('list', { panelId: panelId });
+    var list = byId('panel-plan-list');
+    list.replaceChildren();
+    (result.plans || []).forEach(function (plan) {
+      var row = node('div', null, 'plan');
+      var details = node('div');
+      details.appendChild(node('div', plan.name + ' · ' + Number(plan.price).toLocaleString('en-US'), 'title'));
+      details.appendChild(node('div', 'ID: ' + plan.id + ' · ' + (plan.trafficBytes ? (plan.trafficBytes / (1024 ** 3)) + ' GB' : 'نامحدود') + ' · ' + (plan.durationDays || 'بدون انقضا') + ' روز', 'meta'));
+      var actions = node('div', null, 'actions');
+      var editPlan = node('button', 'ویرایش', 'secondary'); editPlan.type = 'button';
+      editPlan.addEventListener('click', function () {
+        byId('panel-plan-id').value = plan.id; byId('panel-plan-name').value = plan.name;
+        byId('panel-plan-price').value = plan.price; byId('panel-plan-traffic').value = Math.round(Number(plan.trafficBytes || 0) / (1024 ** 3));
+        byId('panel-plan-duration').value = plan.durationDays || 0; byId('panel-plan-reseller-price').value = plan.resellerPrice == null ? '' : plan.resellerPrice;
+        byId('panel-plan-hwid').value = plan.hwidLimit || 0; byId('panel-plan-type').value = plan.type || 'traffic';
+      });
+      actions.appendChild(editPlan);
+      var disablePlan = node('button', 'غیرفعال‌سازی', 'danger'); disablePlan.type = 'button';
+      disablePlan.addEventListener('click', async function () {
+        if (!confirm('این پلن از فهرست خرید حذف می‌شود؛ سابقه آن حفظ خواهد شد. ادامه می‌دهید؟')) return;
+        try { await api('disable_plan', { id: plan.id }); await loadPlans(panelId); message(byId('panel-plan-message'), 'پلن غیرفعال شد.', true); }
+        catch (error) { message(byId('panel-plan-message'), error.message, false); }
+      });
+      actions.appendChild(disablePlan); row.appendChild(details); row.appendChild(actions); list.appendChild(row);
+    });
+    if (!(result.plans || []).length) list.appendChild(node('p', 'برای این پنل پلنی ثبت نشده است.', 'muted'));
   }
   async function refresh() {
     var result = await api('list');
@@ -148,6 +196,58 @@
     var status = node('div'); status.id = 'panel-message'; card.appendChild(status);
     card.appendChild(node('h4', 'پنل‌های ثبت‌شده'));
     var list = node('div'); list.id = 'panel-list'; card.appendChild(list);
+    var planManager = node('section', null, 'card hidden');
+    planManager.id = 'panel-plan-manager';
+    var planTitle = node('h3', 'پلن‌های پنل'); planTitle.id = 'panel-plan-title'; planManager.appendChild(planTitle);
+    planManager.appendChild(node('p', 'شناسه پلن باید یکتا باشد؛ نام پلن‌ها بین پنل‌های مختلف می‌تواند یکسان باشد.', 'muted'));
+    var planForm = node('div', null, 'grid');
+    function planField(labelText, id, placeholder, type) {
+      var wrap = node('div'); var label = node('label', labelText); label.htmlFor = id;
+      var input = node('input'); input.id = id; input.placeholder = placeholder || ''; input.type = type || 'text';
+      wrap.appendChild(label); wrap.appendChild(input); planForm.appendChild(wrap); return input;
+    }
+    planField('شناسه پلن', 'panel-plan-id', 'مثلاً west_10g');
+    planField('نام پلن', 'panel-plan-name', 'مثلاً 10 GB / 30 days');
+    planField('قیمت', 'panel-plan-price', 'قیمت به تومان', 'number');
+    planField('حجم گیگابایت (۰ = نامحدود)', 'panel-plan-traffic', '10', 'number');
+    planField('مدت روز (۰ = بدون انقضا)', 'panel-plan-duration', '30', 'number');
+    planField('قیمت ریسلر (اختیاری)', 'panel-plan-reseller-price', 'خالی = قیمت اصلی', 'number');
+    planField('محدودیت دستگاه', 'panel-plan-hwid', '0', 'number');
+    var planTypeWrap = node('div'); planTypeWrap.appendChild(node('label', 'نوع پلن'));
+    var planType = node('select'); planType.id = 'panel-plan-type';
+    [['traffic','حجمی'],['unlimited','نامحدود']].forEach(function (entry) { var opt = node('option', entry[1]); opt.value = entry[0]; planType.appendChild(opt); });
+    planTypeWrap.appendChild(planType); planForm.appendChild(planTypeWrap);
+    planManager.appendChild(planForm);
+    var planActions = node('div', null, 'actions'); var planSave = node('button', 'ذخیره پلن'); planSave.type = 'button';
+    planSave.addEventListener('click', async function () {
+      if (!selectedPanelId) return;
+      planSave.disabled = true;
+      try {
+        var trafficGb = Number(byId('panel-plan-traffic').value || 0);
+        var days = Number(byId('panel-plan-duration').value || 0);
+        var resellerText = byId('panel-plan-reseller-price').value.trim();
+        var plan = {
+          id: byId('panel-plan-id').value.trim(), name: byId('panel-plan-name').value.trim(),
+          buttonText: byId('panel-plan-name').value.trim(), price: Number(byId('panel-plan-price').value),
+          resellerPrice: resellerText === '' ? null : Number(resellerText), service: 'tunnel',
+          type: byId('panel-plan-type').value, trafficBytes: trafficGb * (1024 ** 3),
+          durationDays: days === 0 ? null : days, hwidLimit: Number(byId('panel-plan-hwid').value || 0),
+          active: true, testEnabled: true,
+        };
+        await api('save_plan', { panelId: selectedPanelId, plan: plan });
+        message(byId('panel-plan-message'), 'پلن ذخیره شد.', true);
+        byId('panel-plan-id').value = '';
+        await loadPlans(selectedPanelId);
+      } catch (error) { message(byId('panel-plan-message'), 'ذخیره پلن ناموفق: ' + error.message, false); }
+      finally { planSave.disabled = false; }
+    });
+    planActions.appendChild(planSave);
+    var planClose = node('button', 'بستن', 'secondary'); planClose.type = 'button';
+    planClose.addEventListener('click', function () { planManager.classList.add('hidden'); }); planActions.appendChild(planClose);
+    planManager.appendChild(planActions);
+    var planMsg = node('div'); planMsg.id = 'panel-plan-message'; planManager.appendChild(planMsg);
+    var planList = node('div'); planList.id = 'panel-plan-list'; planManager.appendChild(planList);
+    card.appendChild(planManager);
     app.insertBefore(card, app.firstChild);
     refresh().catch(function (e) { message(status, 'بارگذاری پنل‌ها ناموفق بود: ' + e.message, false); });
   }

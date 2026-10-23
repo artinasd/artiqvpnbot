@@ -121,7 +121,7 @@
       var disablePlan = node('button', 'غیرفعال‌سازی', 'danger'); disablePlan.type = 'button';
       disablePlan.addEventListener('click', async function () {
         if (!confirm('این پلن از فهرست خرید حذف می‌شود؛ سابقه آن حفظ خواهد شد. ادامه می‌دهید؟')) return;
-        try { await api('disable_plan', { id: plan.id }); await loadPlans(panelId); message(byId('panel-plan-message'), 'پلن غیرفعال شد.', true); }
+        try { await api('disable_plan', { id: plan.id, panelId: panelId }); await loadPlans(panelId); message(byId('panel-plan-message'), 'پلن غیرفعال شد.', true); }
         catch (error) { message(byId('panel-plan-message'), error.message, false); }
       });
       actions.appendChild(disablePlan); row.appendChild(details); row.appendChild(actions); list.appendChild(row);

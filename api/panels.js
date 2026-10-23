@@ -32,7 +32,7 @@ module.exports = async function panelsApi(req, res) {
       return json(res, 200, { plan: await planStore.save(plan) });
     }
     if (body.action === 'disable_plan') {
-      await planStore.remove(String(body.id || ''));
+      await planStore.remove(String(body.id || ''), String(body.panelId || ''));
       return json(res, 200, { ok: true });
     }
     if (body.action === 'disable') return json(res, 200, { panel: await registry.setStatus(String(body.id || ''), 'disabled') });

@@ -50,3 +50,16 @@ test('unlimited plans keep their explicit prices rather than using per-GB rates'
   assert.equal(applyViewerPrice(unlimited, false, { normalPerGb: 4000, resellerPerGb: 2500 }).price, 120000);
   assert.equal(applyViewerPrice(unlimited, true, { normalPerGb: 4000, resellerPerGb: 2500 }).price, 120000);
 });
+
+
+test('per-panel default rates can differ without changing plan-level price precedence', () => {
+  const trafficBytes = 10 * 1024 ** 3;
+  const plan = { id: 'panel-plan', type: 'traffic', trafficBytes, price: null, resellerPrice: null };
+  const panelA = { normalPerGb: 3000, resellerPerGb: 1800 };
+  const panelB = { normalPerGb: 5000, resellerPerGb: 2500 };
+  assert.equal(applyViewerPrice(plan, false, panelA).price, 30000);
+  assert.equal(applyViewerPrice(plan, false, panelB).price, 50000);
+  assert.equal(applyViewerPrice(plan, true, panelA).price, 18000);
+  assert.equal(applyViewerPrice(plan, true, panelB).price, 25000);
+  assert.equal(applyViewerPrice({ ...plan, price: 42000 }, false, panelA).price, 42000);
+});

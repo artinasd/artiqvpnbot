@@ -128,7 +128,7 @@
     actions.appendChild(historySelect);
     actions.appendChild(btn('Rollback', 'mb-danger', async function () { var version = Number(historySelect.value); if (!version || !window.confirm('Roll back to version ' + version + '?')) return; try { var result = await api('rollback', { version: version }); state.published = result.published; showStatus('Rolled back to version ' + version + '.', true); } catch (e) { showStatus(e.message, false); } }));
     card.appendChild(actions); status = el('div'); card.appendChild(status);
-    var login = document.getElementById('login'); if (login && login.parentNode) login.parentNode.insertBefore(card, login.nextSibling);
+    app.insertBefore(card, app.firstChild);
     api().then(function (data) {
       state.actions = data.actions || {}; state.draft = data.draft; state.published = data.published; state.history = data.history || [];
       historySelect.replaceChildren();

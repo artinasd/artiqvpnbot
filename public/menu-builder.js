@@ -19,7 +19,9 @@
     service_renew: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'success' },
     plans_buy: { columns: 1, messageTemplate: '', customPlanButton: true, customPlanLabel: '🛠 ساخت بسته دلخواه (حجم و زمان)', homeButton: true, buttonStyle: 'primary' },
     plans_renew: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'success' },
-    account_list: { columns: 1, messageTemplate: '', homeButton: true, detailLabel: '{title}', renewLabel: '🔁', removeLabel: '❌' }
+    account_list: { columns: 1, messageTemplate: '', homeButton: true, detailLabel: '{title}', renewLabel: '🔁', removeLabel: '❌' },
+    account_detail: { messageTemplate: '', openLabel: '🔗 باز کردن لینک', copyLabel: '📋 کپی لینک', renewLabel: '🔄 تمدید اشتراک', backLabel: '⬅️ بازگشت به اشتراک‌ها', homeButton: true },
+    account_remove: { messageTemplate: '', confirmLabel: '🗑️ بله، حذف اشتراک', cancelLabel: '↩️ انصراف' }
   };
   var screenNames = {
     service_test: 'انتخاب سرویس اکانت تست',
@@ -27,7 +29,9 @@
     service_renew: 'انتخاب سرویس برای تمدید',
     plans_buy: 'فهرست پلن‌های خرید',
     plans_renew: 'فهرست پلن‌های تمدید',
-    account_list: 'فهرست اشتراک‌های حساب'
+    account_list: 'فهرست اشتراک‌های حساب',
+    account_detail: 'جزئیات اشتراک',
+    account_remove: 'تأیید حذف اشتراک'
   };
   function ensureScreens() {
     if (!state.draft.screens || typeof state.draft.screens !== 'object') state.draft.screens = {};
@@ -70,6 +74,16 @@
         controls.appendChild(field('متن دکمه اشتراک (از {title} استفاده کنید)', cfg.detailLabel, function (v) { cfg.detailLabel = v; }));
         controls.appendChild(field('متن دکمه تمدید', cfg.renewLabel, function (v) { cfg.renewLabel = v; }));
         controls.appendChild(field('متن دکمه حذف', cfg.removeLabel, function (v) { cfg.removeLabel = v; }));
+      }
+      if (id === 'account_detail') {
+        controls.appendChild(field('متن دکمه باز کردن لینک', cfg.openLabel, function (v) { cfg.openLabel = v; }));
+        controls.appendChild(field('متن دکمه کپی لینک', cfg.copyLabel, function (v) { cfg.copyLabel = v; }));
+        controls.appendChild(field('متن دکمه تمدید', cfg.renewLabel, function (v) { cfg.renewLabel = v; }));
+        controls.appendChild(field('متن دکمه بازگشت', cfg.backLabel, function (v) { cfg.backLabel = v; }));
+      }
+      if (id === 'account_remove') {
+        controls.appendChild(field('متن دکمه تأیید حذف', cfg.confirmLabel, function (v) { cfg.confirmLabel = v; }));
+        controls.appendChild(field('متن دکمه انصراف', cfg.cancelLabel, function (v) { cfg.cancelLabel = v; }));
       }
       section.appendChild(controls); details.appendChild(section);
     });

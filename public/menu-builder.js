@@ -53,7 +53,7 @@
     editor.appendChild(top);
     var basics = el('div', null, 'mb-basics');
     basics.appendChild(field('Menu name', selected.name, function (v) { selected.name = v; }));
-    basics.appendChild(field('Menu ID', selected.id, function () {}, 'Set when creating menu'));
+    var idField = field('Menu ID', selected.id, function () {}, 'Set when creating menu'); idField.querySelector('input').readOnly = true; basics.appendChild(idField);
     basics.appendChild(field('Message text', selected.text, function (v) { selected.text = v; renderPreview(); }));
     editor.appendChild(basics);
     editor.appendChild(el('div', 'Keyboard layout', 'mb-heading'));

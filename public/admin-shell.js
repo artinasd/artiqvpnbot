@@ -6,6 +6,7 @@
 
   var definitions = [
     { id: 'overview', label: 'نمای کلی', description: 'نمایی سریع از وضعیت پنل‌ها و ابزارهای مدیریتی', icon: '◫', group: 'MAIN' },
+    { id: 'menus', label: 'سازنده منو', description: 'طراحی منوها، چیدمان دکمه‌ها و اتصال به عملیات ثبت‌شده ربات', icon: '⌘', group: 'BOT', selectors: ['#menuBuilderCard'] },
     { id: 'panels', label: 'پنل‌ها و پلن‌ها', description: 'اتصال پنل‌ها، مدیریت پلن‌ها و قیمت‌گذاری اختصاصی', icon: '▦', group: 'OPERATIONS', selectors: ['#panels-cms-card'] },
     { id: 'settings', label: 'تنظیمات ربات', description: 'تنظیمات پرداخت، محدودیت‌ها و رفتار ربات', icon: '⚙', group: 'BOT', selectors: ['#cardNumber', '#tunnelName', '#button_test'] },
     { id: 'messages', label: 'متن‌های ربات', description: 'مدیریت پیام‌ها، متن‌های نمایشی و متغیرهای قابل استفاده', icon: '☷', group: 'BOT', selectors: ['#message_start'] },

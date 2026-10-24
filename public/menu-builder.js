@@ -50,11 +50,13 @@
       var section = el('section', null, 'mb-row');
       section.appendChild(el('strong', screenNames[id], 'mb-screen-title'));
       var controls = el('div', null, 'mb-screen-controls');
-      var colWrap = el('label', null, 'mb-field'); colWrap.appendChild(el('span', 'تعداد دکمه در هر ردیف'));
-      var colSelect = el('select');
-      [1,2,3,4].forEach(function (n) { var opt = el('option', String(n)); opt.value = String(n); opt.selected = Number(cfg.columns || 1) === n; colSelect.appendChild(opt); });
-      colSelect.addEventListener('change', function () { cfg.columns = Number(colSelect.value); });
-      colWrap.appendChild(colSelect); controls.appendChild(colWrap);
+      if (['service_test','service_buy','service_renew','plans_buy','plans_renew'].indexOf(id) !== -1) {
+        var colWrap = el('label', null, 'mb-field'); colWrap.appendChild(el('span', 'تعداد دکمه در هر ردیف'));
+        var colSelect = el('select');
+        [1,2,3,4].forEach(function (n) { var opt = el('option', String(n)); opt.value = String(n); opt.selected = Number(cfg.columns || 1) === n; colSelect.appendChild(opt); });
+        colSelect.addEventListener('change', function () { cfg.columns = Number(colSelect.value); });
+        colWrap.appendChild(colSelect); controls.appendChild(colWrap);
+      }
       if (['service_test','service_buy','service_renew','plans_buy','plans_renew'].indexOf(id) !== -1) {
         var styleWrap = el('label', null, 'mb-field'); styleWrap.appendChild(el('span', 'رنگ دکمه در تلگرام'));
         var styleSelect = el('select');

@@ -155,6 +155,38 @@ test('legacy subscription is lazily mapped when exactly one CMS panel has its se
   }
 });
 
+test('legacy subscription maps by exact globally unique plan ID even if service label changed', async () => {
+  const originals = {
+    getOrder: storage.getOrder,
+    updateOrder: storage.updateOrder,
+    listAll: planStore.listAll,
+    getById: panelRegistry.getById,
+  };
+  const order = {
+    orderId: 'legacy-exact-plan',
+    telegramUserId: 12345,
+    planId: 'stable-plan-id',
+    service: 'tunnel2',
+    provider: 'pasarguard-tunnel2',
+    pasarguardUserId: 'pg-user-1',
+  };
+  let patch;
+  storage.getOrder = async () => order;
+  storage.updateOrder = async (id, value) => { assert.equal(id, order.orderId); patch = value; return { ...order, ...value }; };
+  planStore.listAll = async () => [{ id: 'stable-plan-id', panelId: 'current-panel', service: 'tunnel' }];
+  panelRegistry.getById = async (id) => ({ id, status: 'active' });
+  try {
+    const mapped = await accountService.resolveOrderPanel(order);
+    assert.equal(mapped.panelId, 'current-panel');
+    assert.equal(patch.fulfillmentProvider, 'panel:current-panel');
+  } finally {
+    storage.getOrder = originals.getOrder;
+    storage.updateOrder = originals.updateOrder;
+    planStore.listAll = originals.listAll;
+    panelRegistry.getById = originals.getById;
+  }
+});
+
 test('legacy subscription is not mapped when multiple CMS panels match its service', async () => {
   const originals = {
     getOrder: storage.getOrder,

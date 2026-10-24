@@ -15,6 +15,14 @@ const ACTIONS = Object.freeze({
 });
 const DEFAULT_DOCUMENT = {
   version: 1,
+  screens: {
+    service_test: { columns: 1, messageTemplate: '', homeButton: true },
+    service_buy: { columns: 1, messageTemplate: '', homeButton: true },
+    service_renew: { columns: 1, messageTemplate: '', homeButton: true },
+    plans_buy: { columns: 1, messageTemplate: '', customPlanButton: true, customPlanLabel: '🛠 ساخت بسته دلخواه (حجم و زمان)', homeButton: true },
+    plans_renew: { columns: 1, messageTemplate: '', homeButton: true },
+    account_list: { columns: 1, messageTemplate: '', homeButton: true, detailLabel: '{title}', renewLabel: '🔁', removeLabel: '❌' },
+  },
   menus: [{
     id: 'main',
     name: 'Main menu',
@@ -44,6 +52,14 @@ function validateDocument(input) {
   if (input.menus.length < 1 || input.menus.length > 12) errors.push('Create between 1 and 12 menus.');
   const ids = new Set();
   let buttonCount = 0;
+  if (input.screens !== undefined && (!input.screens || typeof input.screens !== 'object' || Array.isArray(input.screens))) errors.push('Screen settings must be an object.');
+  for (const [screenId, screen] of Object.entries(input.screens || {})) {
+    if (!['service_test', 'service_buy', 'service_renew', 'plans_buy', 'plans_renew', 'account_list'].includes(screenId)) errors.push('Unknown dynamic screen: ' + screenId);
+    if (!screen || typeof screen !== 'object' || Array.isArray(screen)) { errors.push('Invalid settings for screen: ' + screenId); continue; }
+    if (!Number.isInteger(Number(screen.columns || 1)) || Number(screen.columns || 1) < 1 || Number(screen.columns || 1) > 4) errors.push('Screen columns must be between 1 and 4: ' + screenId);
+    for (const key of ['messageTemplate', 'customPlanLabel', 'detailLabel', 'renewLabel', 'removeLabel']) if (screen[key] !== undefined && (typeof screen[key] !== 'string' || screen[key].length > 500)) errors.push('Invalid ' + key + ' for screen: ' + screenId);
+    for (const key of ['homeButton', 'customPlanButton']) if (screen[key] !== undefined && typeof screen[key] !== 'boolean') errors.push(key + ' must be true or false for screen: ' + screenId);
+  }
   for (const menu of input.menus) {
     if (!menu || !/^[a-zA-Z0-9_-]{1,32}$/.test(String(menu.id || ''))) { errors.push('Every menu needs a valid ID.'); continue; }
     if (ids.has(menu.id)) errors.push('Duplicate menu ID: ' + menu.id);

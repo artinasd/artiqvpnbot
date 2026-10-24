@@ -13,6 +13,63 @@
     return fetch('/api/menu-builder', options).then(async function (res) { var data = await res.json().catch(function () { return {}; }); if (!res.ok) throw new Error((data.errors || [data.error || 'Request failed']).join(' · ')); return data; });
   }
   function menu() { return state.draft.menus.find(function (item) { return item.id === state.selectedMenu; }) || state.draft.menus[0]; }
+  var defaultScreens = {
+    service_test: { columns: 1, messageTemplate: '', homeButton: true },
+    service_buy: { columns: 1, messageTemplate: '', homeButton: true },
+    service_renew: { columns: 1, messageTemplate: '', homeButton: true },
+    plans_buy: { columns: 1, messageTemplate: '', customPlanButton: true, customPlanLabel: '🛠 ساخت بسته دلخواه (حجم و زمان)', homeButton: true },
+    plans_renew: { columns: 1, messageTemplate: '', homeButton: true },
+    account_list: { columns: 1, messageTemplate: '', homeButton: true, detailLabel: '{title}', renewLabel: '🔁', removeLabel: '❌' }
+  };
+  var screenNames = {
+    service_test: 'انتخاب سرویس اکانت تست',
+    service_buy: 'انتخاب سرویس برای خرید',
+    service_renew: 'انتخاب سرویس برای تمدید',
+    plans_buy: 'فهرست پلن‌های خرید',
+    plans_renew: 'فهرست پلن‌های تمدید',
+    account_list: 'فهرست اشتراک‌های حساب'
+  };
+  function ensureScreens() {
+    if (!state.draft.screens || typeof state.draft.screens !== 'object') state.draft.screens = {};
+    Object.keys(defaultScreens).forEach(function (id) {
+      state.draft.screens[id] = Object.assign({}, defaultScreens[id], state.draft.screens[id] || {});
+    });
+  }
+  function renderDynamicScreens() {
+    ensureScreens();
+    var details = el('details', null, 'mb-dynamic-settings');
+    var summary = el('summary', 'تنظیمات منوهای پویا (سرویس‌ها، پلن‌ها و اشتراک‌ها)', 'mb-heading');
+    details.appendChild(summary);
+    details.appendChild(el('p', 'این صفحه‌ها از اطلاعات زنده پنل‌ها، پلن‌ها و حساب کاربر ساخته می‌شوند. متن پیام از جایگزین‌های {service}، {prompt}، {title} و {mode} پشتیبانی می‌کند؛ خالی بگذارید تا متن پیش‌فرض استفاده شود.', 'mb-description'));
+    Object.keys(defaultScreens).forEach(function (id) {
+      var cfg = state.draft.screens[id];
+      var section = el('section', null, 'mb-row');
+      section.appendChild(el('strong', screenNames[id], 'mb-screen-title'));
+      var controls = el('div', null, 'mb-screen-controls');
+      var colWrap = el('label', null, 'mb-field'); colWrap.appendChild(el('span', 'تعداد دکمه در هر ردیف'));
+      var colSelect = el('select');
+      [1,2,3,4].forEach(function (n) { var opt = el('option', String(n)); opt.value = String(n); opt.selected = Number(cfg.columns || 1) === n; colSelect.appendChild(opt); });
+      colSelect.addEventListener('change', function () { cfg.columns = Number(colSelect.value); });
+      colWrap.appendChild(colSelect); controls.appendChild(colWrap);
+      var msgWrap = el('label', null, 'mb-field'); msgWrap.appendChild(el('span', 'قالب متن پیام'));
+      var msg = el('textarea'); msg.rows = 2; msg.value = cfg.messageTemplate || ''; msg.placeholder = '{service}\\n\\n{prompt}'; msg.addEventListener('input', function () { cfg.messageTemplate = msg.value; });
+      msgWrap.appendChild(msg); controls.appendChild(msgWrap);
+      var homeWrap = el('label', null, 'mb-check-field'); var home = el('input'); home.type = 'checkbox'; home.checked = cfg.homeButton !== false;
+      home.addEventListener('change', function () { cfg.homeButton = home.checked; }); homeWrap.appendChild(home); homeWrap.appendChild(el('span', 'نمایش دکمه منوی اصلی')); controls.appendChild(homeWrap);
+      if (id === 'plans_buy') {
+        var customWrap = el('label', null, 'mb-check-field'); var custom = el('input'); custom.type = 'checkbox'; custom.checked = cfg.customPlanButton !== false;
+        custom.addEventListener('change', function () { cfg.customPlanButton = custom.checked; }); customWrap.appendChild(custom); customWrap.appendChild(el('span', 'نمایش دکمه ساخت بسته دلخواه')); controls.appendChild(customWrap);
+        var customLabel = field('متن دکمه بسته دلخواه', cfg.customPlanLabel, function (v) { cfg.customPlanLabel = v; }); controls.appendChild(customLabel);
+      }
+      if (id === 'account_list') {
+        controls.appendChild(field('متن دکمه اشتراک (از {title} استفاده کنید)', cfg.detailLabel, function (v) { cfg.detailLabel = v; }));
+        controls.appendChild(field('متن دکمه تمدید', cfg.renewLabel, function (v) { cfg.renewLabel = v; }));
+        controls.appendChild(field('متن دکمه حذف', cfg.removeLabel, function (v) { cfg.removeLabel = v; }));
+      }
+      section.appendChild(controls); details.appendChild(section);
+    });
+    return details;
+  }
   function actionOptions(selected) {
     var select = el('select');
     Object.keys(state.actions).forEach(function (key) { var option = el('option', state.actions[key].label); option.value = key; if (key === selected) option.selected = true; select.appendChild(option); });
@@ -95,6 +152,7 @@
     });
     editor.appendChild(rows);
     editor.appendChild(btn('+ افزودن ردیف', 'mb-secondary', function () { selected.rows.push({ id: 'row_' + Math.random().toString(36).slice(2, 7), buttons: [] }); render(); }));
+    editor.appendChild(renderDynamicScreens());
     renderPreview();
   }
   function renderPreview() {
@@ -130,7 +188,7 @@
     card.appendChild(actions); status = el('div'); card.appendChild(status);
     app.insertBefore(card, app.firstChild);
     api().then(function (data) {
-      state.actions = data.actions || {}; state.draft = data.draft; state.published = data.published; state.history = data.history || [];
+      state.actions = data.actions || {}; state.draft = data.draft; ensureScreens(); state.published = data.published; state.history = data.history || [];
       historySelect.replaceChildren();
       state.history.forEach(function (item) { var opt = el('option', 'نسخه ' + item.version + (item.publishedAt ? ' · ' + item.publishedAt : '')); opt.value = item.version; historySelect.appendChild(opt); });
       if (!state.history.length) { var opt = el('option', 'نسخه قبلی وجود ندارد'); opt.value = ''; historySelect.appendChild(opt); }

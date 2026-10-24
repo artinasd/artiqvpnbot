@@ -16,11 +16,11 @@ const ACTIONS = Object.freeze({
 const DEFAULT_DOCUMENT = {
   version: 1,
   screens: {
-    service_test: { columns: 1, messageTemplate: '', homeButton: true },
-    service_buy: { columns: 1, messageTemplate: '', homeButton: true },
-    service_renew: { columns: 1, messageTemplate: '', homeButton: true },
-    plans_buy: { columns: 1, messageTemplate: '', customPlanButton: true, customPlanLabel: '🛠 ساخت بسته دلخواه (حجم و زمان)', homeButton: true },
-    plans_renew: { columns: 1, messageTemplate: '', homeButton: true },
+    service_test: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'success' },
+    service_buy: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'primary' },
+    service_renew: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'success' },
+    plans_buy: { columns: 1, messageTemplate: '', customPlanButton: true, customPlanLabel: '🛠 ساخت بسته دلخواه (حجم و زمان)', homeButton: true, buttonStyle: 'primary' },
+    plans_renew: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'success' },
     account_list: { columns: 1, messageTemplate: '', homeButton: true, detailLabel: '{title}', renewLabel: '🔁', removeLabel: '❌' },
   },
   menus: [{
@@ -59,6 +59,7 @@ function validateDocument(input) {
     if (!Number.isInteger(Number(screen.columns || 1)) || Number(screen.columns || 1) < 1 || Number(screen.columns || 1) > 4) errors.push('Screen columns must be between 1 and 4: ' + screenId);
     for (const key of ['messageTemplate', 'customPlanLabel', 'detailLabel', 'renewLabel', 'removeLabel']) if (screen[key] !== undefined && (typeof screen[key] !== 'string' || screen[key].length > 500)) errors.push('Invalid ' + key + ' for screen: ' + screenId);
     for (const key of ['homeButton', 'customPlanButton']) if (screen[key] !== undefined && typeof screen[key] !== 'boolean') errors.push(key + ' must be true or false for screen: ' + screenId);
+    if (screen.buttonStyle !== undefined && !['default', 'primary', 'success', 'danger'].includes(screen.buttonStyle)) errors.push('Unsupported Telegram button style for screen: ' + screenId);
   }
   for (const menu of input.menus) {
     if (!menu || !/^[a-zA-Z0-9_-]{1,32}$/.test(String(menu.id || ''))) { errors.push('Every menu needs a valid ID.'); continue; }

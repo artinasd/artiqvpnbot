@@ -21,7 +21,9 @@
     plans_renew: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'success' },
     account_list: { columns: 1, messageTemplate: '', homeButton: true, detailLabel: '{title}', renewLabel: '🔁', removeLabel: '❌' },
     account_detail: { messageTemplate: '', openLabel: '🔗 باز کردن لینک', copyLabel: '📋 کپی لینک', renewLabel: '🔄 تمدید اشتراک', backLabel: '⬅️ بازگشت به اشتراک‌ها', homeButton: true },
-    account_remove: { messageTemplate: '', confirmLabel: '🗑️ بله، حذف اشتراک', cancelLabel: '↩️ انصراف' }
+    account_remove: { messageTemplate: '', confirmLabel: '🗑️ بله، حذف اشتراک', cancelLabel: '↩️ انصراف' },
+    wallet: { messageTemplate: '', homeButton: true },
+    support: { messageTemplate: '', homeButton: true }
   };
   var screenNames = {
     service_test: 'انتخاب سرویس اکانت تست',
@@ -31,7 +33,9 @@
     plans_renew: 'فهرست پلن‌های تمدید',
     account_list: 'فهرست اشتراک‌های حساب',
     account_detail: 'جزئیات اشتراک',
-    account_remove: 'تأیید حذف اشتراک'
+    account_remove: 'تأیید حذف اشتراک',
+    wallet: 'صفحه کیف پول',
+    support: 'صفحه پشتیبانی'
   };
   function ensureScreens() {
     if (!state.draft.screens || typeof state.draft.screens !== 'object') state.draft.screens = {};

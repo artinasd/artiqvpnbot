@@ -4,7 +4,7 @@
   window.__artiqMenuBuilderLoaded = true;
   var app = document.getElementById('app');
   if (!app) return;
-  var state = { actions: {}, draft: null, published: null, history: [], selectedMenu: 'main' };
+  var state = { actions: {}, draft: null, published: null, history: [], selectedMenu: 'main', previewScreen: 'menu' };
   var card, editor, preview, status;
   function el(tag, text, cls) { var node = document.createElement(tag); if (text !== undefined && text !== null) node.textContent = text; if (cls) node.className = cls; return node; }
   function api(action, extra) {
@@ -186,18 +186,68 @@
   }
   function renderPreview() {
     if (!preview || !state.draft) return;
-    var selected = menu(); preview.replaceChildren();
+    ensureScreens();
+    preview.replaceChildren();
     preview.appendChild(el('div', 'پیش‌نمایش تلگرام', 'mb-preview-kicker'));
-    preview.appendChild(el('div', 'Artiq VPN', 'mb-preview-name'));
-    preview.appendChild(el('div', selected.text || 'متن پیام در این قسمت نمایش داده می‌شود.', 'mb-preview-text'));
+    var chooser = el('label', null, 'mb-field'); chooser.appendChild(el('span', 'نمایش پیش‌نمایش'));
+    var select = el('select');
+    [['menu','منوی انتخاب‌شده'],['service_test','انتخاب سرویس تست'],['service_buy','انتخاب سرویس خرید'],['service_renew','انتخاب سرویس تمدید'],['plans_buy','پلن‌های خرید'],['plans_renew','پلن‌های تمدید'],['account_list','فهرست اشتراک‌ها'],['account_detail','جزئیات اشتراک'],['account_remove','تأیید حذف اشتراک'],['wallet','کیف پول'],['support','پشتیبانی']].forEach(function (entry) { var opt = el('option', entry[1]); opt.value = entry[0]; opt.selected = state.previewScreen === entry[0]; select.appendChild(opt); });
+    select.addEventListener('change', function () { state.previewScreen = select.value; renderPreview(); });
+    chooser.appendChild(select); preview.appendChild(chooser);
+    var title = 'Artiq VPN';
+    var message = '';
+    var rows = [];
+    var style = 'default';
+    if (state.previewScreen === 'menu') {
+      var selected = menu(); message = selected.text || 'متن پیام در این قسمت نمایش داده می‌شود.';
+      rows = selected.rows.map(function (row) { return row.buttons.map(function (button) { return { label: button.label || 'Button', style: 'default' }; }); });
+    } else {
+      var cfg = state.draft.screens[state.previewScreen] || {};
+      var samples = {
+        service_test: { title: 'انتخاب سرویس اکانت تست', message: 'سرویس موردنظر را برای اکانت تست انتخاب کنید:', rows: [['🧩 سرویس اصلی'],['🎮 سرویس گیمینگ'],['🏠 منوی اصلی']] },
+        service_buy: { title: 'انتخاب سرویس برای خرید', message: 'ابتدا سرویس موردنظر را انتخاب کنید:', rows: [['🧩 سرویس اصلی'],['⚡ سرویس مستقیم'],['🏠 منوی اصلی']] },
+        service_renew: { title: 'انتخاب سرویس برای تمدید', message: 'سرویس اشتراک خود را انتخاب کنید:', rows: [['🧩 سرویس اصلی'],['🎮 سرویس گیمینگ'],['🏠 منوی اصلی']] },
+        plans_buy: { title: 'پلن‌های خرید', message: '{service}\\n\\n{prompt}', rows: [['📦 پلن ۱۰ گیگ — ۲۰۰٬۰۰۰ تومان'],['📦 پلن ۳۰ گیگ — ۵۰۰٬۰۰۰ تومان'],['🛠 ساخت بسته دلخواه'],['🏠 منوی اصلی']] },
+        plans_renew: { title: 'پلن‌های تمدید', message: '{service}\\n\\n{prompt}', rows: [['🔄 پلن ۱۰ گیگ'],['🔄 پلن ۳۰ گیگ'],['🏠 منوی اصلی']] },
+        account_list: { title: 'حساب من', message: 'اشتراک موردنظر را انتخاب کنید:', rows: [['اشتراک من','🔁','❌'],['🏠 منوی اصلی']] },
+        account_detail: { title: 'جزئیات اشتراک', message: '📦 اشتراک ۱۰ گیگ\\nوضعیت: فعال', rows: [['🔗 باز کردن لینک','📋 کپی لینک'],['🔄 تمدید اشتراک'],['⬅️ بازگشت به اشتراک‌ها'],['🏠 منوی اصلی']] },
+        account_remove: { title: 'تأیید حذف اشتراک', message: 'آیا از حذف این اشتراک مطمئن هستید؟', rows: [['🗑️ بله، حذف اشتراک'],['↩️ انصراف']] },
+        wallet: { title: 'کیف پول', message: 'موجودی فعلی: ۰ تومان\\nمبلغ شارژ را وارد کنید.', rows: [['🏠 منوی اصلی']] },
+        support: { title: 'پشتیبانی', message: 'برای دریافت پشتیبانی با ما در ارتباط باشید.', rows: [['🏠 منوی اصلی']] }
+      };
+      var sample = samples[state.previewScreen] || samples.service_buy;
+      title = sample.title;
+      var values = { service: '🧩 سرویس اصلی', prompt: 'لطفاً بسته موردنظر را انتخاب کنید:', title: sample.title, mode: state.previewScreen.indexOf('renew') !== -1 ? 'تمدید' : 'خرید' };
+      var template = String(cfg.messageTemplate || '').trim() || sample.message;
+      message = template.replace(/\{(service|prompt|title|mode)\}/g, function (_, key) { return values[key] || ''; });
+      rows = sample.rows.map(function (row) { return row.map(function (label) { return { label: label, style: 'default' }; }); });
+      style = cfg.buttonStyle || 'default';
+      if (state.previewScreen === 'plans_buy') {
+        if (cfg.customPlanButton === false) rows = rows.filter(function (row) { return row[0].label !== '🛠 ساخت بسته دلخواه'; });
+        else if (cfg.customPlanLabel) rows[rows.length - 2][0].label = cfg.customPlanLabel;
+      }
+      if (state.previewScreen === 'account_list') {
+        rows[0][0].label = String(cfg.detailLabel || '{title}').replace(/\{title\}/g, 'اشتراک من');
+        rows[0][1].label = cfg.renewLabel || '🔁'; rows[0][2].label = cfg.removeLabel || '❌';
+      }
+      if (state.previewScreen === 'account_detail') {
+        rows[0][0].label = cfg.openLabel || '🔗 باز کردن لینک'; rows[0][1].label = cfg.copyLabel || '📋 کپی لینک';
+        rows[1][0].label = cfg.renewLabel || '🔄 تمدید اشتراک'; rows[2][0].label = cfg.backLabel || '⬅️ بازگشت به اشتراک‌ها';
+        if (cfg.homeButton === false) rows.pop();
+      }
+      if (state.previewScreen === 'account_remove') { rows[0][0].label = cfg.confirmLabel || '🗑️ بله، حذف اشتراک'; rows[1][0].label = cfg.cancelLabel || '↩️ انصراف'; }
+      if (cfg.homeButton === false && ['service_test','service_buy','service_renew','plans_buy','plans_renew','account_list','wallet','support'].indexOf(state.previewScreen) !== -1) rows = rows.filter(function (row) { return row[0] && row[0].label !== '🏠 منوی اصلی'; });
+    }
+    preview.appendChild(el('div', title, 'mb-preview-name'));
+    preview.appendChild(el('div', message || 'متن پیام در این قسمت نمایش داده می‌شود.', 'mb-preview-text'));
     var keyboard = el('div', null, 'mb-preview-keyboard');
-    selected.rows.forEach(function (row) {
+    rows.forEach(function (row) {
       var line = el('div', null, 'mb-preview-row');
-      row.buttons.forEach(function (button) { line.appendChild(el('div', button.label || 'Button', 'mb-preview-button')); });
+      row.forEach(function (button) { line.appendChild(el('div', button.label || 'Button', 'mb-preview-button mb-style-' + (button.style || style || 'default'))); });
       keyboard.appendChild(line);
     });
     preview.appendChild(keyboard);
-    preview.appendChild(el('div', 'این فقط پیش‌نمایش است؛ ظاهر واقعی دکمه‌ها را تلگرام تعیین می‌کند.', 'mb-preview-note'));
+    preview.appendChild(el('div', 'این پیش‌نمایش نمونه است؛ سرویس‌ها و پلن‌های واقعی هنگام اجرا از داده‌های فعال خوانده می‌شوند.', 'mb-preview-note'));
   }
   function showStatus(text, good) { status.replaceChildren(el('div', text, good ? 'mb-ok' : 'mb-error')); }
   function mount() {

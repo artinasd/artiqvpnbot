@@ -22,6 +22,8 @@ const DEFAULT_DOCUMENT = {
     plans_buy: { columns: 1, messageTemplate: '', customPlanButton: true, customPlanLabel: '🛠 ساخت بسته دلخواه (حجم و زمان)', homeButton: true, buttonStyle: 'primary' },
     plans_renew: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'success' },
     account_list: { columns: 1, messageTemplate: '', homeButton: true, detailLabel: '{title}', renewLabel: '🔁', removeLabel: '❌' },
+    account_detail: { messageTemplate: '', openLabel: '🔗 باز کردن لینک', copyLabel: '📋 کپی لینک', renewLabel: '🔄 تمدید اشتراک', backLabel: '⬅️ بازگشت به اشتراک‌ها', homeButton: true },
+    account_remove: { messageTemplate: '', confirmLabel: '🗑️ بله، حذف اشتراک', cancelLabel: '↩️ انصراف' },
   },
   menus: [{
     id: 'main',
@@ -54,10 +56,10 @@ function validateDocument(input) {
   let buttonCount = 0;
   if (input.screens !== undefined && (!input.screens || typeof input.screens !== 'object' || Array.isArray(input.screens))) errors.push('Screen settings must be an object.');
   for (const [screenId, screen] of Object.entries(input.screens || {})) {
-    if (!['service_test', 'service_buy', 'service_renew', 'plans_buy', 'plans_renew', 'account_list'].includes(screenId)) errors.push('Unknown dynamic screen: ' + screenId);
+    if (!['service_test', 'service_buy', 'service_renew', 'plans_buy', 'plans_renew', 'account_list', 'account_detail', 'account_remove'].includes(screenId)) errors.push('Unknown dynamic screen: ' + screenId);
     if (!screen || typeof screen !== 'object' || Array.isArray(screen)) { errors.push('Invalid settings for screen: ' + screenId); continue; }
     if (!Number.isInteger(Number(screen.columns || 1)) || Number(screen.columns || 1) < 1 || Number(screen.columns || 1) > 4) errors.push('Screen columns must be between 1 and 4: ' + screenId);
-    for (const key of ['messageTemplate', 'customPlanLabel', 'detailLabel', 'renewLabel', 'removeLabel']) if (screen[key] !== undefined && (typeof screen[key] !== 'string' || screen[key].length > 500)) errors.push('Invalid ' + key + ' for screen: ' + screenId);
+    for (const key of ['messageTemplate', 'customPlanLabel', 'detailLabel', 'renewLabel', 'removeLabel', 'openLabel', 'copyLabel', 'backLabel', 'confirmLabel', 'cancelLabel']) if (screen[key] !== undefined && (typeof screen[key] !== 'string' || screen[key].length > 500)) errors.push('Invalid ' + key + ' for screen: ' + screenId);
     for (const key of ['homeButton', 'customPlanButton']) if (screen[key] !== undefined && typeof screen[key] !== 'boolean') errors.push(key + ' must be true or false for screen: ' + screenId);
     if (screen.buttonStyle !== undefined && !['default', 'primary', 'success', 'danger'].includes(screen.buttonStyle)) errors.push('Unsupported Telegram button style for screen: ' + screenId);
   }

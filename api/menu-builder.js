@@ -50,6 +50,7 @@ function validateDocument(input) {
     ids.add(menu.id);
     if (String(menu.name || '').length > 64 || String(menu.text || '').length > 3500) errors.push('Menu names must be <=64 and message text <=3500 characters.');
     if (!Array.isArray(menu.rows) || menu.rows.length > 30) { errors.push('Each menu can contain up to 30 rows.'); continue; }
+    if (!menu.rows.some((row) => Array.isArray(row?.buttons) && row.buttons.length > 0)) errors.push('Every menu must contain at least one button.');
     for (const row of menu.rows) {
       if (!row || !Array.isArray(row.buttons) || row.buttons.length > 8) { errors.push('Each row can contain up to 8 buttons.'); continue; }
       for (const button of row.buttons) {
@@ -94,7 +95,8 @@ module.exports = async function menuBuilderApi(req, res) {
       const checked = validateDocument(state.draft);
       if (checked.errors.length) return json(res, 400, { error: 'VALIDATION_FAILED', errors: checked.errors });
       if (state.published) state.history = [{ ...clone(state.published), archivedAt: new Date().toISOString() }, ...(state.history || [])].slice(0, 10);
-      state.published = { ...clone(state.draft), version: Number(state.published?.version || 0) + 1, publishedAt: new Date().toISOString() };
+      const highestVersion = Math.max(Number(state.published?.version || 0), ...(state.history || []).map((item) => Number(item.version || 0)));
+      state.published = { ...clone(state.draft), version: highestVersion + 1, publishedAt: new Date().toISOString() };
       await storage.set(KEY, state);
       return json(res, 200, { ok: true, published: state.published });
     }

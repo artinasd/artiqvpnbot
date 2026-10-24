@@ -3,15 +3,15 @@ const storage = require('../lib/storage');
 const PASSWORD = process.env.ADMIN_CMS_PASSWORD || '';
 const KEY = 'cms:menu-builder';
 const ACTIONS = Object.freeze({
-  test_services: { label: 'Show test-service choices', params: [] },
-  buy_services: { label: 'Show purchase services', params: [] },
-  wallet: { label: 'Open wallet', params: [] },
-  account: { label: 'Open my subscriptions', params: [] },
-  support: { label: 'Show support information', params: [] },
-  renew: { label: 'Start renewal flow', params: [] },
-  navigate_menu: { label: 'Open another menu', params: ['menuId'] },
-  open_url: { label: 'Open HTTPS link', params: ['url'] },
-  back_home: { label: 'Return to main menu', params: [] },
+  test_services: { label: 'نمایش سرویس‌های اکانت تست', params: [] },
+  buy_services: { label: 'نمایش سرویس‌های خرید', params: [] },
+  wallet: { label: 'باز کردن کیف پول', params: [] },
+  account: { label: 'نمایش اشتراک‌های من', params: [] },
+  support: { label: 'نمایش اطلاعات پشتیبانی', params: [] },
+  renew: { label: 'شروع فرایند تمدید', params: [] },
+  navigate_menu: { label: 'باز کردن منوی دیگر', params: ['menuId'] },
+  open_url: { label: 'باز کردن لینک HTTPS', params: ['url'] },
+  back_home: { label: 'بازگشت به منوی اصلی', params: [] },
 });
 const DEFAULT_DOCUMENT = {
   version: 1,

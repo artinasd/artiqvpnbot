@@ -20,9 +20,10 @@ PasarGuard remains the source of truth for VPN configuration. The bot never gene
 
 **Current service catalog:** new Telegram purchase and test menus expose only active panels registered in the CMS. Plans are created explicitly under each panel; an empty plan store is not seeded with legacy defaults. See [Dynamic PasarGuard panels](docs/dynamic-panels.md) for the implementation, security controls, and cutover checklist.
 
-## Legacy PasarGuard environment configuration
+## Panel credentials
 
-These environment variables belong to the legacy provider configuration and do not register a selectable CMS panel. Keep them only where needed by legacy provider references or existing operational setup. For newly registered panels, enter the HTTPS base URL and admin username/password in the CMS; the dynamic provider uses PasarGuard's admin-token flow. It reads `/api/groups/simple` and assigns all available groups to newly created users. The base URL must be the panel origin, not a `/dashboard/` path. See [Dynamic PasarGuard panels](docs/dynamic-panels.md).
+Register each PasarGuard panel in the CMS using its HTTPS base URL and admin username/password. Credentials are encrypted before being stored in Redis. Do not configure panel-specific usernames, passwords, URLs, or API keys as Vercel environment variables. The shared `PANEL_CREDENTIALS_ENCRYPTION_KEY` must be stable across deployments that share the same Redis database.
+
 
 ## Username rules
 
@@ -90,8 +91,6 @@ ADMIN_ID
 WEBHOOK_SECRET
 UPSTASH_REDIS_REST_URL
 UPSTASH_REDIS_REST_TOKEN
-PASARGUARD_BASE_URL
-PASARGUARD_API_KEY
 PANEL_CREDENTIALS_ENCRYPTION_KEY
 ADMIN_CMS_PASSWORD
 BANK_DETAILS
@@ -101,8 +100,6 @@ Optional:
 
 ```text
 SUPPORT_USERNAME
-PASARGUARD_API_KEY_HEADER=X-Api-Key
-PASARGUARD_TIMEOUT_MS=5000
 TEST_TRAFFIC_GB=1
 TEST_DURATION_DAYS=3
 TEST_HWID_LIMIT=0
@@ -131,7 +128,7 @@ See [the full dynamic-panel rollout and rollback guide](docs/dynamic-panels.md).
 3. Deploy and register/test a panel in the CMS before offering its plans.
 4. Set the Telegram webhook to the deployed `/api` function and include the same `WEBHOOK_SECRET` as Telegram's secret token.
 5. Confirm PasarGuard is reachable from the public internet over HTTPS.
-6. Confirm the PasarGuard API key can read groups and manage users.
+6. Register the panel in the CMS and use **Test connection** to confirm it can read groups.
 7. Send `/start` and test the automated test account.
 8. Run a small paid test order and submit a receipt.
 
@@ -159,6 +156,6 @@ npm install
 npm test
 ```
 
-The included tests cover username and plan behavior plus dynamic panel registry validation, encrypted credentials, connection checks, service selection, and panel-specific provider behavior. These automated tests do not replace a controlled end-to-end test against the real PasarGuard panel.
+The included tests cover username and plan behavior plus dynamic panel registry validation, encrypted credentials, connection checks, service selection, and CMS-managed panel provisioning. These automated tests do not replace a controlled end-to-end test against the real PasarGuard panel.
 
 <!-- production redeploy trigger -->

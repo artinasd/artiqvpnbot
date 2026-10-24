@@ -14,11 +14,11 @@
   }
   function menu() { return state.draft.menus.find(function (item) { return item.id === state.selectedMenu; }) || state.draft.menus[0]; }
   var defaultScreens = {
-    service_test: { columns: 1, messageTemplate: '', homeButton: true },
-    service_buy: { columns: 1, messageTemplate: '', homeButton: true },
-    service_renew: { columns: 1, messageTemplate: '', homeButton: true },
-    plans_buy: { columns: 1, messageTemplate: '', customPlanButton: true, customPlanLabel: '🛠 ساخت بسته دلخواه (حجم و زمان)', homeButton: true },
-    plans_renew: { columns: 1, messageTemplate: '', homeButton: true },
+    service_test: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'success' },
+    service_buy: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'primary' },
+    service_renew: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'success' },
+    plans_buy: { columns: 1, messageTemplate: '', customPlanButton: true, customPlanLabel: '🛠 ساخت بسته دلخواه (حجم و زمان)', homeButton: true, buttonStyle: 'primary' },
+    plans_renew: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'success' },
     account_list: { columns: 1, messageTemplate: '', homeButton: true, detailLabel: '{title}', renewLabel: '🔁', removeLabel: '❌' }
   };
   var screenNames = {
@@ -51,6 +51,11 @@
       [1,2,3,4].forEach(function (n) { var opt = el('option', String(n)); opt.value = String(n); opt.selected = Number(cfg.columns || 1) === n; colSelect.appendChild(opt); });
       colSelect.addEventListener('change', function () { cfg.columns = Number(colSelect.value); });
       colWrap.appendChild(colSelect); controls.appendChild(colWrap);
+      var styleWrap = el('label', null, 'mb-field'); styleWrap.appendChild(el('span', 'رنگ دکمه در تلگرام'));
+      var styleSelect = el('select');
+      [['default','پیش‌فرض'],['primary','آبی'],['success','سبز'],['danger','قرمز']].forEach(function (entry) { var opt = el('option', entry[1]); opt.value = entry[0]; opt.selected = (cfg.buttonStyle || (id === 'service_test' || id === 'service_renew' || id === 'plans_renew' ? 'success' : 'primary')) === entry[0]; styleSelect.appendChild(opt); });
+      styleSelect.addEventListener('change', function () { cfg.buttonStyle = styleSelect.value; });
+      styleWrap.appendChild(styleSelect); controls.appendChild(styleWrap);
       var msgWrap = el('label', null, 'mb-field'); msgWrap.appendChild(el('span', 'قالب متن پیام'));
       var msg = el('textarea'); msg.rows = 2; msg.value = cfg.messageTemplate || ''; msg.placeholder = '{service}\\n\\n{prompt}'; msg.addEventListener('input', function () { cfg.messageTemplate = msg.value; });
       msgWrap.appendChild(msg); controls.appendChild(msgWrap);

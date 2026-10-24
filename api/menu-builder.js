@@ -69,8 +69,12 @@ function validateDocument(input) {
   }
   if (buttonCount > 100) errors.push('A document can contain at most 100 buttons.');
   for (const menu of input.menus) {
-    for (const row of (menu.rows || [])) for (const button of (row.buttons || [])) {
-      if (button.action === 'navigate_menu' && !ids.has(String(button.params?.menuId || ''))) errors.push('Navigation target does not exist: ' + String(button.params?.menuId || ''));
+    if (!menu || typeof menu !== 'object' || !Array.isArray(menu.rows)) continue;
+    for (const row of menu.rows) {
+      if (!row || !Array.isArray(row.buttons)) continue;
+      for (const button of row.buttons) {
+        if (button && button.action === 'navigate_menu' && !ids.has(String((button.params && button.params.menuId) || ''))) errors.push('Navigation target does not exist: ' + String((button.params && button.params.menuId) || ''));
+      }
     }
   }
   if (!ids.has('main')) errors.push('A menu with ID "main" is required.');

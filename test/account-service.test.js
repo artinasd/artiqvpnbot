@@ -3,6 +3,8 @@ const assert = require('node:assert/strict');
 
 const storage = require('../lib/storage');
 const providers = require('../lib/providers');
+const planStore = require('../lib/plan-store');
+const panelRegistry = require('../lib/panel-registry');
 const accountService = require('../lib/account-service');
 
 test('listSubscriptions uses stored orders without making live PasarGuard requests', async () => {
@@ -98,6 +100,92 @@ test('legacy orders without a CMS panel mapping fail safely instead of targeting
   } finally {
     storage.getOrder = originalGetOrder;
     providers.getProvider = originalGetProvider;
+  }
+});
+
+
+test('legacy subscription is lazily mapped when exactly one CMS panel has its service type', async () => {
+  const originals = {
+    getOrder: storage.getOrder,
+    updateOrder: storage.updateOrder,
+    listAll: planStore.listAll,
+    getById: panelRegistry.getById,
+    getProvider: providers.getProvider,
+  };
+  const order = {
+    orderId: 'legacy-map',
+    telegramUserId: 12345,
+    planId: 'old-plan-id',
+    planName: 'Old 10 GB',
+    service: 'tunnel2',
+    provider: 'pasarguard-tunnel2',
+    pasarguardUserId: 'pg-user-legacy',
+    generatedPasarguardUsername: 'legacy_user',
+    fulfillmentStatus: 'FULFILLED',
+    paymentStatus: 'APPROVED',
+  };
+  let mappingPatch;
+  let requestedProvider;
+  const client = {
+    getUserById: async (id) => ({ id }),
+    deleteUserById: async (id) => { assert.equal(id, 'pg-user-legacy'); },
+  };
+  storage.getOrder = async () => order;
+  storage.updateOrder = async (id, patch) => {
+    assert.equal(id, 'legacy-map');
+    if (patch.panelId) mappingPatch = patch;
+    return { ...order, ...patch };
+  };
+  planStore.listAll = async () => [{ id: 'new-plan-id', panelId: 'current-tunnel-panel', service: 'tunnel2', name: 'New 10 GB' }];
+  panelRegistry.getById = async (id) => ({ id, status: 'active' });
+  providers.getProvider = (id) => { requestedProvider = id; return client; };
+  try {
+    const result = await accountService.removeSubscriptionFromAccount(12345, 'legacy-map');
+    assert.equal(requestedProvider, 'panel:current-tunnel-panel');
+    assert.equal(mappingPatch.panelId, 'current-tunnel-panel');
+    assert.equal(mappingPatch.fulfillmentProvider, 'panel:current-tunnel-panel');
+    assert.equal(mappingPatch.service, 'panel_current-tunnel-panel');
+    assert.equal(result.order.accountRemoved, true);
+  } finally {
+    storage.getOrder = originals.getOrder;
+    storage.updateOrder = originals.updateOrder;
+    planStore.listAll = originals.listAll;
+    panelRegistry.getById = originals.getById;
+    providers.getProvider = originals.getProvider;
+  }
+});
+
+test('legacy subscription is not mapped when multiple CMS panels match its service', async () => {
+  const originals = {
+    getOrder: storage.getOrder,
+    listAll: planStore.listAll,
+    getById: panelRegistry.getById,
+    getProvider: providers.getProvider,
+  };
+  storage.getOrder = async () => ({
+    orderId: 'ambiguous-legacy',
+    telegramUserId: 12345,
+    planId: 'missing-old-plan',
+    service: 'tunnel2',
+    provider: 'pasarguard-tunnel2',
+    pasarguardUserId: 'pg-user-1',
+  });
+  planStore.listAll = async () => [
+    { id: 'plan-a', panelId: 'panel-a', service: 'tunnel2' },
+    { id: 'plan-b', panelId: 'panel-b', service: 'tunnel2' },
+  ];
+  panelRegistry.getById = async () => { throw new Error('ambiguous mapping must not query a panel'); };
+  providers.getProvider = () => { throw new Error('ambiguous mapping must not contact a panel'); };
+  try {
+    await assert.rejects(
+      accountService.removeSubscriptionFromAccount(12345, 'ambiguous-legacy'),
+      (error) => error.code === 'LEGACY_ORDER_REQUIRES_PANEL_MAPPING'
+    );
+  } finally {
+    storage.getOrder = originals.getOrder;
+    planStore.listAll = originals.listAll;
+    panelRegistry.getById = originals.getById;
+    providers.getProvider = originals.getProvider;
   }
 });
 

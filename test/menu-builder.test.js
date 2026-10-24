@@ -31,4 +31,11 @@ test('published menu renderer supports only registered actions and menu navigati
   assert.match(runtime, /getPublishedMenu/);
   assert.match(runtime, /menu_nav:/);
   assert.match(source('api/index.js'), /getMenuKeyboard\('main'\)/);
+  assert.match(runtime, /arrangeScreenRows/);
+  assert.match(runtime, /formatScreenMessage/);
+  assert.match(source('api/index.js'), /plans_buy/);
+  assert.match(source('api/index.js'), /account_detail/);
+  assert.match(source('lib/account-ui.js'), /options\.confirmLabel/);
+  assert.match(source('public/menu-builder.js'), /تنظیمات منوهای پویا/);
+  assert.match(source('public/menu-builder.js'), /رنگ دکمه در تلگرام/);
 });

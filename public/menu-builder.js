@@ -67,8 +67,10 @@
       var msgWrap = el('label', null, 'mb-field'); msgWrap.appendChild(el('span', 'قالب متن پیام'));
       var msg = el('textarea'); msg.rows = 2; msg.value = cfg.messageTemplate || ''; msg.placeholder = '{service}\\n\\n{prompt}'; msg.addEventListener('input', function () { cfg.messageTemplate = msg.value; });
       msgWrap.appendChild(msg); controls.appendChild(msgWrap);
-      var homeWrap = el('label', null, 'mb-check-field'); var home = el('input'); home.type = 'checkbox'; home.checked = cfg.homeButton !== false;
-      home.addEventListener('change', function () { cfg.homeButton = home.checked; }); homeWrap.appendChild(home); homeWrap.appendChild(el('span', 'نمایش دکمه منوی اصلی')); controls.appendChild(homeWrap);
+      if (id !== 'account_remove') {
+        var homeWrap = el('label', null, 'mb-check-field'); var home = el('input'); home.type = 'checkbox'; home.checked = cfg.homeButton !== false;
+        home.addEventListener('change', function () { cfg.homeButton = home.checked; }); homeWrap.appendChild(home); homeWrap.appendChild(el('span', 'نمایش دکمه منوی اصلی')); controls.appendChild(homeWrap);
+      }
       if (id === 'plans_buy') {
         var customWrap = el('label', null, 'mb-check-field'); var custom = el('input'); custom.type = 'checkbox'; custom.checked = cfg.customPlanButton !== false;
         custom.addEventListener('change', function () { cfg.customPlanButton = custom.checked; }); customWrap.appendChild(custom); customWrap.appendChild(el('span', 'نمایش دکمه ساخت بسته دلخواه')); controls.appendChild(customWrap);

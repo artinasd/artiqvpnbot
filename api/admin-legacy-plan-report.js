@@ -1,5 +1,4 @@
 const storage = require('../lib/storage');
-const planStore = require('../lib/plan-store');
 const panelRegistry = require('../lib/panel-registry');
 
 const PASSWORD = process.env.ADMIN_CMS_PASSWORD || '';
@@ -28,10 +27,11 @@ module.exports = async function handler(req, res) {
   try {
     const [orders, plans, panels] = await Promise.all([
       storage.listAllOrders(),
-      planStore.listAll(),
+      storage.get('cms:plans'),
       panelRegistry.list(),
     ]);
-    const currentIds = new Set(plans.map((plan) => String(plan.id)));
+    const currentPlanRecords = Array.isArray(plans) ? plans : [];
+    const currentIds = new Set(currentPlanRecords.map((plan) => String(plan.id)));
     const panelNames = new Map(panels.map((panel) => [String(panel.id), String(panel.name || panel.id)]));
     const groups = new Map();
 
@@ -71,7 +71,7 @@ module.exports = async function handler(req, res) {
       }))
       .sort((a, b) => a.oldPlanId.localeCompare(b.oldPlanId) || a.oldPlanName.localeCompare(b.oldPlanName));
 
-    const currentPlans = plans.map((plan) => ({
+    const currentPlans = currentPlanRecords.map((plan) => ({
       id: String(plan.id),
       name: String(plan.name || ''),
       buttonText: String(plan.buttonText || ''),

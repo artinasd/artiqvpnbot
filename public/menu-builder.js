@@ -124,6 +124,8 @@
       var section = el('section', null, 'mb-row');
       section.appendChild(el('strong', screenNames[id], 'mb-screen-title'));
       var controls = el('div', null, 'mb-screen-controls');
+      controls.appendChild(el('strong', 'چیدمان دکمه‌ها', 'mb-screen-title'));
+      controls.appendChild(el('p', 'تعداد دکمه در هر ردیف و چیدمان مستقل هر ردیف را برای این صفحه تنظیم کنید؛ این تنظیمات روی دکمه‌های زنده و دکمه‌های اضافی اعمال می‌شوند.', 'mb-description'));
       if (['service_test','service_buy','service_renew','plans_buy','plans_renew','account_list','account_detail','account_remove','wallet','support'].indexOf(id) !== -1) {
         var colWrap = el('label', null, 'mb-field'); colWrap.appendChild(el('span', 'تعداد دکمه در هر ردیف'));
         var colSelect = el('select');

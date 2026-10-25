@@ -17,8 +17,8 @@ const ACTIONS = Object.freeze({
 const DEFAULT_DOCUMENT = {
   version: 1,
   screens: {
-    service_test: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'success', buttonControls: {}, buttons: [] },
-    service_buy: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'primary', buttonControls: {}, buttons: [] },
+    service_test: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'glass', buttonControls: {}, buttons: [] },
+    service_buy: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'glass', buttonControls: {}, buttons: [] },
     service_renew: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'success', buttonControls: {}, buttons: [] },
     plans_buy: { columns: 1, messageTemplate: '', customPlanButton: true, customPlanLabel: '🛠 ساخت بسته دلخواه (حجم و زمان)', homeButton: true, buttonStyle: 'primary', buttonControls: {}, buttons: [] },
     plans_renew: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'success', buttonControls: {}, buttons: [] },
@@ -80,7 +80,7 @@ function validateDocument(input) {
     }
     for (const key of ['messageTemplate', 'customPlanLabel', 'detailLabel', 'renewLabel', 'removeLabel', 'openLabel', 'copyLabel', 'backLabel', 'confirmLabel', 'cancelLabel']) if (screen[key] !== undefined && (typeof screen[key] !== 'string' || screen[key].length > 500)) errors.push('Invalid ' + key + ' for screen: ' + screenId);
     for (const key of ['homeButton', 'customPlanButton']) if (screen[key] !== undefined && typeof screen[key] !== 'boolean') errors.push(key + ' must be true or false for screen: ' + screenId);
-    if (screen.buttonStyle !== undefined && !['default', 'primary', 'success', 'danger'].includes(screen.buttonStyle)) errors.push('Unsupported Telegram button style for screen: ' + screenId);
+    if (screen.buttonStyle !== undefined && !['default', 'glass', 'primary', 'success', 'danger'].includes(screen.buttonStyle)) errors.push('Unsupported Telegram button style for screen: ' + screenId);
     if (screen.buttonControls !== undefined && (!screen.buttonControls || typeof screen.buttonControls !== 'object' || Array.isArray(screen.buttonControls))) errors.push('Button controls must be an object: ' + screenId);
     for (const [controlId, control] of Object.entries(screen.buttonControls || {})) {
       const allowedControls = { service_test: ['services', 'home'], service_buy: ['services', 'home'], service_renew: ['services', 'home'], plans_buy: ['plans', 'custom_plan', 'home'], plans_renew: ['plans', 'home'], account_list: ['subscription_detail', 'subscription_renew', 'subscription_remove', 'home'], account_detail: ['open_link', 'copy_link', 'renew_subscription', 'back_to_list', 'home'], account_remove: ['confirm_remove', 'cancel_remove'], wallet: ['home'], support: ['home'] }[screenId] || [];

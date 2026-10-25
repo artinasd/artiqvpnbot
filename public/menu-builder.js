@@ -74,25 +74,60 @@
   function renderScreenButtons(screenId, cfg) {
     var wrap = el('section', null, 'mb-row');
     wrap.appendChild(el('strong', 'دکمه‌های اضافی این منو', 'mb-screen-title'));
-    wrap.appendChild(el('p', 'این دکمه‌ها کنار دکمه‌های زندهٔ سرویس/پلن/اشتراک نمایش داده می‌شوند و عملکرد انتخابی‌شان اجرا می‌شود. همان ویرایشگر دکمه‌های منوی اصلی برای تغییر متن، عملکرد، رنگ و ترتیب استفاده می‌شود.', 'mb-description'));
+    wrap.appendChild(el('p', 'این دکمه‌ها کنار دکمه‌های زندهٔ سرویس/پلن/اشتراک نمایش داده می‌شوند. هر ردیف می‌تواند چند دکمه داشته باشد؛ چیدمان ردیف‌ها برای دکمه‌های موجود و جدید قابل تنظیم است.', 'mb-description'));
+    if (!Array.isArray(cfg.buttons)) cfg.buttons = [];
+    function getRows() {
+      var groups = [];
+      cfg.buttons.forEach(function (button, index) {
+        if (!button.params || typeof button.params !== 'object') button.params = {};
+        var key = button.rowId || ('legacy:' + (button.id || index));
+        var group = groups.find(function (item) { return item.key === key; });
+        if (!group) { group = { key: key, buttons: [] }; groups.push(group); }
+        group.buttons.push(button);
+      });
+      return groups;
+    }
     var rows = el('div', null, 'mb-rows');
-    (cfg.buttons || []).forEach(function (button, index) {
+    getRows().forEach(function (group, rowIndex) {
       var rowCard = el('section', null, 'mb-row');
       var rowHead = el('div', null, 'mb-row-head');
-      rowHead.appendChild(el('strong', 'دکمه ' + (index + 1)));
-      rowHead.appendChild(btn('↑', 'mb-icon-button', function () { if (index > 0) { cfg.buttons.splice(index, 1); cfg.buttons.splice(index - 1, 0, button); render(); } }));
-      rowHead.appendChild(btn('↓', 'mb-icon-button', function () { if (index < cfg.buttons.length - 1) { cfg.buttons.splice(index, 1); cfg.buttons.splice(index + 1, 0, button); render(); } }));
-      rowHead.appendChild(btn('حذف دکمه', 'mb-danger', function () { cfg.buttons.splice(index, 1); render(); }));
+      rowHead.appendChild(el('strong', 'ردیف ' + (rowIndex + 1)));
       rowCard.appendChild(rowHead);
       var grid = el('div', null, 'mb-button-edit-grid');
-      grid.appendChild(renderManagedButton(button));
+      group.buttons.forEach(function (button, buttonIndex) {
+        var item = renderManagedButton(button);
+        var controls = el('div', null, 'mb-item-controls');
+        controls.appendChild(btn('←', 'mb-icon-button', function () {
+          if (buttonIndex > 0) {
+            var previous = group.buttons[buttonIndex - 1];
+            var a = cfg.buttons.indexOf(button), b = cfg.buttons.indexOf(previous);
+            cfg.buttons[a] = previous; cfg.buttons[b] = button; render();
+          }
+        }));
+        controls.appendChild(btn('→', 'mb-icon-button', function () {
+          if (buttonIndex < group.buttons.length - 1) {
+            var next = group.buttons[buttonIndex + 1];
+            var a = cfg.buttons.indexOf(button), b = cfg.buttons.indexOf(next);
+            cfg.buttons[a] = next; cfg.buttons[b] = button; render();
+          }
+        }));
+        controls.appendChild(btn('حذف دکمه', 'mb-danger', function () { cfg.buttons.splice(cfg.buttons.indexOf(button), 1); render(); }));
+        item.appendChild(controls); grid.appendChild(item);
+      });
       rowCard.appendChild(grid);
+      rowCard.appendChild(btn('+ افزودن دکمه به این ردیف', 'mb-secondary', function () {
+        if (cfg.buttons.length >= 20) return showStatus('برای هر منو حداکثر ۲۰ دکمهٔ اضافی مجاز است.', false);
+        var rowId = group.key.indexOf('legacy:') === 0 ? 'screen_row_' + Math.random().toString(36).slice(2, 7) : group.key;
+        group.buttons.forEach(function (button) { button.rowId = rowId; });
+        cfg.buttons.push({ id: 'screen_button_' + Math.random().toString(36).slice(2, 7), rowId: rowId, label: 'دکمه جدید', action: 'back_home', params: {} });
+        render();
+      }));
       rows.appendChild(rowCard);
     });
     wrap.appendChild(rows);
-    wrap.appendChild(btn('+ افزودن دکمه', 'mb-secondary', function () {
+    wrap.appendChild(btn('+ افزودن ردیف', 'mb-secondary', function () {
       if (cfg.buttons.length >= 20) return showStatus('برای هر منو حداکثر ۲۰ دکمهٔ اضافی مجاز است.', false);
-      cfg.buttons.push({ id: 'screen_button_' + Math.random().toString(36).slice(2, 7), label: 'دکمه جدید', action: 'back_home', params: {} }); render();
+      cfg.buttons.push({ id: 'screen_button_' + Math.random().toString(36).slice(2, 7), rowId: 'screen_row_' + Math.random().toString(36).slice(2, 7), label: 'دکمه جدید', action: 'back_home', params: {} }); render();
     }));
     return wrap;
   }
@@ -444,7 +479,14 @@
         roles.forEach(function(id){var c=cfg.buttonControls[id];if(!c)return;rows.forEach(function(row){row.forEach(function(b){if(!matchers[id].test(b.label))return;if(c.enabled===false)b.__hidden=true;else{b.label=String(c.label||'{label}').replace(/\{label\}/g,b.label);b.style=c.style||'default';}});});});
         rows=rows.map(function(row){return row.filter(function(b){return !b.__hidden;});}).filter(function(row){return row.length;});
       }
-      (cfg.buttons || []).forEach(function (button) { rows.push([{ label: button.label || 'دکمه جدید', style: button.style || 'default' }]); });
+      var extraPreviewRows = [];
+      (cfg.buttons || []).forEach(function (button, index) {
+        var key = button.rowId || ('legacy:' + (button.id || index));
+        var group = extraPreviewRows.find(function (item) { return item.key === key; });
+        if (!group) { group = { key: key, buttons: [] }; extraPreviewRows.push(group); }
+        group.buttons.push({ label: button.label || 'دکمه جدید', style: button.style || 'default' });
+      });
+      extraPreviewRows.forEach(function (group) { rows.push(group.buttons); });
       if (Array.isArray(cfg.rowLayout) && cfg.rowLayout.length) {
         var flat = rows.flat(); rows = []; var offset = 0;
         cfg.rowLayout.forEach(function (rowWidth) { var width = Math.max(1, Math.min(4, Number(rowWidth) || 1)); if (offset < flat.length) { rows.push(flat.slice(offset, offset + width)); offset += width; } });

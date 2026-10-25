@@ -63,6 +63,19 @@ test('account list rows provide username, quick-renew, and remove actions on one
   assert.deepEqual(rows[1], [{ text: '🏠 منوی اصلی', callback_data: 'main_home', style: 'primary' }]);
 });
 
+test('account list keyboard omits disabled renew and remove actions at source', () => {
+  const rows = accountUI.subscriptionKeyboard(
+    [{ id: 'order-1', title: 'customer_name' }],
+    { buttonControls: {
+      subscription_renew: { enabled: false },
+      subscription_remove: { enabled: false },
+    } }
+  );
+  assert.deepEqual(rows[0].map((button) => button.callback_data), ['account_sub:order-1']);
+  assert.equal(rows.flat().some((button) => button.callback_data?.startsWith('account_renew:')), false);
+  assert.equal(rows.flat().some((button) => button.callback_data?.startsWith('account_remove:')), false);
+});
+
 test('remove confirmation offers confirm and cancel actions', () => {
   const rows = accountUI.removeConfirmationKeyboard('order-1');
   assert.equal(rows[0][0].callback_data, 'account_remove_confirm:order-1');

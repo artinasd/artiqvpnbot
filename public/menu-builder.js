@@ -245,7 +245,7 @@
           var grid = el('div', null, 'mb-button-edit-grid');
           row.roles.forEach(function (roleId, buttonIndex) {
             var role = roleDef(roleId); if (!role) return;
-            var control = cfg.buttonControls[roleId] || (cfg.buttonControls[roleId] = { enabled:true, label:'{label}', action:'original', style:'default', params:{} });
+            var control = cfg.buttonControls[roleId] || (cfg.buttonControls[roleId] = { enabled:true, label:'{label}', action:'original', style:'glass', params:{} });
             var item = el('div', null, 'mb-button-edit');
             item.appendChild(field('متن دکمه در تلگرام (' + role.label + ')', control.label || '{label}', function (value) { control.label = value; renderPreview(); }));
             var actionWrap = el('label', null, 'mb-field'); actionWrap.appendChild(el('span','عملکرد دکمه'));

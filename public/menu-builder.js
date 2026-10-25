@@ -334,8 +334,8 @@
   }
   function normalizePreviewText(value) {
     return String(value == null ? '' : value)
-      .replace(/\\r\\n/g, '\n').replace(/\\n/g, '\n')
-      .replace(/<br\\s*\\/?\s*>/gi, '\n').replace(/<\\/(?:p|div|li)>/gi, '\n')
+      .replace(/\r\n/g, '\n').replace(/\\n/g, '\n')
+      .replace(/<br\s*\/?\s*>/gi, '\n').replace(/<\/(?:p|div|li)>/gi, '\n')
       .replace(/<[^>]*>/g, '').replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&')
       .replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&quot;/gi, '"').replace(/&#39;/g, "'")
       .trim();

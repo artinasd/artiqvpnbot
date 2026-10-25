@@ -44,31 +44,52 @@
       if (!Array.isArray(state.draft.screens[id].buttons)) state.draft.screens[id].buttons = [];
     });
   }
+  function renderManagedButton(button, options) {
+    options = options || {};
+    if (!button.params || typeof button.params !== 'object') button.params = {};
+    var item = el('div', null, 'mb-button-edit');
+    item.appendChild(field(options.label || 'متن دکمه در تلگرام', button.label, function (v) { button.label = v; }));
+    var actionLabel = el('label', null, 'mb-field'); actionLabel.appendChild(el('span', 'عملکرد دکمه'));
+    var select = actionOptions(button.action); actionLabel.appendChild(select); item.appendChild(actionLabel);
+    select.addEventListener('change', function () { button.action = select.value; button.params = {}; render(); });
+    var styleLabel = el('label', null, 'mb-field'); styleLabel.appendChild(el('span', 'رنگ دکمه در تلگرام'));
+    var styleSelect = el('select');
+    [['default','پیش‌فرض'],['primary','آبی'],['success','سبز'],['danger','قرمز']].forEach(function (entry) {
+      var opt = el('option', entry[1]); opt.value = entry[0]; opt.selected = (button.style || 'default') === entry[0]; styleSelect.appendChild(opt);
+    });
+    styleSelect.addEventListener('change', function () { if (styleSelect.value === 'default') delete button.style; else button.style = styleSelect.value; renderPreview(); });
+    styleLabel.appendChild(styleSelect); item.appendChild(styleLabel);
+    if (button.action === 'navigate_menu') {
+      var menuField = el('label', null, 'mb-field'); menuField.appendChild(el('span', 'منوی مقصد'));
+      var menuSelect = el('select');
+      state.draft.menus.filter(function (m) { return !options.excludeMenuId || m.id !== options.excludeMenuId || m.id === button.params.menuId; }).forEach(function (m) {
+        var opt = el('option', m.name + ' (' + m.id + ')'); opt.value = m.id; opt.selected = m.id === button.params.menuId; menuSelect.appendChild(opt);
+      });
+      menuSelect.addEventListener('change', function () { button.params.menuId = menuSelect.value; });
+      menuField.appendChild(menuSelect); item.appendChild(menuField);
+    }
+    if (button.action === 'open_url') item.appendChild(field('لینک HTTPS', button.params.url, function (v) { button.params.url = v; }, 'https://example.com'));
+    return item;
+  }
   function renderScreenButtons(screenId, cfg) {
     var wrap = el('section', null, 'mb-row');
     wrap.appendChild(el('strong', 'دکمه‌های اضافی این منو', 'mb-screen-title'));
-    wrap.appendChild(el('p', 'این دکمه‌ها کنار دکمه‌های زندهٔ سرویس/پلن/اشتراک نمایش داده می‌شوند و عملکرد انتخابی‌شان اجرا می‌شود.', 'mb-description'));
+    wrap.appendChild(el('p', 'این دکمه‌ها کنار دکمه‌های زندهٔ سرویس/پلن/اشتراک نمایش داده می‌شوند و عملکرد انتخابی‌شان اجرا می‌شود. همان ویرایشگر دکمه‌های منوی اصلی برای تغییر متن، عملکرد، رنگ و ترتیب استفاده می‌شود.', 'mb-description'));
+    var rows = el('div', null, 'mb-rows');
     (cfg.buttons || []).forEach(function (button, index) {
-      var item = el('div', null, 'mb-button-edit');
-      item.appendChild(field('متن دکمه', button.label, function (v) { button.label = v; renderPreview(); }));
-      var actionLabel = el('label', null, 'mb-field'); actionLabel.appendChild(el('span', 'عملکرد دکمه'));
-      var select = actionOptions(button.action); actionLabel.appendChild(select); item.appendChild(actionLabel);
-      select.addEventListener('change', function () { button.action = select.value; button.params = {}; render(); });
-      var styleLabel = el('label', null, 'mb-field'); styleLabel.appendChild(el('span', 'رنگ دکمه'));
-      var styleSelect = el('select');
-      [['default','پیش‌فرض'],['primary','آبی'],['success','سبز'],['danger','قرمز']].forEach(function (entry) { var opt = el('option', entry[1]); opt.value = entry[0]; opt.selected = (button.style || 'default') === entry[0]; styleSelect.appendChild(opt); });
-      styleSelect.addEventListener('change', function () { if (styleSelect.value === 'default') delete button.style; else button.style = styleSelect.value; renderPreview(); });
-      styleLabel.appendChild(styleSelect); item.appendChild(styleLabel);
-      if (button.action === 'navigate_menu') {
-        var menuField = el('label', null, 'mb-field'); menuField.appendChild(el('span', 'منوی مقصد'));
-        var menuSelect = el('select');
-        state.draft.menus.forEach(function (m) { var opt = el('option', m.name + ' (' + m.id + ')'); opt.value = m.id; opt.selected = m.id === (button.params || {}).menuId; menuSelect.appendChild(opt); });
-        menuSelect.addEventListener('change', function () { button.params.menuId = menuSelect.value; }); menuField.appendChild(menuSelect); item.appendChild(menuField);
-      }
-      if (button.action === 'open_url') item.appendChild(field('لینک HTTPS', (button.params || {}).url, function (v) { button.params.url = v; }, 'https://example.com'));
-      item.appendChild(btn('حذف دکمه', 'mb-danger', function () { cfg.buttons.splice(index, 1); render(); }));
-      wrap.appendChild(item);
+      var rowCard = el('section', null, 'mb-row');
+      var rowHead = el('div', null, 'mb-row-head');
+      rowHead.appendChild(el('strong', 'دکمه ' + (index + 1)));
+      rowHead.appendChild(btn('↑', 'mb-icon-button', function () { if (index > 0) { cfg.buttons.splice(index, 1); cfg.buttons.splice(index - 1, 0, button); render(); } }));
+      rowHead.appendChild(btn('↓', 'mb-icon-button', function () { if (index < cfg.buttons.length - 1) { cfg.buttons.splice(index, 1); cfg.buttons.splice(index + 1, 0, button); render(); } }));
+      rowHead.appendChild(btn('حذف دکمه', 'mb-danger', function () { cfg.buttons.splice(index, 1); render(); }));
+      rowCard.appendChild(rowHead);
+      var grid = el('div', null, 'mb-button-edit-grid');
+      grid.appendChild(renderManagedButton(button));
+      rowCard.appendChild(grid);
+      rows.appendChild(rowCard);
     });
+    wrap.appendChild(rows);
     wrap.appendChild(btn('+ افزودن دکمه', 'mb-secondary', function () {
       if (cfg.buttons.length >= 20) return showStatus('برای هر منو حداکثر ۲۰ دکمهٔ اضافی مجاز است.', false);
       cfg.buttons.push({ id: 'screen_button_' + Math.random().toString(36).slice(2, 7), label: 'دکمه جدید', action: 'back_home', params: {} }); render();
@@ -313,23 +334,7 @@
       rowCard.appendChild(rowHead);
       var buttons = el('div', null, 'mb-button-edit-grid');
       row.buttons.forEach(function (button, buttonIndex) {
-        var item = el('div', null, 'mb-button-edit');
-        item.appendChild(field('متن دکمه در تلگرام', button.label, function (v) { button.label = v; }));
-        var actionLabel = el('label', null, 'mb-field'); actionLabel.appendChild(el('span', 'عملکرد دکمه'));
-        var select = actionOptions(button.action); actionLabel.appendChild(select); item.appendChild(actionLabel);
-        select.addEventListener('change', function () { button.action = select.value; button.params = {}; render(); });
-        var styleLabel = el('label', null, 'mb-field'); styleLabel.appendChild(el('span', 'رنگ بومی دکمه در تلگرام'));
-        var styleSelect = el('select');
-        [['default','پیش‌فرض'],['primary','آبی'],['success','سبز'],['danger','قرمز']].forEach(function (entry) { var opt = el('option', entry[1]); opt.value = entry[0]; opt.selected = (button.style || 'default') === entry[0]; styleSelect.appendChild(opt); });
-        styleSelect.addEventListener('change', function () { if (styleSelect.value === 'default') delete button.style; else button.style = styleSelect.value; renderPreview(); });
-        styleLabel.appendChild(styleSelect); item.appendChild(styleLabel);
-        if (button.action === 'navigate_menu') {
-          var menuField = el('label', null, 'mb-field'); menuField.appendChild(el('span', 'منوی مقصد'));
-          var menuSelect = el('select');
-          state.draft.menus.filter(function (m) { return m.id !== selected.id || m.id === button.params.menuId; }).forEach(function (m) { var opt = el('option', m.name + ' (' + m.id + ')'); opt.value = m.id; opt.selected = m.id === button.params.menuId; menuSelect.appendChild(opt); });
-          menuSelect.addEventListener('change', function () { button.params.menuId = menuSelect.value; }); menuField.appendChild(menuSelect); item.appendChild(menuField);
-        }
-        if (button.action === 'open_url') item.appendChild(field('لینک HTTPS', button.params.url, function (v) { button.params.url = v; }, 'https://example.com'));
+        var item = renderManagedButton(button, { excludeMenuId: selected.id });
         var controls = el('div', null, 'mb-item-controls');
         controls.appendChild(btn('←', 'mb-icon-button', function () { if (buttonIndex > 0) { row.buttons.splice(buttonIndex, 1); row.buttons.splice(buttonIndex - 1, 0, button); render(); } }));
         controls.appendChild(btn('→', 'mb-icon-button', function () { if (buttonIndex < row.buttons.length - 1) { row.buttons.splice(buttonIndex, 1); row.buttons.splice(buttonIndex + 1, 0, button); render(); } }));

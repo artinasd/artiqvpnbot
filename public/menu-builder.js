@@ -187,106 +187,90 @@
         }));
         controls.appendChild(rowLayoutWrap);
       }
-      if (['service_test','service_buy','service_renew','plans_buy','plans_renew'].indexOf(id) !== -1) {
-        var styleWrap = el('label', null, 'mb-field'); styleWrap.appendChild(el('span', 'رنگ دکمه در تلگرام'));
-        var styleSelect = el('select');
-        [['default','پیش‌فرض'],['primary','آبی'],['success','سبز'],['danger','قرمز']].forEach(function (entry) { var opt = el('option', entry[1]); opt.value = entry[0]; opt.selected = (cfg.buttonStyle || (id === 'service_test' || id === 'service_renew' || id === 'plans_renew' ? 'success' : 'primary')) === entry[0]; styleSelect.appendChild(opt); });
-        styleSelect.addEventListener('change', function () { cfg.buttonStyle = styleSelect.value; renderPreview(); });
-        styleWrap.appendChild(styleSelect); controls.appendChild(styleWrap);
-      }
-      var msgWrap = el('label', null, 'mb-field'); msgWrap.appendChild(el('span', 'قالب متن پیام'));
-      var msg = el('textarea'); msg.rows = 4; msg.value = cfg.messageTemplate != null && String(cfg.messageTemplate) !== '' ? String(cfg.messageTemplate) : defaultScreenMessageTemplate(id); msg.placeholder = '{service}\n\n{prompt}'; msg.addEventListener('input', function () { cfg.messageTemplate = msg.value; renderPreview(); });
-      msgWrap.appendChild(msg); controls.appendChild(msgWrap);
-      if (id !== 'account_remove') {
-        var homeWrap = el('label', null, 'mb-check-field'); var home = el('input'); home.type = 'checkbox'; home.checked = cfg.homeButton !== false;
-        home.addEventListener('change', function () { cfg.homeButton = home.checked; renderPreview(); }); homeWrap.appendChild(home); homeWrap.appendChild(el('span', 'نمایش دکمه منوی اصلی')); controls.appendChild(homeWrap);
-      }
-      if (id === 'plans_buy') {
-        var customWrap = el('label', null, 'mb-check-field'); var custom = el('input'); custom.type = 'checkbox'; custom.checked = cfg.customPlanButton !== false;
-        custom.addEventListener('change', function () { cfg.customPlanButton = custom.checked; renderPreview(); }); customWrap.appendChild(custom); customWrap.appendChild(el('span', 'نمایش دکمه ساخت بسته دلخواه')); controls.appendChild(customWrap);
-        var customLabel = field('متن دکمه بسته دلخواه', cfg.customPlanLabel, function (v) { cfg.customPlanLabel = v; }); controls.appendChild(customLabel);
-      }
-      if (id === 'account_list') {
-        controls.appendChild(field('متن دکمه اشتراک (از {title} استفاده کنید)', cfg.detailLabel, function (v) { cfg.detailLabel = v; }));
-        controls.appendChild(field('متن دکمه تمدید', cfg.renewLabel, function (v) { cfg.renewLabel = v; }));
-        controls.appendChild(field('متن دکمه حذف', cfg.removeLabel, function (v) { cfg.removeLabel = v; }));
-      }
-      if (id === 'account_detail') {
-        controls.appendChild(field('متن دکمه باز کردن لینک', cfg.openLabel, function (v) { cfg.openLabel = v; }));
-        controls.appendChild(field('متن دکمه کپی لینک', cfg.copyLabel, function (v) { cfg.copyLabel = v; }));
-        controls.appendChild(field('متن دکمه تمدید', cfg.renewLabel, function (v) { cfg.renewLabel = v; }));
-        controls.appendChild(field('متن دکمه بازگشت', cfg.backLabel, function (v) { cfg.backLabel = v; }));
-      }
-      if (id === 'account_remove') {
-        controls.appendChild(field('متن دکمه تأیید حذف', cfg.confirmLabel, function (v) { cfg.confirmLabel = v; }));
-        controls.appendChild(field('متن دکمه انصراف', cfg.cancelLabel, function (v) { cfg.cancelLabel = v; }));
-      }
-      if (['service_test','service_buy','service_renew','plans_buy','plans_renew'].indexOf(id) !== -1) {
-        if (!cfg.buttonControls || typeof cfg.buttonControls !== 'object') cfg.buttonControls = {};
-        var groups = [
-          { id: 'services', label: 'دکمه‌های سرویس زنده' },
-          { id: 'plans', label: 'دکمه‌های پلن زنده' }
-        ];
-        if (id === 'plans_buy') groups.push({ id: 'custom_plan', label: 'دکمه ساخت بسته دلخواه' });
-        var builtInWrap = el('section', null, 'mb-row');
-        builtInWrap.appendChild(el('strong', 'کنترل دکمه‌های موجود', 'mb-screen-title'));
-        builtInWrap.appendChild(el('p', 'برای هر گروه می‌توانید نمایش، متن، رنگ و عملکرد را تغییر دهید. از {label} در متن استفاده کنید تا متن اصلی هر سرویس یا پلن حفظ شود. «عملکرد اصلی» نگه‌داشتن callback شناسه‌دار ربات است.', 'mb-description'));
-        groups.forEach(function (group) {
-          var control = cfg.buttonControls[group.id] || (cfg.buttonControls[group.id] = { enabled: true, label: '{label}', action: 'original', style: 'default', params: {} });
-          var card = el('div', null, 'mb-button-edit');
-          var enabledWrap = el('label', null, 'mb-check-field'); var enabled = el('input'); enabled.type = 'checkbox'; enabled.checked = control.enabled !== false;
-          enabled.addEventListener('change', function () { control.enabled = enabled.checked; renderPreview(); });
-          enabledWrap.appendChild(enabled); enabledWrap.appendChild(el('span', 'نمایش ' + group.label)); card.appendChild(enabledWrap);
-          card.appendChild(field('الگوی متن (' + group.label + ')', control.label || '{label}', function (v) { control.label = v; }));
-          var actionWrap = el('label', null, 'mb-field'); actionWrap.appendChild(el('span', 'عملکرد'));
-          var actionSelect = el('select');
-          [['original','عملکرد اصلی ربات']].concat(Object.keys(state.actions).map(function (key) { return [key, state.actions[key].label]; })).forEach(function (entry) {
-            var opt = el('option', entry[1]); opt.value = entry[0]; opt.selected = (control.action || 'original') === entry[0]; actionSelect.appendChild(opt);
-          });
-          actionSelect.addEventListener('change', function () { control.action = actionSelect.value; control.params = {}; render(); });
-          actionWrap.appendChild(actionSelect); card.appendChild(actionWrap);
-          var styleWrap = el('label', null, 'mb-field'); styleWrap.appendChild(el('span', 'رنگ'));
-          var styleSelect = el('select');
-          [['default','پیش‌فرض'],['primary','آبی'],['success','سبز'],['danger','قرمز']].forEach(function (entry) { var opt = el('option', entry[1]); opt.value = entry[0]; opt.selected = (control.style || 'default') === entry[0]; styleSelect.appendChild(opt); });
-          styleSelect.addEventListener('change', function () { control.style = styleSelect.value; renderPreview(); });
-          styleWrap.appendChild(styleSelect); card.appendChild(styleWrap);
-          if (control.action === 'navigate_menu') {
-            var targetWrap = el('label', null, 'mb-field'); targetWrap.appendChild(el('span', 'منوی مقصد'));
-            var targetSelect = el('select');
-            state.draft.menus.forEach(function (m) { var opt = el('option', m.name + ' (' + m.id + ')'); opt.value = m.id; opt.selected = m.id === (control.params || {}).menuId; targetSelect.appendChild(opt); });
-            targetSelect.addEventListener('change', function () { control.params.menuId = targetSelect.value; });
-            targetWrap.appendChild(targetSelect); card.appendChild(targetWrap);
-          }
-          if (control.action === 'open_url') card.appendChild(field('لینک HTTPS', (control.params || {}).url, function (v) { control.params.url = v; }, 'https://example.com'));
-          builtInWrap.appendChild(card);
-        });
-        section.appendChild(builtInWrap);
-      }
-      var roleGroups = {
+      var managedRoleGroups = {
+        service_test: [{id:'services',label:'سرویس‌های اکانت تست'}],
+        service_buy: [{id:'services',label:'سرویس‌های خرید'}],
+        service_renew: [{id:'services',label:'سرویس‌های تمدید'}],
+        plans_buy: [{id:'plans',label:'پلن‌های خرید'},{id:'custom_plan',label:'ساخت بسته دلخواه'}],
+        plans_renew: [{id:'plans',label:'پلن‌های تمدید'}],
         account_list: [{id:'subscription_detail',label:'باز کردن جزئیات اشتراک'},{id:'subscription_renew',label:'تمدید اشتراک'},{id:'subscription_remove',label:'حذف اشتراک'},{id:'home',label:'منوی اصلی'}],
         account_detail: [{id:'open_link',label:'باز کردن لینک اشتراک'},{id:'copy_link',label:'کپی لینک اشتراک'},{id:'renew_subscription',label:'تمدید اشتراک'},{id:'back_to_list',label:'بازگشت به فهرست'},{id:'home',label:'منوی اصلی'}],
-        account_remove: [{id:'confirm_remove',label:'تأیید حذف'},{id:'cancel_remove',label:'انصراف از حذف'}]
+        account_remove: [{id:'confirm_remove',label:'تأیید حذف'},{id:'cancel_remove',label:'انصراف از حذف'}],
+        wallet: [{id:'home',label:'منوی اصلی'}],
+        support: [{id:'home',label:'منوی اصلی'}]
       };
-      if (roleGroups[id]) {
+      var roleDefs = managedRoleGroups[id] || [];
+      if (roleDefs.length) {
         if (!cfg.buttonControls || typeof cfg.buttonControls !== 'object') cfg.buttonControls = {};
+        if (!Array.isArray(cfg.buttonRows) || !cfg.buttonRows.length) {
+          cfg.buttonRows = [];
+          roleDefs.forEach(function (role) {
+            var existing = cfg.buttonControls[role.id];
+            if (existing && existing.enabled === false) return;
+            cfg.buttonRows.push({ id: 'managed_row_' + role.id, roles: [role.id] });
+          });
+          if (id === 'account_detail' && cfg.buttonRows.length) {
+            cfg.buttonRows = [
+              { id:'managed_row_links', roles:['open_link','copy_link'] },
+              { id:'managed_row_renew', roles:['renew_subscription'] },
+              { id:'managed_row_back', roles:['back_to_list'] },
+              { id:'managed_row_home', roles:['home'] }
+            ].filter(function (row) { return row.roles.some(function (roleId) { return roleDefs.some(function (role) { return role.id === roleId; }); }); });
+          }
+        }
         var rolesWrap = el('section', null, 'mb-row');
-        rolesWrap.appendChild(el('strong', 'کنترل جداگانه دکمه‌های موجود', 'mb-screen-title'));
-        rolesWrap.appendChild(el('p', 'هر دکمه را مستقل پنهان کنید، متن و رنگش را عوض کنید یا عملکردش را تغییر دهید. برای حفظ شناسه اشتراک و عملکرد اصلی، «عملکرد اصلی ربات» را انتخاب کنید.', 'mb-description'));
-        roleGroups[id].forEach(function (role) {
-          var c = cfg.buttonControls[role.id] || (cfg.buttonControls[role.id] = { enabled: true, label: '{label}', action: 'original', style: 'default', params: {} });
-          var item = el('div', null, 'mb-button-edit'), showWrap = el('label', null, 'mb-check-field'), show = el('input'); show.type = 'checkbox'; show.checked = c.enabled !== false;
-          show.addEventListener('change', function () { c.enabled = show.checked; renderPreview(); }); showWrap.appendChild(show); showWrap.appendChild(el('span', 'نمایش ' + role.label)); item.appendChild(showWrap);
-          item.appendChild(field('الگوی متن (' + role.label + ')', c.label || '{label}', function (v) { c.label = v; }));
-          var aw = el('label', null, 'mb-field'); aw.appendChild(el('span', 'عملکرد')); var as = el('select');
-          [['original','عملکرد اصلی ربات']].concat(Object.keys(state.actions).map(function (k) { return [k,state.actions[k].label]; })).forEach(function (x) { var o = el('option',x[1]); o.value=x[0]; o.selected=(c.action||'original')===x[0]; as.appendChild(o); });
-          as.addEventListener('change',function(){c.action=as.value;c.params={};render();}); aw.appendChild(as); item.appendChild(aw);
-          var sw=el('label',null,'mb-field'); sw.appendChild(el('span','رنگ')); var ss=el('select');
-          [['default','پیش‌فرض'],['primary','آبی'],['success','سبز'],['danger','قرمز']].forEach(function(x){var o=el('option',x[1]);o.value=x[0];o.selected=(c.style||'default')===x[0];ss.appendChild(o);});
-          ss.addEventListener('change',function(){c.style=ss.value;renderPreview();});sw.appendChild(ss);item.appendChild(sw);
-          if(c.action==='navigate_menu'){var tw=el('label',null,'mb-field');tw.appendChild(el('span','منوی مقصد'));var ts=el('select');state.draft.menus.forEach(function(m){var o=el('option',m.name+' ('+m.id+')');o.value=m.id;o.selected=m.id===(c.params||{}).menuId;ts.appendChild(o);});ts.addEventListener('change',function(){c.params.menuId=ts.value;});tw.appendChild(ts);item.appendChild(tw);}
-          if(c.action==='open_url')item.appendChild(field('لینک HTTPS',(c.params||{}).url,function(v){c.params.url=v;},'https://example.com'));
-          rolesWrap.appendChild(item);
+        rolesWrap.appendChild(el('strong', 'چیدمان و کنترل دکمه‌های موجود', 'mb-screen-title'));
+        rolesWrap.appendChild(el('p', 'دکمه‌های موجود را مانند منوی اصلی در ردیف‌ها بچینید. برای دکمه‌های وابسته به شناسه اشتراک یا سرویس، عملکرد اصلی قفل است تا لینک، تمدید، حذف و callback امن باقی بماند؛ متن، رنگ و جایگاه قابل تنظیم است.', 'mb-description'));
+        function roleDef(roleId) { return roleDefs.find(function (role) { return role.id === roleId; }); }
+        function roleLabel(roleId) { var role = roleDef(roleId); return role ? role.label : roleId; }
+        function availableRoles() {
+          var used = [];
+          cfg.buttonRows.forEach(function (row) { (row.roles || []).forEach(function (roleId) { if (used.indexOf(roleId) < 0) used.push(roleId); }); });
+          return roleDefs.filter(function (role) { return used.indexOf(role.id) < 0; });
+        }
+        var managedRows = el('div', null, 'mb-rows');
+        cfg.buttonRows.forEach(function (row, rowIndex) {
+          if (!Array.isArray(row.roles)) row.roles = [];
+          var rowCard = el('section', null, 'mb-row');
+          var rowHead = el('div', null, 'mb-row-head');
+          rowHead.appendChild(el('strong', 'ردیف ' + (rowIndex + 1)));
+          rowHead.appendChild(btn('↑', 'mb-icon-button', function () { if (rowIndex > 0) { var temp = cfg.buttonRows[rowIndex-1]; cfg.buttonRows[rowIndex-1] = row; cfg.buttonRows[rowIndex] = temp; render(); } }));
+          rowHead.appendChild(btn('↓', 'mb-icon-button', function () { if (rowIndex < cfg.buttonRows.length-1) { var temp = cfg.buttonRows[rowIndex+1]; cfg.buttonRows[rowIndex+1] = row; cfg.buttonRows[rowIndex] = temp; render(); } }));
+          rowHead.appendChild(btn('حذف ردیف', 'mb-danger', function () { cfg.buttonRows.splice(rowIndex,1); render(); }));
+          rowCard.appendChild(rowHead);
+          var grid = el('div', null, 'mb-button-edit-grid');
+          row.roles.forEach(function (roleId, buttonIndex) {
+            var role = roleDef(roleId); if (!role) return;
+            var control = cfg.buttonControls[roleId] || (cfg.buttonControls[roleId] = { enabled:true, label:'{label}', action:'original', style:'default', params:{} });
+            var item = el('div', null, 'mb-button-edit');
+            item.appendChild(field('متن دکمه در تلگرام (' + role.label + ')', control.label || '{label}', function (value) { control.label = value; renderPreview(); }));
+            var actionWrap = el('label', null, 'mb-field'); actionWrap.appendChild(el('span','عملکرد دکمه'));
+            var actionSelect = el('select');
+            var originalOpt = el('option','عملکرد اصلی ربات'); originalOpt.value = 'original'; originalOpt.selected = true; actionSelect.appendChild(originalOpt);
+            actionSelect.disabled = true; actionSelect.title = 'برای حفظ شناسه‌های زنده، عملکرد این دکمه قابل تغییر نیست.';
+            actionWrap.appendChild(actionSelect); item.appendChild(actionWrap);
+            var styleWrap = el('label', null, 'mb-field'); styleWrap.appendChild(el('span','رنگ دکمه در تلگرام'));
+            var styleSelect = el('select');
+            [['default','پیش‌فرض'],['primary','آبی'],['success','سبز'],['danger','قرمز']].forEach(function (entry) { var option = el('option',entry[1]); option.value=entry[0]; option.selected=(control.style||'default')===entry[0]; styleSelect.appendChild(option); });
+            styleSelect.addEventListener('change',function(){control.style=styleSelect.value;renderPreview();});
+            styleWrap.appendChild(styleSelect); item.appendChild(styleWrap);
+            var itemControls = el('div',null,'mb-item-controls');
+            itemControls.appendChild(btn('←','mb-icon-button',function(){if(buttonIndex>0){var value=row.roles[buttonIndex-1];row.roles[buttonIndex-1]=roleId;row.roles[buttonIndex]=value;render();}}));
+            itemControls.appendChild(btn('→','mb-icon-button',function(){if(buttonIndex<row.roles.length-1){var value=row.roles[buttonIndex+1];row.roles[buttonIndex+1]=roleId;row.roles[buttonIndex]=value;render();}}));
+            itemControls.appendChild(btn('حذف دکمه','mb-danger',function(){row.roles.splice(buttonIndex,1);control.enabled=false;render();}));
+            item.appendChild(itemControls); grid.appendChild(item);
+          });
+          rowCard.appendChild(grid);
+          rowCard.appendChild(btn('+ افزودن دکمه به این ردیف','mb-secondary',function(){
+            var choices=availableRoles(); if(!choices.length)return showStatus('همه دکمه‌های موجود در ردیف‌ها قرار گرفته‌اند.',false);
+            var selectedRole=choices[0];
+            if(choices.length>1){var promptText=choices.map(function(role,index){return (index+1)+'. '+role.label;}).join('\n');var answer=window.prompt('شماره دکمه برای افزودن به این ردیف:\n'+promptText,'1');if(answer===null)return;var choiceIndex=Number(answer)-1;if(!Number.isInteger(choiceIndex)||choiceIndex<0||choiceIndex>=choices.length)return showStatus('انتخاب نامعتبر است.',false);selectedRole=choices[choiceIndex];}
+            row.roles.push(selectedRole.id); var control=cfg.buttonControls[selectedRole.id]||(cfg.buttonControls[selectedRole.id]={enabled:true,label:'{label}',action:'original',style:'default',params:{}});control.enabled=true;render();
+          }));
+          managedRows.appendChild(rowCard);
         });
+        rolesWrap.appendChild(managedRows);
+        rolesWrap.appendChild(btn('+ افزودن ردیف', 'mb-secondary', function () { cfg.buttonRows.push({id:'managed_row_'+Math.random().toString(36).slice(2,7),roles:[]}); render(); }));
         section.appendChild(rolesWrap);
       }
       section.appendChild(controls); section.appendChild(renderScreenButtons(id, cfg)); details.appendChild(section);

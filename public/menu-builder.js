@@ -500,7 +500,7 @@
             var roles = Array.isArray(layoutRow.roles) ? layoutRow.roles : [];
             var selected = sourceRow.filter(function (item) { return item.role && roles.indexOf(item.role) !== -1 && assigned.indexOf(item) === -1; });
             selected.forEach(function (item) { assigned.push(item); });
-            if (selected.length) rows.push(selected.map(function (item) { return item.button; });
+            if (selected.length) rows.push(selected.map(function (item) { return item.button; }));
           });
           var leftovers = sourceRow.filter(function (item) { return !item.role && assigned.indexOf(item) === -1; });
           if (leftovers.length) rows.push(leftovers.map(function (item) { return item.button; }));

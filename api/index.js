@@ -1,7 +1,7 @@
 const { Telegraf, Markup } = require('telegraf');
 const { calculateCustomPrice, parseDurationDays, buildCustomPlan } = require('../lib/plans');
 const planStore = require('../lib/plan-store');
-const { getConfiguredServiceWithPanels, serviceLabel, serviceButtonsWithPanels } = require('../lib/services');
+const { getConfiguredServiceWithPanels, serviceName, serviceLabel, serviceButtonsWithPanels } = require('../lib/services');
 const { normalizeSubscriptionName } = require('../lib/username');
 const storage = require('../lib/storage');
 const wallet = require('../lib/wallet');
@@ -137,15 +137,18 @@ async function sendPlanMenu(ctx, mode = 'buy', serviceId = 'tunnel') {
   const service = await getConfiguredServiceWithPanels(serviceId, config);
   if (!service) return ctx.reply(await getMessage('invalidService'));
   const plans = service.panelId ? await planStore.listActiveByPanel(service.panelId) : await planStore.listActiveByService(service.id);
-  if (!plans.length && mode !== 'buy') return ctx.reply(await getMessage('noPlans', { service_name: serviceLabel(service) }));
+  const displayServiceName = serviceName(service);
+  if (!plans.length && mode !== 'buy') return ctx.reply(await getMessage('noPlans', { service_name: displayServiceName }));
   const screenId = mode === 'renew' ? 'plans_renew' : 'plans_buy';
   const screen = await getPublishedScreen(screenId) || {};
   const buttons = plans.map((plan) => [Markup.button.callback(`${plan.buttonText || plan.name} - ${Number(plan.price).toLocaleString('en-US')} ${config.payment?.currency || plan.currency || 'تومان'}`, `${mode === 'renew' ? 'renew_plan_' : 'select_plan_'}${plan.id}`)]);
   if (mode === 'buy' && screen.customPlanButton !== false) buttons.push([Markup.button.callback(String(screen.customPlanLabel || '🛠 ساخت بسته دلخواه (حجم و زمان)'), `select_custom_${service.id}`)]);
   if (!buttons.length) return ctx.reply(await getMessage('noPlans', { service_name: serviceLabel(service) }));
   const prompt = await getMessage('planPrompt');
-  const fallbackText = `${mode === 'renew' ? '🔄' : '📋'} ${serviceLabel(service)}\\n\\n${prompt}`;
-  const messageText = await formatScreenMessage(screenId, fallbackText, { service: serviceLabel(service), prompt, mode: mode === 'renew' ? 'تمدید' : 'خرید', title: serviceLabel(service) });
+  const fallbackText = `${mode === 'renew' ? '🔄' : '📋'} ${displayServiceName}\\n\\n${prompt}`;
+  // {service} is the exact CMS-defined service name. Keep emoji decoration out of the
+  // placeholder so custom message templates don't inherit an unexpected prefix.
+  const messageText = await formatScreenMessage(screenId, fallbackText, { service: displayServiceName, prompt, mode: mode === 'renew' ? 'تمدید' : 'خرید', title: displayServiceName });
   const rows = await arrangeScreenRows(screenId, buttons);
   await ctx.reply(messageText, Markup.inlineKeyboard(rows));
 }

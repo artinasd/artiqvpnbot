@@ -145,7 +145,7 @@ async function sendPlanMenu(ctx, mode = 'buy', serviceId = 'tunnel') {
   if (mode === 'buy' && screen.customPlanButton !== false) buttons.push([Markup.button.callback(String(screen.customPlanLabel || '🛠 ساخت بسته دلخواه (حجم و زمان)'), `select_custom_${service.id}`)]);
   if (!buttons.length) return ctx.reply(await getMessage('noPlans', { service_name: displayServiceName }));
   const prompt = await getMessage('planPrompt');
-  const fallbackText = `${mode === 'renew' ? '🔄' : '📋'} ${displayServiceName}\\n\\n${prompt}`;
+  const fallbackText = `${displayServiceName}\\n\\n${prompt}`;
   // {service} is the exact CMS-defined service name. Keep emoji decoration out of the
   // placeholder so custom message templates don't inherit an unexpected prefix.
   const messageText = await formatScreenMessage(screenId, fallbackText, { service: displayServiceName, prompt, mode: mode === 'renew' ? 'تمدید' : 'خرید', title: displayServiceName });

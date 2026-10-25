@@ -75,6 +75,22 @@
     }));
     return wrap;
   }
+  function defaultScreenMessageTemplate(id) {
+    var botTexts = state.botTexts || {};
+    var defaults = {
+      service_test: botTexts.serviceSelectionTest || '🎁 سرویس مورد نظر برای اکانت تست را انتخاب کنید:',
+      service_buy: botTexts.serviceSelectionBuy || '🛒 ابتدا سرویس مورد نظر را انتخاب کنید:',
+      service_renew: botTexts.serviceSelectionRenew || 'سرویس مورد نظر را برای تمدید انتخاب کنید:',
+      plans_buy: '{service}\n\n' + (botTexts.planPrompt || 'لطفاً بسته مورد نظر را انتخاب کنید:'),
+      plans_renew: '{service}\n\n' + (botTexts.planPrompt || 'لطفاً بسته مورد نظر را انتخاب کنید:'),
+      account_list: 'اشتراک موردنظر را انتخاب کنید:',
+      account_detail: '📦 اشتراک ۱۰ گیگ\nوضعیت: فعال',
+      account_remove: 'آیا از حذف این اشتراک مطمئن هستید؟',
+      wallet: 'موجودی فعلی: ۰ تومان\nمبلغ شارژ را وارد کنید.',
+      support: botTexts.support || 'برای دریافت پشتیبانی با ما در ارتباط باشید.'
+    };
+    return Object.prototype.hasOwnProperty.call(defaults, id) ? String(defaults[id] == null ? '' : defaults[id]) : '';
+  }
   function renderDynamicScreens(selectedScreen) {
     ensureScreens();
     var details = el('details', null, 'mb-dynamic-settings');
@@ -121,7 +137,7 @@
         styleWrap.appendChild(styleSelect); controls.appendChild(styleWrap);
       }
       var msgWrap = el('label', null, 'mb-field'); msgWrap.appendChild(el('span', 'قالب متن پیام'));
-      var msg = el('textarea'); msg.rows = 2; msg.value = cfg.messageTemplate || ''; msg.placeholder = '{service}\n\n{prompt}'; msg.addEventListener('input', function () { cfg.messageTemplate = msg.value; renderPreview(); });
+      var msg = el('textarea'); msg.rows = 4; msg.value = cfg.messageTemplate != null && String(cfg.messageTemplate) !== '' ? String(cfg.messageTemplate) : defaultScreenMessageTemplate(id); msg.placeholder = '{service}\n\n{prompt}'; msg.addEventListener('input', function () { cfg.messageTemplate = msg.value; renderPreview(); });
       msgWrap.appendChild(msg); controls.appendChild(msgWrap);
       if (id !== 'account_remove') {
         var homeWrap = el('label', null, 'mb-check-field'); var home = el('input'); home.type = 'checkbox'; home.checked = cfg.homeButton !== false;

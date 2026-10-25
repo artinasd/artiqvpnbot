@@ -213,7 +213,7 @@
               { id:'managed_row_renew', roles:['renew_subscription'] },
               { id:'managed_row_back', roles:['back_to_list'] },
               { id:'managed_row_home', roles:['home'] }
-            ].filter(function (row) { return row.roles.some(function (roleId) { return roleDefs.some(function (role) { return role.id === roleId; }); }); });
+            ].filter(function (row) { return row.roles.some(function (roleId) { return roleDefs.some(function (role) { return role.id === roleId; }) && !(cfg.buttonControls[roleId] && cfg.buttonControls[roleId].enabled === false) && !(roleId === 'home' && cfg.homeButton === false); }); });
           }
         }
         var rolesWrap = el('section', null, 'mb-row');

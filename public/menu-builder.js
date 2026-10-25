@@ -91,26 +91,26 @@
         var colWrap = el('label', null, 'mb-field'); colWrap.appendChild(el('span', 'تعداد دکمه در هر ردیف'));
         var colSelect = el('select');
         [1,2,3,4].forEach(function (n) { var opt = el('option', String(n)); opt.value = String(n); opt.selected = Number(cfg.columns || 1) === n; colSelect.appendChild(opt); });
-        colSelect.addEventListener('change', function () { cfg.columns = Number(colSelect.value); });
+        colSelect.addEventListener('change', function () { cfg.columns = Number(colSelect.value); renderPreview(); });
         colWrap.appendChild(colSelect); controls.appendChild(colWrap);
       }
       if (['service_test','service_buy','service_renew','plans_buy','plans_renew'].indexOf(id) !== -1) {
         var styleWrap = el('label', null, 'mb-field'); styleWrap.appendChild(el('span', 'رنگ دکمه در تلگرام'));
         var styleSelect = el('select');
         [['default','پیش‌فرض'],['primary','آبی'],['success','سبز'],['danger','قرمز']].forEach(function (entry) { var opt = el('option', entry[1]); opt.value = entry[0]; opt.selected = (cfg.buttonStyle || (id === 'service_test' || id === 'service_renew' || id === 'plans_renew' ? 'success' : 'primary')) === entry[0]; styleSelect.appendChild(opt); });
-        styleSelect.addEventListener('change', function () { cfg.buttonStyle = styleSelect.value; });
+        styleSelect.addEventListener('change', function () { cfg.buttonStyle = styleSelect.value; renderPreview(); });
         styleWrap.appendChild(styleSelect); controls.appendChild(styleWrap);
       }
       var msgWrap = el('label', null, 'mb-field'); msgWrap.appendChild(el('span', 'قالب متن پیام'));
-      var msg = el('textarea'); msg.rows = 2; msg.value = cfg.messageTemplate || ''; msg.placeholder = '{service}\\n\\n{prompt}'; msg.addEventListener('input', function () { cfg.messageTemplate = msg.value; });
+      var msg = el('textarea'); msg.rows = 2; msg.value = cfg.messageTemplate || ''; msg.placeholder = '{service}\\n\\n{prompt}'; msg.addEventListener('input', function () { cfg.messageTemplate = msg.value; renderPreview(); });
       msgWrap.appendChild(msg); controls.appendChild(msgWrap);
       if (id !== 'account_remove') {
         var homeWrap = el('label', null, 'mb-check-field'); var home = el('input'); home.type = 'checkbox'; home.checked = cfg.homeButton !== false;
-        home.addEventListener('change', function () { cfg.homeButton = home.checked; }); homeWrap.appendChild(home); homeWrap.appendChild(el('span', 'نمایش دکمه منوی اصلی')); controls.appendChild(homeWrap);
+        home.addEventListener('change', function () { cfg.homeButton = home.checked; renderPreview(); }); homeWrap.appendChild(home); homeWrap.appendChild(el('span', 'نمایش دکمه منوی اصلی')); controls.appendChild(homeWrap);
       }
       if (id === 'plans_buy') {
         var customWrap = el('label', null, 'mb-check-field'); var custom = el('input'); custom.type = 'checkbox'; custom.checked = cfg.customPlanButton !== false;
-        custom.addEventListener('change', function () { cfg.customPlanButton = custom.checked; }); customWrap.appendChild(custom); customWrap.appendChild(el('span', 'نمایش دکمه ساخت بسته دلخواه')); controls.appendChild(customWrap);
+        custom.addEventListener('change', function () { cfg.customPlanButton = custom.checked; renderPreview(); }); customWrap.appendChild(custom); customWrap.appendChild(el('span', 'نمایش دکمه ساخت بسته دلخواه')); controls.appendChild(customWrap);
         var customLabel = field('متن دکمه بسته دلخواه', cfg.customPlanLabel, function (v) { cfg.customPlanLabel = v; }); controls.appendChild(customLabel);
       }
       if (id === 'account_list') {
@@ -229,8 +229,8 @@
     select.appendChild(screenGroup);
     select.addEventListener('change', function () {
       var value = select.value.split(':');
-      if (value[0] === 'screen') { state.editorMode = 'screen'; state.selectedScreen = value.slice(1).join(':'); }
-      else { state.editorMode = 'menu'; state.selectedMenu = value.slice(1).join(':'); }
+      if (value[0] === 'screen') { state.editorMode = 'screen'; state.selectedScreen = value.slice(1).join(':'); state.previewScreen = state.selectedScreen; }
+      else { state.editorMode = 'menu'; state.selectedMenu = value.slice(1).join(':'); state.previewScreen = 'menu'; }
       render();
     });
     return select;
@@ -238,7 +238,7 @@
   function addMenu() {
     var id = 'menu_' + Math.random().toString(36).slice(2, 7);
     state.draft.menus.push({ id: id, name: 'منوی جدید', text: 'لطفاً یکی از گزینه‌ها را انتخاب کنید:', rows: [{ id: 'row_1', buttons: [{ id: 'home', label: '🏠 Main menu', action: 'back_home', params: {} }] }] });
-    state.selectedMenu = id; render();
+    state.selectedMenu = id; state.editorMode = 'menu'; state.previewScreen = 'menu'; render();
   }
   function render() {
     if (!state.draft) return;

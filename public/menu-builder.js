@@ -270,7 +270,7 @@
             if (roleId === 'home' && control.action === 'open_url') item.appendChild(field('لینک HTTPS',(control.params||{}).url,function(value){control.params.url=value;},'https://example.com'));
             var styleWrap = el('label', null, 'mb-field'); styleWrap.appendChild(el('span','رنگ دکمه در تلگرام'));
             var styleSelect = el('select');
-            [['default','پیش‌فرض'],['primary','آبی'],['success','سبز'],['danger','قرمز']].forEach(function (entry) { var option = el('option',entry[1]); option.value=entry[0]; option.selected=(control.style||'glass')===entry[0]; styleSelect.appendChild(option); });
+            [['glass','شیشه ای'],['primary','آبی'],['success','سبز'],['danger','قرمز']].forEach(function (entry) { var option = el('option',entry[1]); option.value=entry[0]; option.selected=(control.style||'glass')===entry[0]; styleSelect.appendChild(option); });
             styleSelect.addEventListener('change',function(){control.style=styleSelect.value;renderPreview();});
             styleWrap.appendChild(styleSelect); item.appendChild(styleWrap);
             var itemControls = el('div',null,'mb-item-controls');

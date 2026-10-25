@@ -100,7 +100,7 @@ function validateDocument(input) {
       if (!button || !/^[a-zA-Z0-9_-]{1,40}$/.test(String(button.id || ''))) errors.push('Every screen button needs a valid ID: ' + screenId);
       if (!String(button.label || '').trim() || String(button.label).length > 64) errors.push('Screen button labels must contain 1–64 characters: ' + screenId);
       if (!Object.prototype.hasOwnProperty.call(ACTIONS, button.action)) { errors.push('Unregistered screen action: ' + String(button.action || '')); continue; }
-      if (button.style !== undefined && !['default', 'primary', 'success', 'danger'].includes(button.style)) errors.push('Unsupported Telegram button style for screen button: ' + String(button.id || ''));
+      if (button.style !== undefined && !['default', 'glass', 'primary', 'success', 'danger'].includes(button.style)) errors.push('Unsupported Telegram button style for screen button: ' + String(button.id || ''));
       const params = button.params && typeof button.params === 'object' ? button.params : {};
       if (button.action === 'navigate_menu' && !/^[a-zA-Z0-9_-]{1,32}$/.test(String(params.menuId || ''))) errors.push('Screen navigation requires a valid target menu ID: ' + screenId);
       if (button.action === 'open_url') {
@@ -122,7 +122,7 @@ function validateDocument(input) {
         buttonCount++;
         if (!button || !/^[a-zA-Z0-9_-]{1,40}$/.test(String(button.id || ''))) errors.push('Every button needs a valid ID.');
         if (!String(button.label || '').trim() || String(button.label).length > 64) errors.push('Button labels must contain 1–64 characters.');
-        if (button.style !== undefined && !['default', 'primary', 'success', 'danger'].includes(button.style)) errors.push('Unsupported Telegram button style for button: ' + String(button.id || ''));
+        if (button.style !== undefined && !['default', 'glass', 'primary', 'success', 'danger'].includes(button.style)) errors.push('Unsupported Telegram button style for button: ' + String(button.id || ''));
         if (!Object.prototype.hasOwnProperty.call(ACTIONS, button.action)) { errors.push('Unregistered action: ' + String(button.action || '')); continue; }
         const params = button.params && typeof button.params === 'object' ? button.params : {};
         if (button.action === 'navigate_menu' && !/^[a-zA-Z0-9_-]{1,32}$/.test(String(params.menuId || ''))) errors.push('Menu navigation requires a valid target menu ID.');

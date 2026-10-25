@@ -4,7 +4,7 @@
   window.__artiqMenuBuilderLoaded = true;
   var app = document.getElementById('app');
   if (!app) return;
-  var state = { actions: {}, draft: null, published: null, history: [], selectedMenu: 'main', editorMode: 'menu', selectedScreen: 'service_test', previewScreen: 'menu' };
+  var state = { actions: {}, draft: null, published: null, history: [], botTexts: {}, botButtons: {}, selectedMenu: 'main', editorMode: 'menu', selectedScreen: 'service_test', previewScreen: 'menu' };
   var card, editor, preview, status;
   function el(tag, text, cls) { var node = document.createElement(tag); if (text !== undefined && text !== null) node.textContent = text; if (cls) node.className = cls; return node; }
   function api(action, extra) {
@@ -332,6 +332,14 @@
     editor.appendChild(renderDynamicScreens());
     renderPreview();
   }
+  function normalizePreviewText(value) {
+    return String(value == null ? '' : value)
+      .replace(/\\r\\n/g, '\n').replace(/\\n/g, '\n')
+      .replace(/<br\\s*\\/?\s*>/gi, '\n').replace(/<\\/(?:p|div|li)>/gi, '\n')
+      .replace(/<[^>]*>/g, '').replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&')
+      .replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&quot;/gi, '"').replace(/&#39;/g, "'")
+      .trim();
+  }
   function renderPreview() {
     if (!preview || !state.draft) return;
     ensureScreens();
@@ -365,9 +373,19 @@
       };
       var sample = samples[state.previewScreen] || samples.service_buy;
       title = sample.title;
-      var values = { service: '🧩 سرویس اصلی', prompt: 'لطفاً بسته موردنظر را انتخاب کنید:', title: sample.title, mode: state.previewScreen.indexOf('renew') !== -1 ? 'تمدید' : 'خرید' };
-      var template = String(cfg.messageTemplate || '').trim() || sample.message;
-      message = template.replace(/\{(service|prompt|title|mode)\}/g, function (_, key) { return values[key] || ''; });
+      var botTexts = state.botTexts || {};
+      var actualMessages = {
+        service_test: botTexts.serviceSelectionTest,
+        service_buy: botTexts.serviceSelectionBuy,
+        service_renew: botTexts.serviceSelectionRenew,
+        plans_buy: '{service}\\n\\n{prompt}',
+        plans_renew: '{service}\\n\\n{prompt}',
+        support: botTexts.support
+      };
+      if (state.previewScreen === 'plans_buy' || state.previewScreen === 'plans_renew') actualMessages[state.previewScreen] = '{service}\\n\\n' + (botTexts.planPrompt || 'لطفاً بسته مورد نظر را انتخاب کنید:');
+      var values = { service: 'سرویس اصلی', prompt: botTexts.planPrompt || 'لطفاً بسته مورد نظر را انتخاب کنید:', title: sample.title, mode: state.previewScreen.indexOf('renew') !== -1 ? 'تمدید' : 'خرید', support_username: 'نام کاربری پشتیبانی' };
+      var template = String(cfg.messageTemplate || '').trim() || actualMessages[state.previewScreen] || sample.message;
+      message = template.replace(/\{(service|prompt|title|mode|support_username)\}/g, function (_, key) { return values[key] || ''; });
       rows = sample.rows.map(function (row) { return row.map(function (label) { return { label: label, style: 'default' }; }); });
       style = cfg.buttonStyle || 'default';
       if (state.previewScreen === 'plans_buy') {
@@ -413,7 +431,7 @@
       } else if (Number(cfg.columns)>0) { var width=Math.max(1,Math.min(4,Number(cfg.columns)||1)), flat=rows.flat(); rows=[]; for(var ri=0;ri<flat.length;ri+=width) rows.push(flat.slice(ri,ri+width)); }
     }
     preview.appendChild(el('div', title, 'mb-preview-name'));
-    preview.appendChild(el('div', message || 'متن پیام در این قسمت نمایش داده می‌شود.', 'mb-preview-text'));
+    preview.appendChild(el('div', normalizePreviewText(message || 'متن پیام در این قسمت نمایش داده می‌شود.'), 'mb-preview-text'));
     var keyboard = el('div', null, 'mb-preview-keyboard');
     rows.forEach(function (row) {
       var line = el('div', null, 'mb-preview-row');
@@ -441,7 +459,7 @@
     card.appendChild(actions); status = el('div'); card.appendChild(status);
     app.insertBefore(card, app.firstChild);
     api().then(function (data) {
-      state.actions = data.actions || {}; state.draft = data.draft; ensureScreens(); state.published = data.published; state.history = data.history || [];
+      state.actions = data.actions || {}; state.botTexts = data.botTexts || {}; state.botButtons = data.botButtons || {}; state.draft = data.draft; ensureScreens(); state.published = data.published; state.history = data.history || [];
       historySelect.replaceChildren();
       state.history.forEach(function (item) { var opt = el('option', 'نسخه ' + item.version + (item.publishedAt ? ' · ' + item.publishedAt : '')); opt.value = item.version; historySelect.appendChild(opt); });
       if (!state.history.length) { var opt = el('option', 'نسخه قبلی وجود ندارد'); opt.value = ''; historySelect.appendChild(opt); }

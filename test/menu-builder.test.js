@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const { serviceName, serviceLabel } = require('../lib/services');
 
 const root = path.join(__dirname, '..');
 const source = (file) => fs.readFileSync(path.join(root, file), 'utf8');
@@ -141,4 +142,14 @@ test('published runtime routes registered actions and rejects missing submenu ta
   assert.match(source('lib/account-ui.js'), /options\.confirmLabel/);
   assert.match(source('public/menu-builder.js'), /تنظیمات منوهای پویا/);
   assert.match(source('public/menu-builder.js'), /رنگ دکمه در تلگرام/);
+});
+
+
+test('available-plan service placeholder uses the exact CMS name without emoji decoration', () => {
+  const service = { id: 'panel_abcd', name: 'My VPN Panel', emoji: '🧩' };
+  assert.equal(serviceName(service), 'My VPN Panel');
+  assert.equal(serviceLabel(service), '🧩 My VPN Panel');
+  const index = source('api/index.js');
+  assert.match(index, /const displayServiceName = serviceName\(service\);/);
+  assert.match(index, /\{ service: displayServiceName, prompt, mode:/);
 });

@@ -30,6 +30,10 @@ test('published menu renderer supports only registered actions and menu navigati
   assert.match(api, /A menu with ID "main" is required/);
   assert.match(runtime, /getPublishedMenu/);
   assert.match(runtime, /menu_nav:/);
+  assert.match(api, /Unsupported Telegram button style for button/);
+  assert.match(runtime, /rendered\.style = style/);
+  assert.match(source('public/menu-builder.js'), /رنگ بومی دکمه در تلگرام/);
+  assert.match(source('public/menu-builder.js'), /style: button\.style \|\| 'default'/);
   assert.match(source('api/index.js'), /getMenuKeyboard\('main'\)/);
   assert.match(runtime, /arrangeScreenRows/);
   assert.match(runtime, /formatScreenMessage/);

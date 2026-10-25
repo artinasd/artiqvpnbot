@@ -159,6 +159,11 @@
         var actionLabel = el('label', null, 'mb-field'); actionLabel.appendChild(el('span', 'عملکرد دکمه'));
         var select = actionOptions(button.action); actionLabel.appendChild(select); item.appendChild(actionLabel);
         select.addEventListener('change', function () { button.action = select.value; button.params = {}; render(); });
+        var styleLabel = el('label', null, 'mb-field'); styleLabel.appendChild(el('span', 'رنگ بومی دکمه در تلگرام'));
+        var styleSelect = el('select');
+        [['default','پیش‌فرض'],['primary','آبی'],['success','سبز'],['danger','قرمز']].forEach(function (entry) { var opt = el('option', entry[1]); opt.value = entry[0]; opt.selected = (button.style || 'default') === entry[0]; styleSelect.appendChild(opt); });
+        styleSelect.addEventListener('change', function () { if (styleSelect.value === 'default') delete button.style; else button.style = styleSelect.value; renderPreview(); });
+        styleLabel.appendChild(styleSelect); item.appendChild(styleLabel);
         if (button.action === 'navigate_menu') {
           var menuField = el('label', null, 'mb-field'); menuField.appendChild(el('span', 'منوی مقصد'));
           var menuSelect = el('select');
@@ -200,7 +205,7 @@
     var style = 'default';
     if (state.previewScreen === 'menu') {
       var selected = menu(); message = selected.text || 'متن پیام در این قسمت نمایش داده می‌شود.';
-      rows = selected.rows.map(function (row) { return row.buttons.map(function (button) { return { label: button.label || 'Button', style: 'default' }; }); });
+      rows = selected.rows.map(function (row) { return row.buttons.map(function (button) { return { label: button.label || 'Button', style: button.style || 'default' }; }); });
     } else {
       var cfg = state.draft.screens[state.previewScreen] || {};
       var samples = {

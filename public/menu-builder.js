@@ -4,7 +4,7 @@
   window.__artiqMenuBuilderLoaded = true;
   var app = document.getElementById('app');
   if (!app) return;
-  var state = { actions: {}, draft: null, published: null, history: [], selectedMenu: 'main', previewScreen: 'menu' };
+  var state = { actions: {}, draft: null, published: null, history: [], selectedMenu: 'main', editorMode: 'menu', selectedScreen: 'service_test', previewScreen: 'menu' };
   var card, editor, preview, status;
   function el(tag, text, cls) { var node = document.createElement(tag); if (text !== undefined && text !== null) node.textContent = text; if (cls) node.className = cls; return node; }
   function api(action, extra) {
@@ -43,13 +43,14 @@
       state.draft.screens[id] = Object.assign({}, defaultScreens[id], state.draft.screens[id] || {});
     });
   }
-  function renderDynamicScreens() {
+  function renderDynamicScreens(selectedScreen) {
     ensureScreens();
     var details = el('details', null, 'mb-dynamic-settings');
-    var summary = el('summary', 'تنظیمات منوهای پویا (سرویس‌ها، پلن‌ها و اشتراک‌ها)', 'mb-heading');
+    if (selectedScreen) details.open = true;
+    var summary = el('summary', selectedScreen ? 'تنظیمات منوی انتخاب‌شده' : 'تنظیمات منوهای پویا (سرویس‌ها، پلن‌ها و اشتراک‌ها)', 'mb-heading');
     details.appendChild(summary);
     details.appendChild(el('p', 'این صفحه‌ها از اطلاعات زنده پنل‌ها، پلن‌ها و حساب کاربر ساخته می‌شوند. متن پیام از جایگزین‌های {service}، {prompt}، {title} و {mode} پشتیبانی می‌کند؛ خالی بگذارید تا متن پیش‌فرض استفاده شود.', 'mb-description'));
-    Object.keys(defaultScreens).forEach(function (id) {
+    Object.keys(defaultScreens).filter(function (id) { return !selectedScreen || id === selectedScreen; }).forEach(function (id) {
       var cfg = state.draft.screens[id];
       var section = el('section', null, 'mb-row');
       section.appendChild(el('strong', screenNames[id], 'mb-screen-title'));
@@ -113,8 +114,25 @@
   function btn(text, cls, handler) { var b = el('button', text, cls || 'mb-button'); b.type = 'button'; b.addEventListener('click', handler); return b; }
   function currentMenusSelect() {
     var select = el('select');
-    state.draft.menus.forEach(function (item) { var opt = el('option', item.name + ' (' + item.id + ')'); opt.value = item.id; opt.selected = item.id === state.selectedMenu; select.appendChild(opt); });
-    select.addEventListener('change', function () { state.selectedMenu = select.value; render(); });
+    select.setAttribute('aria-label', 'ویرایشگر منو');
+    var customGroup = el('optgroup'); customGroup.label = 'منوهای اصلی و زیرمنوها';
+    state.draft.menus.forEach(function (item) {
+      var opt = el('option', item.name + ' (' + item.id + ')'); opt.value = 'menu:' + item.id;
+      opt.selected = state.editorMode === 'menu' && item.id === state.selectedMenu; customGroup.appendChild(opt);
+    });
+    select.appendChild(customGroup);
+    var screenGroup = el('optgroup'); screenGroup.label = 'منوهای موجود ربات';
+    Object.keys(defaultScreens).forEach(function (id) {
+      var opt = el('option', screenNames[id]); opt.value = 'screen:' + id;
+      opt.selected = state.editorMode === 'screen' && id === state.selectedScreen; screenGroup.appendChild(opt);
+    });
+    select.appendChild(screenGroup);
+    select.addEventListener('change', function () {
+      var value = select.value.split(':');
+      if (value[0] === 'screen') { state.editorMode = 'screen'; state.selectedScreen = value.slice(1).join(':'); }
+      else { state.editorMode = 'menu'; state.selectedMenu = value.slice(1).join(':'); }
+      render();
+    });
     return select;
   }
   function addMenu() {
@@ -129,14 +147,20 @@
     var top = el('div', null, 'mb-toolbar');
     top.appendChild(el('div', 'ویرایشگر منو', 'mb-heading'));
     top.appendChild(currentMenusSelect());
-    top.appendChild(btn('+ Add menu', 'mb-secondary', addMenu));
-    if (selected.id !== 'main') top.appendChild(btn('حذف منو', 'mb-danger', function () {
+    if (state.editorMode === 'menu') top.appendChild(btn('+ افزودن منو', 'mb-secondary', addMenu));
+    if (state.editorMode === 'menu' && selected.id !== 'main') top.appendChild(btn('حذف منو', 'mb-danger', function () {
       if (!window.confirm('این منو حذف شود؟ دکمه‌هایی که به آن اشاره می‌کنند نیز باید اصلاح شوند.')) return;
       state.draft.menus = state.draft.menus.filter(function (m) { return m.id !== selected.id; });
       state.draft.menus.forEach(function (m) { m.rows.forEach(function (r) { r.buttons = r.buttons.filter(function (b) { return !(b.action === 'navigate_menu' && b.params.menuId === selected.id); }); }); });
       state.selectedMenu = 'main'; render();
     }));
     editor.appendChild(top);
+    if (state.editorMode === 'screen') {
+      editor.appendChild(el('p', 'این‌ها منوهای موجود ربات هستند؛ تنظیمات صفحهٔ انتخاب‌شده را از اینجا ویرایش کنید.', 'mb-description'));
+      editor.appendChild(renderDynamicScreens(state.selectedScreen));
+      renderPreview();
+      return;
+    }
     var basics = el('div', null, 'mb-basics');
     basics.appendChild(field('نام منو', selected.name, function (v) { selected.name = v; }));
     var idField = field('شناسه منو', selected.id, function () {}, 'هنگام ساخت منو تعیین می‌شود'); idField.querySelector('input').readOnly = true; basics.appendChild(idField);

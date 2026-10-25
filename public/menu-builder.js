@@ -247,9 +247,22 @@
             item.appendChild(field('متن دکمه در تلگرام (' + role.label + ')', control.label || '{label}', function (value) { control.label = value; renderPreview(); }));
             var actionWrap = el('label', null, 'mb-field'); actionWrap.appendChild(el('span','عملکرد دکمه'));
             var actionSelect = el('select');
-            var originalOpt = el('option','عملکرد اصلی ربات'); originalOpt.value = 'original'; originalOpt.selected = true; actionSelect.appendChild(originalOpt);
-            actionSelect.disabled = true; actionSelect.title = 'برای حفظ شناسه‌های زنده، عملکرد این دکمه قابل تغییر نیست.';
+            var originalOpt = el('option','عملکرد اصلی ربات'); originalOpt.value = 'original'; originalOpt.selected = (control.action || 'original') === 'original'; actionSelect.appendChild(originalOpt);
+            if (roleId === 'home') {
+              Object.keys(state.actions).forEach(function (key) { var opt = el('option',state.actions[key].label); opt.value=key; opt.selected=(control.action||'original')===key; actionSelect.appendChild(opt); });
+              actionSelect.addEventListener('change',function(){control.action=actionSelect.value;control.params={};render();});
+            } else {
+              actionSelect.disabled = true; actionSelect.title = 'برای حفظ شناسه‌های زنده، عملکرد این دکمه قابل تغییر نیست.';
+            }
             actionWrap.appendChild(actionSelect); item.appendChild(actionWrap);
+            if (roleId === 'home' && control.action === 'navigate_menu') {
+              var targetWrap = el('label',null,'mb-field'); targetWrap.appendChild(el('span','منوی مقصد'));
+              var targetSelect = el('select');
+              state.draft.menus.forEach(function(m){var opt=el('option',m.name+' ('+m.id+')');opt.value=m.id;opt.selected=m.id===(control.params||{}).menuId;targetSelect.appendChild(opt);});
+              targetSelect.addEventListener('change',function(){control.params.menuId=targetSelect.value;});
+              targetWrap.appendChild(targetSelect); item.appendChild(targetWrap);
+            }
+            if (roleId === 'home' && control.action === 'open_url') item.appendChild(field('لینک HTTPS',(control.params||{}).url,function(value){control.params.url=value;},'https://example.com'));
             var styleWrap = el('label', null, 'mb-field'); styleWrap.appendChild(el('span','رنگ دکمه در تلگرام'));
             var styleSelect = el('select');
             [['default','پیش‌فرض'],['primary','آبی'],['success','سبز'],['danger','قرمز']].forEach(function (entry) { var option = el('option',entry[1]); option.value=entry[0]; option.selected=(control.style||'default')===entry[0]; styleSelect.appendChild(option); });

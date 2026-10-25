@@ -1,4 +1,5 @@
 const storage = require('../lib/storage');
+const { getConfig } = require('../lib/bot-config');
 
 const PASSWORD = process.env.ADMIN_CMS_PASSWORD || '';
 const KEY = 'cms:menu-builder';
@@ -142,7 +143,10 @@ module.exports = async function menuBuilderApi(req, res) {
   if (!authorized(req)) return json(res, 401, { error: 'UNAUTHORIZED' });
   try {
     const state = await storage.get(KEY) || { draft: clone(DEFAULT_DOCUMENT), published: null, history: [] };
-    if (req.method === 'GET') return json(res, 200, { actions: ACTIONS, draft: state.draft || clone(DEFAULT_DOCUMENT), published: state.published || null, history: (state.history || []).slice(0, 10) });
+    if (req.method === 'GET') {
+      const botConfig = await getConfig();
+      return json(res, 200, { actions: ACTIONS, draft: state.draft || clone(DEFAULT_DOCUMENT), published: state.published || null, history: (state.history || []).slice(0, 10), botTexts: botConfig.messages || {}, botButtons: botConfig.buttons || {} });
+    }
     if (req.method !== 'POST') return json(res, 405, { error: 'METHOD_NOT_ALLOWED' });
     const body = req.body || {};
     if (body.action === 'save_draft') {

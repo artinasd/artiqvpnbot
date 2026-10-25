@@ -192,14 +192,11 @@ async function sendAccountList(ctx, requestedPage = 0, { edit = false } = {}) {
   const fallback = '👤 <b>حساب من</b>\n\nاشتراک موردنظر را انتخاب کنید:';
   let message = await formatScreenMessage('account_list', fallback, { title: '👤 حساب من' });
   if (totalPages > 1) message += `\n\nصفحه ${page + 1} از ${totalPages}`;
-  const rows = accountUI.subscriptionKeyboard(current, { ...screen, homeButton, pagination: { page, totalPages } });
-  let remaining = Math.max(0, 100 - rows.flat().length);
-  for (const row of extraRows) {
-    if (!remaining) break;
-    const selected = row.slice(0, remaining);
-    if (selected.length) rows.push(selected);
-    remaining -= selected.length;
-  }
+  // Route the generated subscription rows through the same published-screen
+  // controls as other menus. This makes Menu Maker's enabled/disabled role settings
+  // (including hiding renew/remove) apply to the live per-subscription buttons.
+  const generatedRows = accountUI.subscriptionKeyboard(current, { ...screen, homeButton, pagination: { page, totalPages } });
+  const rows = await arrangeScreenRows('account_list', generatedRows);
   const options = { parse_mode: 'HTML', reply_markup: { inline_keyboard: rows } };
   if (edit) return ctx.editMessageText(message, options);
   return ctx.reply(message, options);

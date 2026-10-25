@@ -89,7 +89,7 @@ function validateDocument(input) {
       if (control.enabled !== undefined && typeof control.enabled !== 'boolean') errors.push('Button enabled must be true or false: ' + controlId);
       if (control.label !== undefined && (typeof control.label !== 'string' || control.label.length > 64 || !control.label.trim())) errors.push('Button label must contain 1–64 characters: ' + controlId);
       if (control.action !== undefined && control.action !== 'original' && !Object.prototype.hasOwnProperty.call(ACTIONS, control.action)) errors.push('Unregistered built-in button action: ' + String(control.action));
-      if (control.style !== undefined && !['default', 'primary', 'success', 'danger'].includes(control.style)) errors.push('Unsupported built-in button style: ' + controlId);
+      if (control.style !== undefined && !['default', 'glass', 'primary', 'success', 'danger'].includes(control.style)) errors.push('Unsupported built-in button style: ' + controlId);
       const params = control.params && typeof control.params === 'object' ? control.params : {};
       if (control.action === 'navigate_menu' && !/^[a-zA-Z0-9_-]{1,32}$/.test(String(params.menuId || ''))) errors.push('Built-in button navigation requires a valid target menu ID: ' + controlId);
       if (control.action === 'open_url') { try { const url = new URL(String(params.url || '')); if (url.protocol !== 'https:') errors.push('Only HTTPS links are allowed.'); } catch (_) { errors.push('Built-in open URL actions require a valid HTTPS URL.'); } }

@@ -334,11 +334,10 @@
   }
   function normalizePreviewText(value) {
     return String(value == null ? '' : value)
-      .replace(/\r\n/g, '\n').replace(/\\n/g, '\n')
+      .replace(/\r\n/g, '\n').replace(/\\r\\n/g, '\n').replace(/\\n/g, '\n')
       .replace(/<br\s*\/?\s*>/gi, '\n').replace(/<\/(?:p|div|li)>/gi, '\n')
       .replace(/<[^>]*>/g, '').replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&')
       .replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&quot;/gi, '"').replace(/&#39;/g, "'")
-      .trim();
   }
   function renderPreview() {
     if (!preview || !state.draft) return;
@@ -384,7 +383,7 @@
       };
       if (state.previewScreen === 'plans_buy' || state.previewScreen === 'plans_renew') actualMessages[state.previewScreen] = '{service}\n\n' + (botTexts.planPrompt || 'لطفاً بسته مورد نظر را انتخاب کنید:');
       var values = { service: 'سرویس اصلی', prompt: botTexts.planPrompt || 'لطفاً بسته مورد نظر را انتخاب کنید:', title: sample.title, mode: state.previewScreen.indexOf('renew') !== -1 ? 'تمدید' : 'خرید', support_username: 'نام کاربری پشتیبانی' };
-      var template = String(cfg.messageTemplate || '').trim() || actualMessages[state.previewScreen] || sample.message;
+      var template = cfg.messageTemplate != null && String(cfg.messageTemplate) !== '' ? String(cfg.messageTemplate) : (actualMessages[state.previewScreen] || sample.message);
       message = template.replace(/\{(service|prompt|title|mode|support_username)\}/g, function (_, key) { return values[key] || ''; });
       rows = sample.rows.map(function (row) { return row.map(function (label) { return { label: label, style: 'default' }; }); });
       style = cfg.buttonStyle || 'default';

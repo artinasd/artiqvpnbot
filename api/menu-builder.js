@@ -117,6 +117,9 @@ function validateDocument(input) {
   }
   if (buttonCount > 100) errors.push('A document can contain at most 100 buttons.');
   for (const [screenId, screen] of Object.entries(input.screens || {})) {
+    for (const [controlId, control] of Object.entries(screen?.buttonControls || {})) {
+      if (control?.action === 'navigate_menu' && !ids.has(String((control.params && control.params.menuId) || ''))) errors.push('Built-in button navigation target does not exist: ' + String((control.params && control.params.menuId) || ''));
+    }
     for (const button of (Array.isArray(screen?.buttons) ? screen.buttons : [])) {
       if (button?.action === 'navigate_menu' && !ids.has(String((button.params && button.params.menuId) || ''))) errors.push('Screen navigation target does not exist: ' + String((button.params && button.params.menuId) || ''));
     }

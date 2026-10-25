@@ -93,6 +93,25 @@
         [1,2,3,4].forEach(function (n) { var opt = el('option', String(n)); opt.value = String(n); opt.selected = Number(cfg.columns || 1) === n; colSelect.appendChild(opt); });
         colSelect.addEventListener('change', function () { cfg.columns = Number(colSelect.value); renderPreview(); });
         colWrap.appendChild(colSelect); controls.appendChild(colWrap);
+        if (!Array.isArray(cfg.rowLayout)) cfg.rowLayout = [];
+        var rowLayoutWrap = el('div', null, 'mb-row-layout');
+        rowLayoutWrap.appendChild(el('span', 'چیدمان جداگانه ردیف‌ها', 'mb-screen-title'));
+        rowLayoutWrap.appendChild(el('p', 'برای هر ردیف تعداد دکمه را جداگانه تعیین کنید؛ مثلاً ۱، سپس ۳، سپس ۲. ردیف‌های تعریف‌نشده از تنظیم «تعداد دکمه در هر ردیف» استفاده می‌کنند.', 'mb-description'));
+        cfg.rowLayout.forEach(function (width, rowIndex) {
+          var rowSetting = el('div', null, 'mb-row-layout-item');
+          var rowLabel = el('label', null, 'mb-field'); rowLabel.appendChild(el('span', 'ردیف ' + (rowIndex + 1)));
+          var rowSelect = el('select');
+          [1,2,3,4].forEach(function (n) { var opt = el('option', n + ' دکمه'); opt.value = String(n); opt.selected = Number(width) === n; rowSelect.appendChild(opt); });
+          rowSelect.addEventListener('change', function () { cfg.rowLayout[rowIndex] = Number(rowSelect.value); renderPreview(); });
+          rowLabel.appendChild(rowSelect); rowSetting.appendChild(rowLabel);
+          rowSetting.appendChild(btn('حذف ردیف', 'mb-danger', function () { cfg.rowLayout.splice(rowIndex, 1); render(); }));
+          rowLayoutWrap.appendChild(rowSetting);
+        });
+        rowLayoutWrap.appendChild(btn('+ افزودن تنظیم ردیف', 'mb-secondary', function () {
+          if (cfg.rowLayout.length >= 30) return showStatus('حداکثر ۳۰ تنظیم ردیف مجاز است.', false);
+          cfg.rowLayout.push(Math.max(1, Math.min(4, Number(cfg.columns) || 1))); render();
+        }));
+        controls.appendChild(rowLayoutWrap);
       }
       if (['service_test','service_buy','service_renew','plans_buy','plans_renew'].indexOf(id) !== -1) {
         var styleWrap = el('label', null, 'mb-field'); styleWrap.appendChild(el('span', 'رنگ دکمه در تلگرام'));
@@ -385,8 +404,13 @@
         roles.forEach(function(id){var c=cfg.buttonControls[id];if(!c)return;rows.forEach(function(row){row.forEach(function(b){if(!matchers[id].test(b.label))return;if(c.enabled===false)b.__hidden=true;else{b.label=String(c.label||'{label}').replace(/\\{label\\}/g,b.label);b.style=c.style||'default';}});});});
         rows=rows.map(function(row){return row.filter(function(b){return !b.__hidden;});}).filter(function(row){return row.length;});
       }
-      if (Number(cfg.columns)>0) { var width=Math.max(1,Math.min(4,Number(cfg.columns)||1)), flat=rows.flat(); rows=[]; for(var ri=0;ri<flat.length;ri+=width) rows.push(flat.slice(ri,ri+width)); }
       (cfg.buttons || []).forEach(function (button) { rows.push([{ label: button.label || 'دکمه جدید', style: button.style || 'default' }]); });
+      if (Array.isArray(cfg.rowLayout) && cfg.rowLayout.length) {
+        var flat = rows.flat(); rows = []; var offset = 0;
+        cfg.rowLayout.forEach(function (rowWidth) { var width = Math.max(1, Math.min(4, Number(rowWidth) || 1)); if (offset < flat.length) { rows.push(flat.slice(offset, offset + width)); offset += width; } });
+        var fallbackWidth = Math.max(1, Math.min(4, Number(cfg.columns) || 1));
+        while (offset < flat.length) { rows.push(flat.slice(offset, offset + fallbackWidth)); offset += fallbackWidth; }
+      } else if (Number(cfg.columns)>0) { var width=Math.max(1,Math.min(4,Number(cfg.columns)||1)), flat=rows.flat(); rows=[]; for(var ri=0;ri<flat.length;ri+=width) rows.push(flat.slice(ri,ri+width)); }
     }
     preview.appendChild(el('div', title, 'mb-preview-name'));
     preview.appendChild(el('div', message || 'متن پیام در این قسمت نمایش داده می‌شود.', 'mb-preview-text'));

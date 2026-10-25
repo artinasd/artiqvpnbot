@@ -153,7 +153,7 @@
     if (selectedScreen) details.open = true;
     var summary = el('summary', selectedScreen ? 'تنظیمات منوی انتخاب‌شده' : 'تنظیمات منوهای پویا (سرویس‌ها، پلن‌ها و اشتراک‌ها)', 'mb-heading');
     details.appendChild(summary);
-    details.appendChild(el('p', 'این صفحه‌ها از اطلاعات زنده پنل‌ها، پلن‌ها و حساب کاربر ساخته می‌شوند. متن پیام از جایگزین‌های {service}، {prompt}، {title} و {mode} پشتیبانی می‌کند؛ خالی بگذارید تا متن پیش‌فرض استفاده شود.', 'mb-description'));
+    details.appendChild(el('p', 'این صفحه‌ها از اطلاعات زنده پنل‌ها، پلن‌ها و حساب کاربر ساخته می‌شوند. دکمه‌های موجود را در ردیف‌های زیر مدیریت کنید؛ تعداد دکمه در هر ردیف فقط روی دکمه‌های اضافی اعمال می‌شود. متن پیام از {service}، {prompt}، {title} و {mode} پشتیبانی می‌کند.', 'mb-description'));
     Object.keys(defaultScreens).filter(function (id) { return !selectedScreen || id === selectedScreen; }).forEach(function (id) {
       var cfg = state.draft.screens[id];
       var section = el('section', null, 'mb-row');
@@ -167,25 +167,7 @@
         [1,2,3,4].forEach(function (n) { var opt = el('option', String(n)); opt.value = String(n); opt.selected = Number(cfg.columns || 1) === n; colSelect.appendChild(opt); });
         colSelect.addEventListener('change', function () { cfg.columns = Number(colSelect.value); renderPreview(); });
         colWrap.appendChild(colSelect); controls.appendChild(colWrap);
-        if (!Array.isArray(cfg.rowLayout)) cfg.rowLayout = [];
-        var rowLayoutWrap = el('div', null, 'mb-row-layout');
-        rowLayoutWrap.appendChild(el('span', 'چیدمان جداگانه ردیف‌ها', 'mb-screen-title'));
-        rowLayoutWrap.appendChild(el('p', 'برای هر ردیف تعداد دکمه را جداگانه تعیین کنید؛ مثلاً ۱، سپس ۳، سپس ۲. ردیف‌های تعریف‌نشده از تنظیم «تعداد دکمه در هر ردیف» استفاده می‌کنند.', 'mb-description'));
-        cfg.rowLayout.forEach(function (width, rowIndex) {
-          var rowSetting = el('div', null, 'mb-row-layout-item');
-          var rowLabel = el('label', null, 'mb-field'); rowLabel.appendChild(el('span', 'ردیف ' + (rowIndex + 1)));
-          var rowSelect = el('select');
-          [1,2,3,4].forEach(function (n) { var opt = el('option', n + ' دکمه'); opt.value = String(n); opt.selected = Number(width) === n; rowSelect.appendChild(opt); });
-          rowSelect.addEventListener('change', function () { cfg.rowLayout[rowIndex] = Number(rowSelect.value); renderPreview(); });
-          rowLabel.appendChild(rowSelect); rowSetting.appendChild(rowLabel);
-          rowSetting.appendChild(btn('حذف ردیف', 'mb-danger', function () { cfg.rowLayout.splice(rowIndex, 1); render(); }));
-          rowLayoutWrap.appendChild(rowSetting);
-        });
-        rowLayoutWrap.appendChild(btn('+ افزودن تنظیم ردیف', 'mb-secondary', function () {
-          if (cfg.rowLayout.length >= 30) return showStatus('حداکثر ۳۰ تنظیم ردیف مجاز است.', false);
-          cfg.rowLayout.push(Math.max(1, Math.min(4, Number(cfg.columns) || 1))); render();
-        }));
-        controls.appendChild(rowLayoutWrap);
+
       }
       var msgWrap = el('label', null, 'mb-field'); msgWrap.appendChild(el('span', 'قالب متن پیام'));
       var msg = el('textarea'); msg.rows = 4; msg.value = cfg.messageTemplate != null && String(cfg.messageTemplate) !== '' ? String(cfg.messageTemplate) : defaultScreenMessageTemplate(id); msg.placeholder = '{service}\\n\\n{prompt}'; msg.addEventListener('input', function () { cfg.messageTemplate = msg.value; renderPreview(); });
@@ -222,6 +204,12 @@
             if (existing && existing.enabled === false) return;
             cfg.buttonRows.push({ id: 'managed_row_' + role.id, roles: [role.id] });
           });
+          if (id === 'account_list') {
+            cfg.buttonRows = [
+              { id:'managed_row_subscription', roles:['subscription_detail','subscription_renew','subscription_remove'] },
+              { id:'managed_row_home', roles:['home'] }
+            ].filter(function (row) { return row.roles.some(function (roleId) { return roleDefs.some(function (role) { return role.id === roleId; }); }); });
+          }
           if (id === 'account_detail' && cfg.buttonRows.length) {
             cfg.buttonRows = [
               { id:'managed_row_links', roles:['open_link','copy_link'] },

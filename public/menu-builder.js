@@ -172,10 +172,6 @@
       var msgWrap = el('label', null, 'mb-field'); msgWrap.appendChild(el('span', 'قالب متن پیام'));
       var msg = el('textarea'); msg.rows = 4; msg.value = cfg.messageTemplate != null && String(cfg.messageTemplate) !== '' ? String(cfg.messageTemplate) : defaultScreenMessageTemplate(id); msg.placeholder = '{service}\\n\\n{prompt}'; msg.addEventListener('input', function () { cfg.messageTemplate = msg.value; renderPreview(); });
       msgWrap.appendChild(msg); controls.appendChild(msgWrap);
-      if (id !== 'account_remove') {
-        var homeWrap = el('label', null, 'mb-check-field'); var home = el('input'); home.type = 'checkbox'; home.checked = cfg.homeButton !== false;
-        home.addEventListener('change', function () { cfg.homeButton = home.checked; renderPreview(); }); homeWrap.appendChild(home); homeWrap.appendChild(el('span', 'نمایش دکمه منوی اصلی')); controls.appendChild(homeWrap);
-      }
       if (['service_test','service_buy','service_renew','plans_buy','plans_renew'].indexOf(id) !== -1) {
         var styleWrap = el('label', null, 'mb-field'); styleWrap.appendChild(el('span', 'رنگ پیش‌فرض دکمه‌های زنده'));
         var styleSelect = el('select');
@@ -202,13 +198,14 @@
           roleDefs.forEach(function (role) {
             var existing = cfg.buttonControls[role.id];
             if (existing && existing.enabled === false) return;
+            if (role.id === 'home' && cfg.homeButton === false) return;
             cfg.buttonRows.push({ id: 'managed_row_' + role.id, roles: [role.id] });
           });
           if (id === 'account_list') {
             cfg.buttonRows = [
               { id:'managed_row_subscription', roles:['subscription_detail','subscription_renew','subscription_remove'] },
               { id:'managed_row_home', roles:['home'] }
-            ].filter(function (row) { return row.roles.some(function (roleId) { return roleDefs.some(function (role) { return role.id === roleId; }) && !(cfg.buttonControls[roleId] && cfg.buttonControls[roleId].enabled === false); }); });
+            ].filter(function (row) { return row.roles.some(function (roleId) { return roleDefs.some(function (role) { return role.id === roleId; }) && !(cfg.buttonControls[roleId] && cfg.buttonControls[roleId].enabled === false) && !(roleId === 'home' && cfg.homeButton === false); }); });
           }
           if (id === 'account_detail' && cfg.buttonRows.length) {
             cfg.buttonRows = [
@@ -237,7 +234,7 @@
           rowHead.appendChild(el('strong', 'ردیف ' + (rowIndex + 1)));
           rowHead.appendChild(btn('↑', 'mb-icon-button', function () { if (rowIndex > 0) { var temp = cfg.buttonRows[rowIndex-1]; cfg.buttonRows[rowIndex-1] = row; cfg.buttonRows[rowIndex] = temp; render(); } }));
           rowHead.appendChild(btn('↓', 'mb-icon-button', function () { if (rowIndex < cfg.buttonRows.length-1) { var temp = cfg.buttonRows[rowIndex+1]; cfg.buttonRows[rowIndex+1] = row; cfg.buttonRows[rowIndex] = temp; render(); } }));
-          rowHead.appendChild(btn('حذف ردیف', 'mb-danger', function () { cfg.buttonRows.splice(rowIndex,1); render(); }));
+          rowHead.appendChild(btn('حذف ردیف', 'mb-danger', function () { if ((row.roles || []).indexOf('home') !== -1) cfg.homeButton = false; cfg.buttonRows.splice(rowIndex,1); render(); }));
           rowCard.appendChild(rowHead);
           var grid = el('div', null, 'mb-button-edit-grid');
           row.roles.forEach(function (roleId, buttonIndex) {
@@ -271,7 +268,7 @@
             var itemControls = el('div',null,'mb-item-controls');
             itemControls.appendChild(btn('←','mb-icon-button',function(){if(buttonIndex>0){var value=row.roles[buttonIndex-1];row.roles[buttonIndex-1]=roleId;row.roles[buttonIndex]=value;render();}}));
             itemControls.appendChild(btn('→','mb-icon-button',function(){if(buttonIndex<row.roles.length-1){var value=row.roles[buttonIndex+1];row.roles[buttonIndex+1]=roleId;row.roles[buttonIndex]=value;render();}}));
-            itemControls.appendChild(btn('حذف دکمه','mb-danger',function(){row.roles.splice(buttonIndex,1);control.enabled=false;render();}));
+            itemControls.appendChild(btn('حذف دکمه','mb-danger',function(){row.roles.splice(buttonIndex,1);control.enabled=false;if(roleId==='home')cfg.homeButton=false;render();}));
             item.appendChild(itemControls); grid.appendChild(item);
           });
           rowCard.appendChild(grid);
@@ -279,7 +276,7 @@
             var choices=availableRoles(); if(!choices.length)return showStatus('همه دکمه‌های موجود در ردیف‌ها قرار گرفته‌اند.',false);
             var selectedRole=choices[0];
             if(choices.length>1){var promptText=choices.map(function(role,index){return (index+1)+'. '+role.label;}).join('\n');var answer=window.prompt('شماره دکمه برای افزودن به این ردیف:\n'+promptText,'1');if(answer===null)return;var choiceIndex=Number(answer)-1;if(!Number.isInteger(choiceIndex)||choiceIndex<0||choiceIndex>=choices.length)return showStatus('انتخاب نامعتبر است.',false);selectedRole=choices[choiceIndex];}
-            row.roles.push(selectedRole.id); var control=cfg.buttonControls[selectedRole.id]||(cfg.buttonControls[selectedRole.id]={enabled:true,label:'{label}',action:'original',style:'default',params:{}});control.enabled=true;render();
+            row.roles.push(selectedRole.id); var control=cfg.buttonControls[selectedRole.id]||(cfg.buttonControls[selectedRole.id]={enabled:true,label:'{label}',action:'original',style:'default',params:{}});control.enabled=true;if(selectedRole.id==='home')cfg.homeButton=true;render();
           }));
           managedRows.appendChild(rowCard);
         });

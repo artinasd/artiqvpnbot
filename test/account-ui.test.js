@@ -76,6 +76,18 @@ test('account list keyboard omits disabled renew and remove actions at source', 
   assert.equal(rows.flat().some((button) => button.callback_data?.startsWith('account_remove:')), false);
 });
 
+test('account list always keeps subscription detail action when published controls disable it', () => {
+  const rows = accountUI.subscriptionKeyboard(
+    [{ id: 'order-1', title: 'customer_name' }],
+    { buttonControls: {
+      subscription_detail: { enabled: false },
+      subscription_renew: { enabled: false },
+      subscription_remove: { enabled: false },
+    } }
+  );
+  assert.deepEqual(rows[0].map((button) => button.callback_data), ['account_sub:order-1']);
+});
+
 test('remove confirmation offers confirm and cancel actions', () => {
   const rows = accountUI.removeConfirmationKeyboard('order-1');
   assert.equal(rows[0][0].callback_data, 'account_remove_confirm:order-1');

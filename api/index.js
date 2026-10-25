@@ -143,7 +143,7 @@ async function sendPlanMenu(ctx, mode = 'buy', serviceId = 'tunnel') {
   const screen = await getPublishedScreen(screenId) || {};
   const buttons = plans.map((plan) => [Markup.button.callback(`${plan.buttonText || plan.name} - ${Number(plan.price).toLocaleString('en-US')} ${config.payment?.currency || plan.currency || 'تومان'}`, `${mode === 'renew' ? 'renew_plan_' : 'select_plan_'}${plan.id}`)]);
   if (mode === 'buy' && screen.customPlanButton !== false) buttons.push([Markup.button.callback(String(screen.customPlanLabel || '🛠 ساخت بسته دلخواه (حجم و زمان)'), `select_custom_${service.id}`)]);
-  if (!buttons.length) return ctx.reply(await getMessage('noPlans', { service_name: serviceLabel(service) }));
+  if (!buttons.length) return ctx.reply(await getMessage('noPlans', { service_name: displayServiceName }));
   const prompt = await getMessage('planPrompt');
   const fallbackText = `${mode === 'renew' ? '🔄' : '📋'} ${displayServiceName}\\n\\n${prompt}`;
   // {service} is the exact CMS-defined service name. Keep emoji decoration out of the

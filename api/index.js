@@ -62,20 +62,35 @@ async function askSubscriptionName(ctx, order) {
 async function showWalletCheckout(ctx, order) {
   const balance = await wallet.getBalance(ctx.from.id);
   const price = Number(order.price || 0);
-  if (balance >= price) {
+  const transactionId = `purchase:${order.orderId}`;
+  const alreadyDebited = order.walletCharged === true || await wallet.hasProcessedTransaction(ctx.from.id, transactionId);
+
+  if (balance >= price || alreadyDebited) {
     const lock = `wallet-purchase:${ctx.from.id}`;
     if (!(await storage.acquireLock(lock, 30))) return ctx.reply('⏳ درخواست شما در حال پردازش است.');
+    let insufficientAfterLock = false;
     try {
       const freshBalance = await wallet.getBalance(ctx.from.id);
-      if (freshBalance < price) return showWalletCheckout(ctx, order);
-      await wallet.debit(ctx.from.id, price, { walletLastTransaction: `purchase:${order.orderId}` });
-      await storage.updateOrder(order.orderId, { paymentStatus: 'WALLET_PAID', fulfillmentStatus: 'RECEIPT_SUBMITTED', walletCharged: true, walletChargedAmount: price, walletChargedAt: new Date().toISOString() });
-      await storage.deleteState('user', ctx.from.id);
-      await ctx.reply(`✅ مبلغ ${price.toLocaleString('en-US')} تومان از کیف پول شما کسر شد.\n\n⏳ در حال ساخت اشتراک...`);
-      await fulfillOrder(order.orderId, bot.telegram);
-    } finally { await storage.releaseLock(lock); }
+      const debitAlreadyProcessed = await wallet.hasProcessedTransaction(ctx.from.id, transactionId);
+      if (!debitAlreadyProcessed && freshBalance < price) {
+        insufficientAfterLock = true;
+      } else {
+        await wallet.debitOnce(ctx.from.id, price, transactionId, { walletLastTransaction: transactionId });
+        await storage.updateOrder(order.orderId, { paymentStatus: 'WALLET_PAID', fulfillmentStatus: 'RECEIPT_SUBMITTED', walletCharged: true, walletChargedAmount: price, walletChargedAt: new Date().toISOString() });
+        await storage.deleteState('user', ctx.from.id);
+        await ctx.reply(`✅ مبلغ ${price.toLocaleString('en-US')} تومان از کیف پول شما کسر شد.\n\n⏳ در حال ساخت اشتراک...`);
+        await fulfillOrder(order.orderId, bot.telegram);
+      }
+    } catch (error) {
+      if (error?.message === 'INSUFFICIENT_BALANCE') insufficientAfterLock = true;
+      else throw error;
+    } finally {
+      await storage.releaseLock(lock);
+    }
+    if (insufficientAfterLock) return showWalletCheckout(ctx, await storage.getOrder(order.orderId) || order);
     return;
   }
+
   await storage.updateOrder(order.orderId, { paymentStatus: 'WALLET_REQUIRED', fulfillmentStatus: 'AWAITING_WALLET' });
   await storage.setState('user', ctx.from.id, { stage: 'AWAITING_WALLET_AMOUNT', orderId: order.orderId, requiredAmount: price, balance });
   const missing = Math.max(0, price - balance);
@@ -109,8 +124,10 @@ async function activateWalletOrder(order) {
     const current = await storage.getOrder(order.orderId);
     if (!current || current.walletCharged || current.fulfillmentStatus === 'FULFILLED') return { already: true, order: current };
     const balance = await wallet.getBalance(current.telegramUserId);
-    if (balance < price) return { insufficient: true, balance };
-    await wallet.debit(current.telegramUserId, price, { walletLastTransaction: `purchase:${current.orderId}` });
+    const transactionId = `purchase:${current.orderId}`;
+    const alreadyDebited = await wallet.hasProcessedTransaction(current.telegramUserId, transactionId);
+    if (!alreadyDebited && balance < price) return { insufficient: true, balance };
+    await wallet.debitOnce(current.telegramUserId, price, transactionId, { walletLastTransaction: transactionId });
     const paid = await storage.updateOrder(current.orderId, { paymentStatus: 'WALLET_PAID', fulfillmentStatus: 'RECEIPT_SUBMITTED', walletCharged: true, walletChargedAmount: price, walletChargedAt: new Date().toISOString() });
     await storage.deleteState('user', current.telegramUserId);
     await bot.telegram.sendMessage(current.telegramUserId, `✅ شارژ کیف پول تأیید شد و ${price.toLocaleString('en-US')} تومان بابت سفارش ${current.planName} کسر شد.\n\n⏳ اشتراک شما در حال ساخت است...`).catch(() => {});
@@ -176,8 +193,51 @@ bot.hears('🎁 دریافت اکانت تست',async(ctx)=>{await sendServiceMe
 bot.on('callback_query',async(ctx)=>{
   const data=ctx.callbackQuery.data||'';await ctx.answerCbQuery().catch(()=>{});
   if(data.startsWith('wallet_charge_')){const id=data.slice('wallet_charge_'.length);const order=await storage.getOrder(id);if(!order||String(order.telegramUserId)!==String(ctx.from.id))return ctx.reply('❌ سفارش پیدا نشد.');await storage.setState('user',ctx.from.id,{stage:'AWAITING_WALLET_AMOUNT',orderId:id,requiredAmount:Number(order.price||0),balance:await wallet.getBalance(ctx.from.id)});return ctx.reply('💳 مبلغ شارژ کیف پول را به تومان وارد کنید:');}
-  if(data.startsWith('wallet_approve_')){if(!isAdmin(ctx))return;const id=data.slice('wallet_approve_'.length);const topup=await storage.getOrder(id);if(!topup||topup.orderType!=='wallet_topup'||topup.paymentStatus!=='RECEIPT_SUBMITTED')return ctx.reply('❌ این درخواست قبلاً پردازش شده یا معتبر نیست.');await wallet.credit(topup.telegramUserId,Number(topup.topupAmount||0),{walletLastCredit:`topup:${id}`,walletLastCreditAt:new Date().toISOString()});await storage.updateOrder(id,{paymentStatus:'APPROVED',fulfillmentStatus:'WALLET_CREDITED',approvedAt:new Date().toISOString()});await ctx.reply(`✅ شارژ ${Number(topup.topupAmount||0).toLocaleString('en-US')} تومان تأیید شد.`);if(topup.linkedOrderId){const pending=await storage.getOrder(topup.linkedOrderId);if(pending)await activateWalletOrder(pending);}return;}
-  if(data.startsWith('wallet_reject_')){if(!isAdmin(ctx))return;const id=data.slice('wallet_reject_'.length);const topup=await storage.getOrder(id);if(!topup||topup.orderType!=='wallet_topup'||topup.paymentStatus!=='RECEIPT_SUBMITTED')return ctx.reply('❌ این درخواست قبلاً پردازش شده یا معتبر نیست.');await storage.updateOrder(id,{paymentStatus:'REJECTED',fulfillmentStatus:'WALLET_TOPUP_REJECTED',rejectedAt:new Date().toISOString()});await bot.telegram.sendMessage(topup.telegramUserId,'❌ رسید شارژ کیف پول شما تأیید نشد. در صورت نیاز، دوباره تلاش کنید.').catch(()=>{});return ctx.reply('❌ درخواست شارژ رد شد.');}
+  if (data.startsWith('wallet_approve_')) {
+    if (!isAdmin(ctx)) return;
+    const id = data.slice('wallet_approve_'.length);
+    const lockName = `wallet-topup-review:${id}`;
+    if (!(await storage.acquireLock(lockName, 60))) return ctx.reply('⏳ این درخواست شارژ در حال پردازش است.');
+    let linkedOrderId = null;
+    try {
+      const topup = await storage.getOrder(id);
+      if (!topup || topup.orderType !== 'wallet_topup' || topup.paymentStatus !== 'RECEIPT_SUBMITTED') {
+        return ctx.reply('❌ این درخواست قبلاً پردازش شده یا معتبر نیست.');
+      }
+      await wallet.creditOnce(topup.telegramUserId, Number(topup.topupAmount || 0), `topup:${id}`, {
+        walletLastCredit: `topup:${id}`,
+        walletLastCreditAt: new Date().toISOString(),
+      });
+      await storage.updateOrder(id, { paymentStatus: 'APPROVED', fulfillmentStatus: 'WALLET_CREDITED', approvedAt: new Date().toISOString() });
+      linkedOrderId = topup.linkedOrderId || null;
+      await ctx.reply(`✅ شارژ ${Number(topup.topupAmount || 0).toLocaleString('en-US')} تومان تأیید شد.`);
+    } finally {
+      await storage.releaseLock(lockName).catch(() => {});
+    }
+    if (linkedOrderId) {
+      const pending = await storage.getOrder(linkedOrderId);
+      if (pending) await activateWalletOrder(pending);
+    }
+    return;
+  }
+  if (data.startsWith('wallet_reject_')) {
+    if (!isAdmin(ctx)) return;
+    const id = data.slice('wallet_reject_'.length);
+    const lockName = `wallet-topup-review:${id}`;
+    if (!(await storage.acquireLock(lockName, 60))) return ctx.reply('⏳ این درخواست شارژ در حال پردازش است.');
+    let rejectedTopup = null;
+    try {
+      const topup = await storage.getOrder(id);
+      if (!topup || topup.orderType !== 'wallet_topup' || topup.paymentStatus !== 'RECEIPT_SUBMITTED') {
+        return ctx.reply('❌ این درخواست قبلاً پردازش شده یا معتبر نیست.');
+      }
+      rejectedTopup = await storage.updateOrder(id, { paymentStatus: 'REJECTED', fulfillmentStatus: 'WALLET_TOPUP_REJECTED', rejectedAt: new Date().toISOString() });
+    } finally {
+      await storage.releaseLock(lockName).catch(() => {});
+    }
+    await bot.telegram.sendMessage(rejectedTopup.telegramUserId, '❌ رسید شارژ کیف پول شما تأیید نشد. در صورت نیاز، دوباره تلاش کنید.').catch(() => {});
+    return ctx.reply('❌ درخواست شارژ رد شد.');
+  }
   if(data==='account_list'){const subscriptions=await accountUI.listForUser(ctx.from.id);if(!subscriptions.length)return ctx.reply(await getMessage('accountNoSubscription'));const screen=await getPublishedScreen('account_list')||{};const fallback='👤 <b>حساب من</b>\n\nاشتراک موردنظر را انتخاب کنید:';const message=await formatScreenMessage('account_list',fallback,{title:'👤 حساب من'});return ctx.reply(message,{parse_mode:'HTML',reply_markup:{inline_keyboard:accountUI.subscriptionKeyboard(subscriptions,screen)}});}
   if(data.startsWith('account_remove_confirm:')) {
     const id = data.slice('account_remove_confirm:'.length);

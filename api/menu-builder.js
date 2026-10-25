@@ -5,9 +5,9 @@ const KEY = 'cms:menu-builder';
 const ACTIONS = Object.freeze({
   test_services: { label: 'نمایش سرویس‌های اکانت تست', params: [] },
   buy_services: { label: 'نمایش سرویس‌های خرید', params: [] },
-  wallet: { label: 'باز کردن کیف پول', params: [], buttons: [] },
+  wallet: { label: 'باز کردن کیف پول', params: [] },
   account: { label: 'نمایش اشتراک‌های من', params: [] },
-  support: { label: 'نمایش اطلاعات پشتیبانی', params: [], buttons: [] },
+  support: { label: 'نمایش اطلاعات پشتیبانی', params: [] },
   renew: { label: 'شروع فرایند تمدید', params: [] },
   navigate_menu: { label: 'باز کردن منوی دیگر', params: ['menuId'] },
   open_url: { label: 'باز کردن لینک HTTPS', params: ['url'] },
@@ -24,8 +24,8 @@ const DEFAULT_DOCUMENT = {
     account_list: { columns: 1, messageTemplate: '', homeButton: true, detailLabel: '{title}', renewLabel: '🔁', removeLabel: '❌', buttons: [] },
     account_detail: { messageTemplate: '', openLabel: '🔗 باز کردن لینک', copyLabel: '📋 کپی لینک', renewLabel: '🔄 تمدید اشتراک', backLabel: '⬅️ بازگشت به اشتراک‌ها', homeButton: true, buttons: [] },
     account_remove: { messageTemplate: '', confirmLabel: '🗑️ بله، حذف اشتراک', cancelLabel: '↩️ انصراف', buttons: [] },
-    wallet: { messageTemplate: '', homeButton: true },
-    support: { messageTemplate: '', homeButton: true },
+    wallet: { messageTemplate: '', homeButton: true, buttons: [] },
+    support: { messageTemplate: '', homeButton: true, buttons: [] },
   },
   menus: [{
     id: 'main',
@@ -104,6 +104,11 @@ function validateDocument(input) {
     }
   }
   if (buttonCount > 100) errors.push('A document can contain at most 100 buttons.');
+  for (const [screenId, screen] of Object.entries(input.screens || {})) {
+    for (const button of (Array.isArray(screen?.buttons) ? screen.buttons : [])) {
+      if (button?.action === 'navigate_menu' && !ids.has(String((button.params && button.params.menuId) || ''))) errors.push('Screen navigation target does not exist: ' + String((button.params && button.params.menuId) || ''));
+    }
+  }
   for (const menu of input.menus) {
     if (!menu || typeof menu !== 'object' || !Array.isArray(menu.rows)) continue;
     for (const row of menu.rows) {

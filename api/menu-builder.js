@@ -16,11 +16,11 @@ const ACTIONS = Object.freeze({
 const DEFAULT_DOCUMENT = {
   version: 1,
   screens: {
-    service_test: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'success', buttons: [] },
-    service_buy: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'primary', buttons: [] },
-    service_renew: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'success', buttons: [] },
-    plans_buy: { columns: 1, messageTemplate: '', customPlanButton: true, customPlanLabel: '🛠 ساخت بسته دلخواه (حجم و زمان)', homeButton: true, buttonStyle: 'primary', buttons: [] },
-    plans_renew: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'success', buttons: [] },
+    service_test: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'success', buttonControls: {}, buttons: [] },
+    service_buy: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'primary', buttonControls: {}, buttons: [] },
+    service_renew: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'success', buttonControls: {}, buttons: [] },
+    plans_buy: { columns: 1, messageTemplate: '', customPlanButton: true, customPlanLabel: '🛠 ساخت بسته دلخواه (حجم و زمان)', homeButton: true, buttonStyle: 'primary', buttonControls: {}, buttons: [] },
+    plans_renew: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'success', buttonControls: {}, buttons: [] },
     account_list: { columns: 1, messageTemplate: '', homeButton: true, detailLabel: '{title}', renewLabel: '🔁', removeLabel: '❌', buttons: [] },
     account_detail: { messageTemplate: '', openLabel: '🔗 باز کردن لینک', copyLabel: '📋 کپی لینک', renewLabel: '🔄 تمدید اشتراک', backLabel: '⬅️ بازگشت به اشتراک‌ها', homeButton: true, buttons: [] },
     account_remove: { messageTemplate: '', confirmLabel: '🗑️ بله، حذف اشتراک', cancelLabel: '↩️ انصراف', buttons: [] },
@@ -64,6 +64,18 @@ function validateDocument(input) {
     for (const key of ['messageTemplate', 'customPlanLabel', 'detailLabel', 'renewLabel', 'removeLabel', 'openLabel', 'copyLabel', 'backLabel', 'confirmLabel', 'cancelLabel']) if (screen[key] !== undefined && (typeof screen[key] !== 'string' || screen[key].length > 500)) errors.push('Invalid ' + key + ' for screen: ' + screenId);
     for (const key of ['homeButton', 'customPlanButton']) if (screen[key] !== undefined && typeof screen[key] !== 'boolean') errors.push(key + ' must be true or false for screen: ' + screenId);
     if (screen.buttonStyle !== undefined && !['default', 'primary', 'success', 'danger'].includes(screen.buttonStyle)) errors.push('Unsupported Telegram button style for screen: ' + screenId);
+    if (screen.buttonControls !== undefined && (!screen.buttonControls || typeof screen.buttonControls !== 'object' || Array.isArray(screen.buttonControls))) errors.push('Button controls must be an object: ' + screenId);
+    for (const [controlId, control] of Object.entries(screen.buttonControls || {})) {
+      if (!['services', 'plans', 'custom_plan'].includes(controlId)) errors.push('Unknown built-in button group: ' + controlId);
+      if (!control || typeof control !== 'object' || Array.isArray(control)) { errors.push('Invalid built-in button control: ' + controlId); continue; }
+      if (control.enabled !== undefined && typeof control.enabled !== 'boolean') errors.push('Button enabled must be true or false: ' + controlId);
+      if (control.label !== undefined && (typeof control.label !== 'string' || control.label.length > 64 || !control.label.trim())) errors.push('Button label must contain 1–64 characters: ' + controlId);
+      if (control.action !== undefined && control.action !== 'original' && !Object.prototype.hasOwnProperty.call(ACTIONS, control.action)) errors.push('Unregistered built-in button action: ' + String(control.action));
+      if (control.style !== undefined && !['default', 'primary', 'success', 'danger'].includes(control.style)) errors.push('Unsupported built-in button style: ' + controlId);
+      const params = control.params && typeof control.params === 'object' ? control.params : {};
+      if (control.action === 'navigate_menu' && !/^[a-zA-Z0-9_-]{1,32}$/.test(String(params.menuId || ''))) errors.push('Built-in button navigation requires a valid target menu ID: ' + controlId);
+      if (control.action === 'open_url') { try { const url = new URL(String(params.url || '')); if (url.protocol !== 'https:') errors.push('Only HTTPS links are allowed.'); } catch (_) { errors.push('Built-in open URL actions require a valid HTTPS URL.'); } }
+    }
     if (screen.buttons !== undefined && (!Array.isArray(screen.buttons) || screen.buttons.length > 20)) errors.push('Screen buttons must be an array with at most 20 entries: ' + screenId);
     for (const button of (Array.isArray(screen.buttons) ? screen.buttons : [])) {
       buttonCount++;

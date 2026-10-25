@@ -14,11 +14,11 @@
   }
   function menu() { return state.draft.menus.find(function (item) { return item.id === state.selectedMenu; }) || state.draft.menus[0]; }
   var defaultScreens = {
-    service_test: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'success' },
-    service_buy: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'primary' },
-    service_renew: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'success' },
-    plans_buy: { columns: 1, messageTemplate: '', customPlanButton: true, customPlanLabel: '🛠 ساخت بسته دلخواه (حجم و زمان)', homeButton: true, buttonStyle: 'primary' },
-    plans_renew: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'success' },
+    service_test: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'success', buttonControls: {} },
+    service_buy: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'primary', buttonControls: {} },
+    service_renew: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'success', buttonControls: {} },
+    plans_buy: { columns: 1, messageTemplate: '', customPlanButton: true, customPlanLabel: '🛠 ساخت بسته دلخواه (حجم و زمان)', homeButton: true, buttonStyle: 'primary', buttonControls: {} },
+    plans_renew: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'success', buttonControls: {} },
     account_list: { columns: 1, messageTemplate: '', homeButton: true, detailLabel: '{title}', renewLabel: '🔁', removeLabel: '❌' },
     account_detail: { messageTemplate: '', openLabel: '🔗 باز کردن لینک', copyLabel: '📋 کپی لینک', renewLabel: '🔄 تمدید اشتراک', backLabel: '⬅️ بازگشت به اشتراک‌ها', homeButton: true },
     account_remove: { messageTemplate: '', confirmLabel: '🗑️ بله، حذف اشتراک', cancelLabel: '↩️ انصراف' },
@@ -127,6 +127,47 @@
       if (id === 'account_remove') {
         controls.appendChild(field('متن دکمه تأیید حذف', cfg.confirmLabel, function (v) { cfg.confirmLabel = v; }));
         controls.appendChild(field('متن دکمه انصراف', cfg.cancelLabel, function (v) { cfg.cancelLabel = v; }));
+      }
+      if (['service_test','service_buy','service_renew','plans_buy','plans_renew'].indexOf(id) !== -1) {
+        if (!cfg.buttonControls || typeof cfg.buttonControls !== 'object') cfg.buttonControls = {};
+        var groups = [
+          { id: 'services', label: 'دکمه‌های سرویس زنده' },
+          { id: 'plans', label: 'دکمه‌های پلن زنده' }
+        ];
+        if (id === 'plans_buy') groups.push({ id: 'custom_plan', label: 'دکمه ساخت بسته دلخواه' });
+        var builtInWrap = el('section', null, 'mb-row');
+        builtInWrap.appendChild(el('strong', 'کنترل دکمه‌های موجود', 'mb-screen-title'));
+        builtInWrap.appendChild(el('p', 'برای هر گروه می‌توانید نمایش، متن، رنگ و عملکرد را تغییر دهید. از {label} در متن استفاده کنید تا متن اصلی هر سرویس یا پلن حفظ شود. «عملکرد اصلی» نگه‌داشتن callback شناسه‌دار ربات است.', 'mb-description'));
+        groups.forEach(function (group) {
+          var control = cfg.buttonControls[group.id] || (cfg.buttonControls[group.id] = { enabled: true, label: '{label}', action: 'original', style: 'default', params: {} });
+          var card = el('div', null, 'mb-button-edit');
+          var enabledWrap = el('label', null, 'mb-check-field'); var enabled = el('input'); enabled.type = 'checkbox'; enabled.checked = control.enabled !== false;
+          enabled.addEventListener('change', function () { control.enabled = enabled.checked; renderPreview(); });
+          enabledWrap.appendChild(enabled); enabledWrap.appendChild(el('span', 'نمایش ' + group.label)); card.appendChild(enabledWrap);
+          card.appendChild(field('الگوی متن (' + group.label + ')', control.label || '{label}', function (v) { control.label = v; }));
+          var actionWrap = el('label', null, 'mb-field'); actionWrap.appendChild(el('span', 'عملکرد'));
+          var actionSelect = el('select');
+          [['original','عملکرد اصلی ربات']].concat(Object.keys(state.actions).map(function (key) { return [key, state.actions[key].label]; })).forEach(function (entry) {
+            var opt = el('option', entry[1]); opt.value = entry[0]; opt.selected = (control.action || 'original') === entry[0]; actionSelect.appendChild(opt);
+          });
+          actionSelect.addEventListener('change', function () { control.action = actionSelect.value; control.params = {}; render(); });
+          actionWrap.appendChild(actionSelect); card.appendChild(actionWrap);
+          var styleWrap = el('label', null, 'mb-field'); styleWrap.appendChild(el('span', 'رنگ'));
+          var styleSelect = el('select');
+          [['default','پیش‌فرض'],['primary','آبی'],['success','سبز'],['danger','قرمز']].forEach(function (entry) { var opt = el('option', entry[1]); opt.value = entry[0]; opt.selected = (control.style || 'default') === entry[0]; styleSelect.appendChild(opt); });
+          styleSelect.addEventListener('change', function () { control.style = styleSelect.value; renderPreview(); });
+          styleWrap.appendChild(styleSelect); card.appendChild(styleWrap);
+          if (control.action === 'navigate_menu') {
+            var targetWrap = el('label', null, 'mb-field'); targetWrap.appendChild(el('span', 'منوی مقصد'));
+            var targetSelect = el('select');
+            state.draft.menus.forEach(function (m) { var opt = el('option', m.name + ' (' + m.id + ')'); opt.value = m.id; opt.selected = m.id === (control.params || {}).menuId; targetSelect.appendChild(opt); });
+            targetSelect.addEventListener('change', function () { control.params.menuId = targetSelect.value; });
+            targetWrap.appendChild(targetSelect); card.appendChild(targetWrap);
+          }
+          if (control.action === 'open_url') card.appendChild(field('لینک HTTPS', (control.params || {}).url, function (v) { control.params.url = v; }, 'https://example.com'));
+          builtInWrap.appendChild(card);
+        });
+        section.appendChild(builtInWrap);
       }
       section.appendChild(controls); section.appendChild(renderScreenButtons(id, cfg)); details.appendChild(section);
     });
@@ -298,6 +339,19 @@
       }
       if (state.previewScreen === 'account_remove') { rows[0][0].label = cfg.confirmLabel || '🗑️ بله، حذف اشتراک'; rows[1][0].label = cfg.cancelLabel || '↩️ انصراف'; }
       if (cfg.homeButton === false && ['service_test','service_buy','service_renew','plans_buy','plans_renew','account_list','wallet','support'].indexOf(state.previewScreen) !== -1) rows = rows.filter(function (row) { return row[0] && row[0].label !== '🏠 منوی اصلی'; });
+      (cfg.buttonControls && Object.keys(cfg.buttonControls)).forEach(function (groupId) {
+        var control = cfg.buttonControls[groupId];
+        if (!control || control.enabled === false) {
+          if (groupId === 'custom_plan') rows = rows.filter(function (row) { return !row.some(function (b) { return /ساخت بسته دلخواه/.test(b.label); }); });
+          else if (groupId === 'services') rows = rows.filter(function (row) { return !row.some(function (b) { return /سرویس اصلی|سرویس گیمینگ|سرویس مستقیم/.test(b.label); }); });
+          else if (groupId === 'plans') rows = rows.filter(function (row) { return !row.some(function (b) { return /پلن/.test(b.label); }); });
+          return;
+        }
+        rows.forEach(function (row) { row.forEach(function (button) {
+          var matches = groupId === 'custom_plan' ? /ساخت بسته دلخواه/.test(button.label) : groupId === 'services' ? /سرویس اصلی|سرویس گیمینگ|سرویس مستقیم/.test(button.label) : /پلن/.test(button.label);
+          if (matches) { button.label = String(control.label || '{label}').replace(/\{label\}/g, button.label); button.style = control.style || 'default'; }
+        }); });
+      });
       (cfg.buttons || []).forEach(function (button) { rows.push([{ label: button.label || 'دکمه جدید', style: button.style || 'default' }]); });
     }
     preview.appendChild(el('div', title, 'mb-preview-name'));

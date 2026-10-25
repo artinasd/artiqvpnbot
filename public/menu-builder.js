@@ -479,24 +479,6 @@
         roles.forEach(function(id){var c=cfg.buttonControls[id];if(!c)return;rows.forEach(function(row){row.forEach(function(b){if(!matchers[id].test(b.label))return;if(c.enabled===false)b.__hidden=true;else{b.label=String(c.label||'{label}').replace(/\{label\}/g,b.label);b.style=c.style||'default';}});});});
         rows=rows.map(function(row){return row.filter(function(b){return !b.__hidden;});}).filter(function(row){return row.length;});
       }
-      // Apply the same per-row layout to the existing built-in buttons as well as extras.
-      var layoutButtons = [];
-      rows.forEach(function (row) { row.forEach(function (button) { layoutButtons.push(button); }); });
-      var laidOutRows = [];
-      var layoutOffset = 0;
-      var rowWidths = Array.isArray(cfg.rowLayout) ? cfg.rowLayout.slice(0, 30) : [];
-      rowWidths.forEach(function (width) {
-        var count = Math.max(1, Math.min(4, Number(width) || 1));
-        if (layoutOffset >= layoutButtons.length) return;
-        laidOutRows.push(layoutButtons.slice(layoutOffset, layoutOffset + count));
-        layoutOffset += count;
-      });
-      var defaultColumns = Math.max(1, Math.min(4, Number(cfg.columns) || 1));
-      while (layoutOffset < layoutButtons.length) {
-        laidOutRows.push(layoutButtons.slice(layoutOffset, layoutOffset + defaultColumns));
-        layoutOffset += defaultColumns;
-      }
-      rows = laidOutRows;
       var extraPreviewRows = [];
       (cfg.buttons || []).forEach(function (button, index) {
         var key = button.rowId || ('legacy:' + (button.id || index));

@@ -187,12 +187,25 @@
         }));
         controls.appendChild(rowLayoutWrap);
       }
+      var msgWrap = el('label', null, 'mb-field'); msgWrap.appendChild(el('span', 'قالب متن پیام'));
+      var msg = el('textarea'); msg.rows = 4; msg.value = cfg.messageTemplate != null && String(cfg.messageTemplate) !== '' ? String(cfg.messageTemplate) : defaultScreenMessageTemplate(id); msg.placeholder = '{service}\\n\\n{prompt}'; msg.addEventListener('input', function () { cfg.messageTemplate = msg.value; renderPreview(); });
+      msgWrap.appendChild(msg); controls.appendChild(msgWrap);
+      if (id !== 'account_remove') {
+        var homeWrap = el('label', null, 'mb-check-field'); var home = el('input'); home.type = 'checkbox'; home.checked = cfg.homeButton !== false;
+        home.addEventListener('change', function () { cfg.homeButton = home.checked; renderPreview(); }); homeWrap.appendChild(home); homeWrap.appendChild(el('span', 'نمایش دکمه منوی اصلی')); controls.appendChild(homeWrap);
+      }
+      if (['service_test','service_buy','service_renew','plans_buy','plans_renew'].indexOf(id) !== -1) {
+        var styleWrap = el('label', null, 'mb-field'); styleWrap.appendChild(el('span', 'رنگ پیش‌فرض دکمه‌های زنده'));
+        var styleSelect = el('select');
+        [['default','پیش‌فرض'],['primary','آبی'],['success','سبز'],['danger','قرمز']].forEach(function (entry) { var opt = el('option',entry[1]); opt.value=entry[0]; opt.selected=(cfg.buttonStyle || 'default')===entry[0]; styleSelect.appendChild(opt); });
+        styleSelect.addEventListener('change',function(){cfg.buttonStyle=styleSelect.value;renderPreview();}); styleWrap.appendChild(styleSelect); controls.appendChild(styleWrap);
+      }
       var managedRoleGroups = {
-        service_test: [{id:'services',label:'سرویس‌های اکانت تست'}],
-        service_buy: [{id:'services',label:'سرویس‌های خرید'}],
-        service_renew: [{id:'services',label:'سرویس‌های تمدید'}],
-        plans_buy: [{id:'plans',label:'پلن‌های خرید'},{id:'custom_plan',label:'ساخت بسته دلخواه'}],
-        plans_renew: [{id:'plans',label:'پلن‌های تمدید'}],
+        service_test: [{id:'services',label:'سرویس‌های اکانت تست'},{id:'home',label:'منوی اصلی'}],
+        service_buy: [{id:'services',label:'سرویس‌های خرید'},{id:'home',label:'منوی اصلی'}],
+        service_renew: [{id:'services',label:'سرویس‌های تمدید'},{id:'home',label:'منوی اصلی'}],
+        plans_buy: [{id:'plans',label:'پلن‌های خرید'},{id:'custom_plan',label:'ساخت بسته دلخواه'},{id:'home',label:'منوی اصلی'}],
+        plans_renew: [{id:'plans',label:'پلن‌های تمدید'},{id:'home',label:'منوی اصلی'}],
         account_list: [{id:'subscription_detail',label:'باز کردن جزئیات اشتراک'},{id:'subscription_renew',label:'تمدید اشتراک'},{id:'subscription_remove',label:'حذف اشتراک'},{id:'home',label:'منوی اصلی'}],
         account_detail: [{id:'open_link',label:'باز کردن لینک اشتراک'},{id:'copy_link',label:'کپی لینک اشتراک'},{id:'renew_subscription',label:'تمدید اشتراک'},{id:'back_to_list',label:'بازگشت به فهرست'},{id:'home',label:'منوی اصلی'}],
         account_remove: [{id:'confirm_remove',label:'تأیید حذف'},{id:'cancel_remove',label:'انصراف از حذف'}],
@@ -202,7 +215,7 @@
       var roleDefs = managedRoleGroups[id] || [];
       if (roleDefs.length) {
         if (!cfg.buttonControls || typeof cfg.buttonControls !== 'object') cfg.buttonControls = {};
-        if (!Array.isArray(cfg.buttonRows) || !cfg.buttonRows.length) {
+        if (!Array.isArray(cfg.buttonRows)) {
           cfg.buttonRows = [];
           roleDefs.forEach(function (role) {
             var existing = cfg.buttonControls[role.id];

@@ -457,24 +457,56 @@
       }
       if (state.previewScreen === 'account_remove') { rows[0][0].label = cfg.confirmLabel || '🗑️ بله، حذف اشتراک'; rows[1][0].label = cfg.cancelLabel || '↩️ انصراف'; }
       if (cfg.homeButton === false && ['service_test','service_buy','service_renew','plans_buy','plans_renew','account_list','wallet','support'].indexOf(state.previewScreen) !== -1) rows = rows.filter(function (row) { return row[0] && row[0].label !== '🏠 منوی اصلی'; });
-      (cfg.buttonControls && Object.keys(cfg.buttonControls)).forEach(function (groupId) {
-        var control = cfg.buttonControls[groupId];
-        if (!control || control.enabled === false) {
-          if (groupId === 'custom_plan') rows = rows.filter(function (row) { return !row.some(function (b) { return /ساخت بسته دلخواه/.test(b.label); }); });
-          else if (groupId === 'services') rows = rows.filter(function (row) { return !row.some(function (b) { return /سرویس اصلی|سرویس گیمینگ|سرویس مستقیم/.test(b.label); }); });
-          else if (groupId === 'plans') rows = rows.filter(function (row) { return !row.some(function (b) { return /پلن/.test(b.label); }); });
-          return;
+      function previewRole(label) {
+        if (label === '🏠 منوی اصلی') return 'home';
+        if (state.previewScreen.indexOf('service_') === 0 && /سرویس/.test(label)) return 'services';
+        if (state.previewScreen.indexOf('plans_') === 0 && /پلن/.test(label)) return 'plans';
+        if (state.previewScreen === 'plans_buy' && /ساخت بسته دلخواه/.test(label)) return 'custom_plan';
+        if (state.previewScreen === 'account_list') {
+          if (/اشتراک من/.test(label)) return 'subscription_detail';
+          if (/🔁|تمدید/.test(label)) return 'subscription_renew';
+          if (/❌|حذف/.test(label)) return 'subscription_remove';
         }
-        rows.forEach(function (row) { row.forEach(function (button) {
-          var matches = groupId === 'custom_plan' ? /ساخت بسته دلخواه/.test(button.label) : groupId === 'services' ? /سرویس اصلی|سرویس گیمینگ|سرویس مستقیم/.test(button.label) : /پلن/.test(button.label);
-          if (matches) { button.label = String(control.label || '{label}').replace(/\{label\}/g, button.label); button.style = control.style || 'default'; }
-        }); });
+        if (state.previewScreen === 'account_detail') {
+          if (/باز کردن لینک/.test(label)) return 'open_link';
+          if (/کپی لینک/.test(label)) return 'copy_link';
+          if (/تمدید اشتراک/.test(label)) return 'renew_subscription';
+          if (/بازگشت به اشتراک‌ها/.test(label)) return 'back_to_list';
+        }
+        if (state.previewScreen === 'account_remove') {
+          if (/بله، حذف/.test(label)) return 'confirm_remove';
+          if (/انصراف/.test(label)) return 'cancel_remove';
+        }
+        return null;
+      }
+      var sourcePreviewRows = rows;
+      var controlledPreviewRows = sourcePreviewRows.map(function (row) {
+        return row.map(function (button) {
+          var roleId = previewRole(button.label);
+          var control = roleId && cfg.buttonControls && cfg.buttonControls[roleId];
+          if (control) {
+            if (control.enabled === false) return null;
+            button.label = String(control.label || '{label}').replace(/\{label\}/g, button.label);
+            button.style = control.style || 'default';
+          }
+          return { button: button, role: roleId };
+        }).filter(Boolean);
       });
-      if (cfg.buttonControls) {
-        var roles = {account_list:['subscription_detail','subscription_renew','subscription_remove','home'],account_detail:['open_link','copy_link','renew_subscription','back_to_list','home'],account_remove:['confirm_remove','cancel_remove']}[state.previewScreen] || [];
-        var matchers = {subscription_detail:/اشتراک من/,subscription_renew:/🔁/,subscription_remove:/❌/,open_link:/باز کردن لینک/,copy_link:/کپی لینک/,renew_subscription:/تمدید اشتراک/,back_to_list:/بازگشت به اشتراک‌ها/,confirm_remove:/بله، حذف اشتراک/,cancel_remove:/انصراف/,home:/منوی اصلی/};
-        roles.forEach(function(id){var c=cfg.buttonControls[id];if(!c)return;rows.forEach(function(row){row.forEach(function(b){if(!matchers[id].test(b.label))return;if(c.enabled===false)b.__hidden=true;else{b.label=String(c.label||'{label}').replace(/\{label\}/g,b.label);b.style=c.style||'default';}});});});
-        rows=rows.map(function(row){return row.filter(function(b){return !b.__hidden;});}).filter(function(row){return row.length;});
+      if (Array.isArray(cfg.buttonRows)) {
+        rows = [];
+        controlledPreviewRows.forEach(function (sourceRow) {
+          var assigned = [];
+          cfg.buttonRows.forEach(function (layoutRow) {
+            var roles = Array.isArray(layoutRow.roles) ? layoutRow.roles : [];
+            var selected = sourceRow.filter(function (item) { return item.role && roles.indexOf(item.role) !== -1 && assigned.indexOf(item) === -1; });
+            selected.forEach(function (item) { assigned.push(item); });
+            if (selected.length) rows.push(selected.map(function (item) { return item.button; });
+          });
+          var leftovers = sourceRow.filter(function (item) { return !item.role && assigned.indexOf(item) === -1; });
+          if (leftovers.length) rows.push(leftovers.map(function (item) { return item.button; }));
+        });
+      } else {
+        rows = controlledPreviewRows.map(function (row) { return row.map(function (item) { return item.button; }); });
       }
       var extraPreviewRows = [];
       (cfg.buttons || []).forEach(function (button, index) {
@@ -484,7 +516,9 @@
         group.buttons.push({ label: button.label || 'دکمه جدید', style: button.style || 'default' });
       });
       extraPreviewRows.forEach(function (group) { rows.push(group.buttons); });
-      if (Array.isArray(cfg.rowLayout) && cfg.rowLayout.length) {
+      if (Array.isArray(cfg.buttonRows)) {
+        // Explicit managed rows above remain intact; custom buttons keep their own rows.
+      } else if (Array.isArray(cfg.rowLayout) && cfg.rowLayout.length) {
         var flat = rows.flat(); rows = []; var offset = 0;
         cfg.rowLayout.forEach(function (rowWidth) { var width = Math.max(1, Math.min(4, Number(rowWidth) || 1)); if (offset < flat.length) { rows.push(flat.slice(offset, offset + width)); offset += width; } });
         var fallbackWidth = Math.max(1, Math.min(4, Number(cfg.columns) || 1));

@@ -68,3 +68,14 @@ test('remove confirmation offers confirm and cancel actions', () => {
   assert.equal(rows[0][0].callback_data, 'account_remove_confirm:order-1');
   assert.equal(rows[1][0].callback_data, 'account_list');
 });
+
+test('account list keyboard paginates without exceeding Telegram button limits', () => {
+  const subscriptions = Array.from({ length: 20 }, (_, i) => ({ id: `order-${i}`, title: `user_${i}` }));
+  const rows = accountUI.subscriptionKeyboard(subscriptions, { homeButton: true, pagination: { page: 0, totalPages: 3 } });
+  assert.equal(rows.flat().length, 62);
+  assert.equal(rows[0].length, 3);
+  assert.deepEqual(rows[rows.length - 2].map((button) => button.callback_data), ['account_page:1']);
+  assert.equal(rows.at(-1)[0].callback_data, 'main_home');
+  const lastPage = accountUI.subscriptionKeyboard([{ id: 'last', title: 'last_user' }], { pagination: { page: 2, totalPages: 3 } });
+  assert.deepEqual(lastPage[lastPage.length - 2].map((button) => button.callback_data), ['account_page:1']);
+});

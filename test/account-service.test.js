@@ -17,7 +17,7 @@ test('listSubscriptions uses stored orders without making live PasarGuard reques
   ];
   storage.listUserOrders = async (telegramUserId, limit) => {
     assert.equal(String(telegramUserId), '12345');
-    assert.equal(limit, 100);
+    assert.equal(limit, Number.MAX_SAFE_INTEGER);
     return storedOrders;
   };
   try {

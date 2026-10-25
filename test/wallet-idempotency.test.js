@@ -53,4 +53,8 @@ test('checkout does not retry while holding the purchase lock', () => {
   assert.ok(checkout.indexOf('await storage.releaseLock(lock)') < checkout.indexOf('if (insufficientAfterLock) return showWalletCheckout'));
   assert.match(checkout, /wallet\.debitOnce/);
   assert.match(checkout, /hasProcessedTransaction/);
+  const apiSource = source('api/index.js');
+  assert.match(apiSource, /async function requestWalletFundsForOrder/);
+  assert.match(apiSource, /stage: 'AWAITING_WALLET_AMOUNT'/);
+  assert.match(apiSource, /WALLET_TOPUP_APPROVAL_NOTIFY_FAILED/);
 });

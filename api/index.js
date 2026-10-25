@@ -116,6 +116,22 @@ async function createWalletTopup(ctx, amount, linkedOrderId) {
   return topup;
 }
 
+async function requestWalletFundsForOrder(order, balance) {
+  const price = Number(order.price || 0);
+  const missing = Math.max(0, price - Number(balance || 0));
+  await storage.updateOrder(order.orderId, { paymentStatus: 'WALLET_REQUIRED', fulfillmentStatus: 'AWAITING_WALLET' });
+  await storage.setState('user', order.telegramUserId, {
+    stage: 'AWAITING_WALLET_AMOUNT',
+    orderId: order.orderId,
+    requiredAmount: price,
+    balance: Number(balance || 0),
+  });
+  await bot.telegram.sendMessage(order.telegramUserId,
+    `💰 شارژ کیف پول تأیید شد، اما موجودی هنوز برای تکمیل سفارش کافی نیست.\n\nموجودی فعلی: ${Number(balance || 0).toLocaleString('en-US')} تومان\nمبلغ سفارش: ${price.toLocaleString('en-US')} تومان\nکسری: ${missing.toLocaleString('en-US')} تومان\n\nلطفاً مبلغ کسری را وارد کنید تا خرید ادامه پیدا کند.`
+  ).catch((error) => log('WALLET_RECHARGE_FOLLOWUP_FAILED', { order_id: order.orderId, telegram_user_id: order.telegramUserId, error: error?.message || String(error) }));
+  return { insufficient: true, balance: Number(balance || 0), missing };
+}
+
 async function activateWalletOrder(order) {
   const price = Number(order.price || 0);
   const lock = `wallet-purchase:${order.telegramUserId}`;
@@ -126,14 +142,21 @@ async function activateWalletOrder(order) {
     const balance = await wallet.getBalance(current.telegramUserId);
     const transactionId = `purchase:${current.orderId}`;
     const alreadyDebited = await wallet.hasProcessedTransaction(current.telegramUserId, transactionId);
-    if (!alreadyDebited && balance < price) return { insufficient: true, balance };
-    await wallet.debitOnce(current.telegramUserId, price, transactionId, { walletLastTransaction: transactionId });
+    if (!alreadyDebited && balance < price) return requestWalletFundsForOrder(current, balance);
+    try {
+      await wallet.debitOnce(current.telegramUserId, price, transactionId, { walletLastTransaction: transactionId });
+    } catch (error) {
+      if (error?.message !== 'INSUFFICIENT_BALANCE') throw error;
+      return requestWalletFundsForOrder(current, await wallet.getBalance(current.telegramUserId));
+    }
     const paid = await storage.updateOrder(current.orderId, { paymentStatus: 'WALLET_PAID', fulfillmentStatus: 'RECEIPT_SUBMITTED', walletCharged: true, walletChargedAmount: price, walletChargedAt: new Date().toISOString() });
     await storage.deleteState('user', current.telegramUserId);
     await bot.telegram.sendMessage(current.telegramUserId, `✅ شارژ کیف پول تأیید شد و ${price.toLocaleString('en-US')} تومان بابت سفارش ${current.planName} کسر شد.\n\n⏳ اشتراک شما در حال ساخت است...`).catch(() => {});
     await fulfillOrder(current.orderId, bot.telegram);
     return { fulfilled: true, order: paid };
-  } finally { await storage.releaseLock(lock); }
+  } finally {
+    await storage.releaseLock(lock);
+  }
 }
 
 async function sendServiceMenu(ctx, mode = 'buy') {
@@ -210,7 +233,7 @@ bot.on('callback_query',async(ctx)=>{
       });
       await storage.updateOrder(id, { paymentStatus: 'APPROVED', fulfillmentStatus: 'WALLET_CREDITED', approvedAt: new Date().toISOString() });
       linkedOrderId = topup.linkedOrderId || null;
-      await ctx.reply(`✅ شارژ ${Number(topup.topupAmount || 0).toLocaleString('en-US')} تومان تأیید شد.`);
+      await ctx.reply(`✅ شارژ ${Number(topup.topupAmount || 0).toLocaleString('en-US')} تومان تأیید شد.`).catch((error) => log('WALLET_TOPUP_APPROVAL_NOTIFY_FAILED', { order_id: id, error: error?.message || String(error) }));
     } finally {
       await storage.releaseLock(lockName).catch(() => {});
     }

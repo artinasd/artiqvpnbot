@@ -121,7 +121,7 @@
         styleWrap.appendChild(styleSelect); controls.appendChild(styleWrap);
       }
       var msgWrap = el('label', null, 'mb-field'); msgWrap.appendChild(el('span', 'قالب متن پیام'));
-      var msg = el('textarea'); msg.rows = 2; msg.value = cfg.messageTemplate || ''; msg.placeholder = '{service}\\n\\n{prompt}'; msg.addEventListener('input', function () { cfg.messageTemplate = msg.value; renderPreview(); });
+      var msg = el('textarea'); msg.rows = 2; msg.value = cfg.messageTemplate || ''; msg.placeholder = '{service}\n\n{prompt}'; msg.addEventListener('input', function () { cfg.messageTemplate = msg.value; renderPreview(); });
       msgWrap.appendChild(msg); controls.appendChild(msgWrap);
       if (id !== 'account_remove') {
         var homeWrap = el('label', null, 'mb-check-field'); var home = el('input'); home.type = 'checkbox'; home.checked = cfg.homeButton !== false;
@@ -363,12 +363,12 @@
         service_test: { title: 'انتخاب سرویس اکانت تست', message: 'سرویس موردنظر را برای اکانت تست انتخاب کنید:', rows: [['🧩 سرویس اصلی'],['🎮 سرویس گیمینگ'],['🏠 منوی اصلی']] },
         service_buy: { title: 'انتخاب سرویس برای خرید', message: 'ابتدا سرویس موردنظر را انتخاب کنید:', rows: [['🧩 سرویس اصلی'],['⚡ سرویس مستقیم'],['🏠 منوی اصلی']] },
         service_renew: { title: 'انتخاب سرویس برای تمدید', message: 'سرویس اشتراک خود را انتخاب کنید:', rows: [['🧩 سرویس اصلی'],['🎮 سرویس گیمینگ'],['🏠 منوی اصلی']] },
-        plans_buy: { title: 'پلن‌های خرید', message: '{service}\\n\\n{prompt}', rows: [['📦 پلن ۱۰ گیگ — ۲۰۰٬۰۰۰ تومان'],['📦 پلن ۳۰ گیگ — ۵۰۰٬۰۰۰ تومان'],['🛠 ساخت بسته دلخواه'],['🏠 منوی اصلی']] },
-        plans_renew: { title: 'پلن‌های تمدید', message: '{service}\\n\\n{prompt}', rows: [['🔄 پلن ۱۰ گیگ'],['🔄 پلن ۳۰ گیگ'],['🏠 منوی اصلی']] },
+        plans_buy: { title: 'پلن‌های خرید', message: '{service}\n\n{prompt}', rows: [['📦 پلن ۱۰ گیگ — ۲۰۰٬۰۰۰ تومان'],['📦 پلن ۳۰ گیگ — ۵۰۰٬۰۰۰ تومان'],['🛠 ساخت بسته دلخواه'],['🏠 منوی اصلی']] },
+        plans_renew: { title: 'پلن‌های تمدید', message: '{service}\n\n{prompt}', rows: [['🔄 پلن ۱۰ گیگ'],['🔄 پلن ۳۰ گیگ'],['🏠 منوی اصلی']] },
         account_list: { title: 'حساب من', message: 'اشتراک موردنظر را انتخاب کنید:', rows: [['اشتراک من','🔁','❌'],['🏠 منوی اصلی']] },
-        account_detail: { title: 'جزئیات اشتراک', message: '📦 اشتراک ۱۰ گیگ\\nوضعیت: فعال', rows: [['🔗 باز کردن لینک','📋 کپی لینک'],['🔄 تمدید اشتراک'],['⬅️ بازگشت به اشتراک‌ها'],['🏠 منوی اصلی']] },
+        account_detail: { title: 'جزئیات اشتراک', message: '📦 اشتراک ۱۰ گیگ\nوضعیت: فعال', rows: [['🔗 باز کردن لینک','📋 کپی لینک'],['🔄 تمدید اشتراک'],['⬅️ بازگشت به اشتراک‌ها'],['🏠 منوی اصلی']] },
         account_remove: { title: 'تأیید حذف اشتراک', message: 'آیا از حذف این اشتراک مطمئن هستید؟', rows: [['🗑️ بله، حذف اشتراک'],['↩️ انصراف']] },
-        wallet: { title: 'کیف پول', message: 'موجودی فعلی: ۰ تومان\\nمبلغ شارژ را وارد کنید.', rows: [['🏠 منوی اصلی']] },
+        wallet: { title: 'کیف پول', message: 'موجودی فعلی: ۰ تومان\nمبلغ شارژ را وارد کنید.', rows: [['🏠 منوی اصلی']] },
         support: { title: 'پشتیبانی', message: 'برای دریافت پشتیبانی با ما در ارتباط باشید.', rows: [['🏠 منوی اصلی']] }
       };
       var sample = samples[state.previewScreen] || samples.service_buy;
@@ -378,11 +378,11 @@
         service_test: botTexts.serviceSelectionTest,
         service_buy: botTexts.serviceSelectionBuy,
         service_renew: botTexts.serviceSelectionRenew,
-        plans_buy: '{service}\\n\\n{prompt}',
-        plans_renew: '{service}\\n\\n{prompt}',
+        plans_buy: '{service}\n\n{prompt}',
+        plans_renew: '{service}\n\n{prompt}',
         support: botTexts.support
       };
-      if (state.previewScreen === 'plans_buy' || state.previewScreen === 'plans_renew') actualMessages[state.previewScreen] = '{service}\\n\\n' + (botTexts.planPrompt || 'لطفاً بسته مورد نظر را انتخاب کنید:');
+      if (state.previewScreen === 'plans_buy' || state.previewScreen === 'plans_renew') actualMessages[state.previewScreen] = '{service}\n\n' + (botTexts.planPrompt || 'لطفاً بسته مورد نظر را انتخاب کنید:');
       var values = { service: 'سرویس اصلی', prompt: botTexts.planPrompt || 'لطفاً بسته مورد نظر را انتخاب کنید:', title: sample.title, mode: state.previewScreen.indexOf('renew') !== -1 ? 'تمدید' : 'خرید', support_username: 'نام کاربری پشتیبانی' };
       var template = String(cfg.messageTemplate || '').trim() || actualMessages[state.previewScreen] || sample.message;
       message = template.replace(/\{(service|prompt|title|mode|support_username)\}/g, function (_, key) { return values[key] || ''; });
@@ -419,7 +419,7 @@
       if (cfg.buttonControls) {
         var roles = {account_list:['subscription_detail','subscription_renew','subscription_remove','home'],account_detail:['open_link','copy_link','renew_subscription','back_to_list','home'],account_remove:['confirm_remove','cancel_remove']}[state.previewScreen] || [];
         var matchers = {subscription_detail:/اشتراک من/,subscription_renew:/🔁/,subscription_remove:/❌/,open_link:/باز کردن لینک/,copy_link:/کپی لینک/,renew_subscription:/تمدید اشتراک/,back_to_list:/بازگشت به اشتراک‌ها/,confirm_remove:/بله، حذف اشتراک/,cancel_remove:/انصراف/,home:/منوی اصلی/};
-        roles.forEach(function(id){var c=cfg.buttonControls[id];if(!c)return;rows.forEach(function(row){row.forEach(function(b){if(!matchers[id].test(b.label))return;if(c.enabled===false)b.__hidden=true;else{b.label=String(c.label||'{label}').replace(/\\{label\\}/g,b.label);b.style=c.style||'default';}});});});
+        roles.forEach(function(id){var c=cfg.buttonControls[id];if(!c)return;rows.forEach(function(row){row.forEach(function(b){if(!matchers[id].test(b.label))return;if(c.enabled===false)b.__hidden=true;else{b.label=String(c.label||'{label}').replace(/\{label\}/g,b.label);b.style=c.style||'default';}});});});
         rows=rows.map(function(row){return row.filter(function(b){return !b.__hidden;});}).filter(function(row){return row.length;});
       }
       (cfg.buttons || []).forEach(function (button) { rows.push([{ label: button.label || 'دکمه جدید', style: button.style || 'default' }]); });

@@ -273,10 +273,28 @@
           });
           rowCard.appendChild(grid);
           rowCard.appendChild(btn('+ افزودن دکمه به این ردیف','mb-secondary',function(){
-            var choices=availableRoles(); if(!choices.length)return showStatus('همه دکمه‌های موجود در ردیف‌ها قرار گرفته‌اند.',false);
-            var selectedRole=choices[0];
-            if(choices.length>1){var promptText=choices.map(function(role,index){return (index+1)+'. '+role.label;}).join('\n');var answer=window.prompt('شماره دکمه برای افزودن به این ردیف:\n'+promptText,'1');if(answer===null)return;var choiceIndex=Number(answer)-1;if(!Number.isInteger(choiceIndex)||choiceIndex<0||choiceIndex>=choices.length)return showStatus('انتخاب نامعتبر است.',false);selectedRole=choices[choiceIndex];}
-            row.roles.push(selectedRole.id); var control=cfg.buttonControls[selectedRole.id]||(cfg.buttonControls[selectedRole.id]={enabled:true,label:'{label}',action:'original',style:'default',params:{}});control.enabled=true;if(selectedRole.id==='home')cfg.homeButton=true;render();
+            var choices=availableRoles();
+            if(!choices.length)return showStatus('همه دکمه‌های موجود در این صفحه از قبل در ردیف‌ها قرار دارند. برای افزودن دکمهٔ سفارشی از بخش «دکمه‌های اضافی این منو» استفاده کنید.',false);
+            // Avoid window.prompt: embedded admin panels can suppress native dialogs,
+            // making this button appear to do nothing.
+            var existingPicker = rowCard.querySelector('.mb-add-role-picker');
+            if(existingPicker){existingPicker.remove();return;}
+            var picker = el('div',null,'mb-add-role-picker mb-screen-controls');
+            var pickerLabel = el('label',null,'mb-field'); pickerLabel.appendChild(el('span','انتخاب دکمه برای افزودن به این ردیف'));
+            var pickerSelect = el('select');
+            choices.forEach(function(role,index){var option=el('option',role.label);option.value=role.id;option.selected=index===0;pickerSelect.appendChild(option);});
+            pickerLabel.appendChild(pickerSelect); picker.appendChild(pickerLabel);
+            picker.appendChild(btn('افزودن','mb-button',function(){
+              var selectedRole=choices.find(function(role){return role.id===pickerSelect.value;});
+              if(!selectedRole)return showStatus('لطفاً یک دکمه انتخاب کنید.',false);
+              row.roles.push(selectedRole.id);
+              var control=cfg.buttonControls[selectedRole.id]||(cfg.buttonControls[selectedRole.id]={enabled:true,label:'{label}',action:'original',style:'default',params:{}});
+              control.enabled=true;
+              if(selectedRole.id==='home')cfg.homeButton=true;
+              render();
+            }));
+            picker.appendChild(btn('انصراف','mb-secondary',function(){picker.remove();}));
+            rowCard.appendChild(picker);
           }));
           managedRows.appendChild(rowCard);
         });

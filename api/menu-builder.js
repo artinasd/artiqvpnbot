@@ -63,12 +63,27 @@ function validateDocument(input) {
     if (!screen || typeof screen !== 'object' || Array.isArray(screen)) { errors.push('Invalid settings for screen: ' + screenId); continue; }
     if (!Number.isInteger(Number(screen.columns || 1)) || Number(screen.columns || 1) < 1 || Number(screen.columns || 1) > 4) errors.push('Screen columns must be between 1 and 4: ' + screenId);
     if (screen.rowLayout !== undefined && (!Array.isArray(screen.rowLayout) || screen.rowLayout.length > 30 || screen.rowLayout.some((width) => !Number.isInteger(Number(width)) || Number(width) < 1 || Number(width) > 4))) errors.push('Screen row layout must contain up to 30 row widths between 1 and 4: ' + screenId);
+    const allowedRowRoles = { service_test: ['services', 'home'], service_buy: ['services', 'home'], service_renew: ['services', 'home'], plans_buy: ['plans', 'custom_plan', 'home'], plans_renew: ['plans', 'home'], account_list: ['subscription_detail', 'subscription_renew', 'subscription_remove', 'home'], account_detail: ['open_link', 'copy_link', 'renew_subscription', 'back_to_list', 'home'], account_remove: ['confirm_remove', 'cancel_remove'], wallet: ['home'], support: ['home'] }[screenId] || [];
+    if (screen.buttonRows !== undefined) {
+      if (!Array.isArray(screen.buttonRows) || screen.buttonRows.length > 30) errors.push('Button rows must be an array with at most 30 rows: ' + screenId);
+      else {
+        const seenRoles = new Set();
+        for (const row of screen.buttonRows) {
+          if (!row || typeof row !== 'object' || !/^[a-zA-Z0-9_-]{1,40}$/.test(String(row.id || '')) || !Array.isArray(row.roles) || row.roles.length > 8) { errors.push('Invalid managed button row: ' + screenId); continue; }
+          for (const role of row.roles) {
+            if (!allowedRowRoles.includes(role)) errors.push('Unknown managed button role: ' + screenId + '/' + String(role));
+            if (seenRoles.has(role)) errors.push('Duplicate managed button role: ' + screenId + '/' + String(role));
+            seenRoles.add(role);
+          }
+        }
+      }
+    }
     for (const key of ['messageTemplate', 'customPlanLabel', 'detailLabel', 'renewLabel', 'removeLabel', 'openLabel', 'copyLabel', 'backLabel', 'confirmLabel', 'cancelLabel']) if (screen[key] !== undefined && (typeof screen[key] !== 'string' || screen[key].length > 500)) errors.push('Invalid ' + key + ' for screen: ' + screenId);
     for (const key of ['homeButton', 'customPlanButton']) if (screen[key] !== undefined && typeof screen[key] !== 'boolean') errors.push(key + ' must be true or false for screen: ' + screenId);
     if (screen.buttonStyle !== undefined && !['default', 'primary', 'success', 'danger'].includes(screen.buttonStyle)) errors.push('Unsupported Telegram button style for screen: ' + screenId);
     if (screen.buttonControls !== undefined && (!screen.buttonControls || typeof screen.buttonControls !== 'object' || Array.isArray(screen.buttonControls))) errors.push('Button controls must be an object: ' + screenId);
     for (const [controlId, control] of Object.entries(screen.buttonControls || {})) {
-      const allowedControls = { service_test: ['services'], service_buy: ['services'], service_renew: ['services'], plans_buy: ['plans', 'custom_plan'], plans_renew: ['plans'], account_list: ['subscription_detail', 'subscription_renew', 'subscription_remove', 'home'], account_detail: ['open_link', 'copy_link', 'renew_subscription', 'back_to_list', 'home'], account_remove: ['confirm_remove', 'cancel_remove'] }[screenId] || [];
+      const allowedControls = { service_test: ['services', 'home'], service_buy: ['services', 'home'], service_renew: ['services', 'home'], plans_buy: ['plans', 'custom_plan', 'home'], plans_renew: ['plans', 'home'], account_list: ['subscription_detail', 'subscription_renew', 'subscription_remove', 'home'], account_detail: ['open_link', 'copy_link', 'renew_subscription', 'back_to_list', 'home'], account_remove: ['confirm_remove', 'cancel_remove'], wallet: ['home'], support: ['home'] }[screenId] || [];
       if (!allowedControls.includes(controlId)) errors.push('Unknown built-in button control: ' + screenId + '/' + controlId);
       if (!control || typeof control !== 'object' || Array.isArray(control)) { errors.push('Invalid built-in button control: ' + controlId); continue; }
       if (control.enabled !== undefined && typeof control.enabled !== 'boolean') errors.push('Button enabled must be true or false: ' + controlId);

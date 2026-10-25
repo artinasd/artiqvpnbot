@@ -274,23 +274,29 @@
           rowCard.appendChild(grid);
           rowCard.appendChild(btn('+ افزودن دکمه به این ردیف','mb-secondary',function(){
             var choices=availableRoles();
-            if(!choices.length)return showStatus('همه دکمه‌های موجود در این صفحه از قبل در ردیف‌ها قرار دارند. برای افزودن دکمهٔ سفارشی از بخش «دکمه‌های اضافی این منو» استفاده کنید.',false);
-            // Avoid window.prompt: embedded admin panels can suppress native dialogs,
-            // making this button appear to do nothing.
+            // Keep this picker inline; native prompt dialogs are suppressed in some embedded panels.
             var existingPicker = rowCard.querySelector('.mb-add-role-picker');
             if(existingPicker){existingPicker.remove();return;}
             var picker = el('div',null,'mb-add-role-picker mb-screen-controls');
-            var pickerLabel = el('label',null,'mb-field'); pickerLabel.appendChild(el('span','انتخاب دکمه برای افزودن به این ردیف'));
-            var pickerSelect = el('select');
-            choices.forEach(function(role,index){var option=el('option',role.label);option.value=role.id;option.selected=index===0;pickerSelect.appendChild(option);});
-            pickerLabel.appendChild(pickerSelect); picker.appendChild(pickerLabel);
-            picker.appendChild(btn('افزودن','mb-button',function(){
-              var selectedRole=choices.find(function(role){return role.id===pickerSelect.value;});
-              if(!selectedRole)return showStatus('لطفاً یک دکمه انتخاب کنید.',false);
-              row.roles.push(selectedRole.id);
-              var control=cfg.buttonControls[selectedRole.id]||(cfg.buttonControls[selectedRole.id]={enabled:true,label:'{label}',action:'original',style:'default',params:{}});
-              control.enabled=true;
-              if(selectedRole.id==='home')cfg.homeButton=true;
+            if(choices.length){
+              var pickerLabel = el('label',null,'mb-field'); pickerLabel.appendChild(el('span','افزودن دکمهٔ موجود به این ردیف'));
+              var pickerSelect = el('select');
+              choices.forEach(function(role,index){var option=el('option',role.label);option.value=role.id;option.selected=index===0;pickerSelect.appendChild(option);});
+              pickerLabel.appendChild(pickerSelect); picker.appendChild(pickerLabel);
+              picker.appendChild(btn('افزودن دکمهٔ موجود','mb-button',function(){
+                var selectedRole=choices.find(function(role){return role.id===pickerSelect.value;});
+                if(!selectedRole)return showStatus('لطفاً یک دکمه انتخاب کنید.',false);
+                row.roles.push(selectedRole.id);
+                var control=cfg.buttonControls[selectedRole.id]||(cfg.buttonControls[selectedRole.id]={enabled:true,label:'{label}',action:'original',style:'default',params:{}});
+                control.enabled=true;
+                if(selectedRole.id==='home')cfg.homeButton=true;
+                render();
+              }));
+            }
+            picker.appendChild(btn('ساخت دکمهٔ سفارشی در این ردیف','mb-button',function(){
+              if(!Array.isArray(cfg.buttons))cfg.buttons=[];
+              if(cfg.buttons.length>=20)return showStatus('برای هر منو حداکثر ۲۰ دکمهٔ اضافی مجاز است.',false);
+              cfg.buttons.push({id:'screen_button_'+Math.random().toString(36).slice(2,7),rowId:row.id,label:'دکمه جدید',action:'back_home',params:{}});
               render();
             }));
             picker.appendChild(btn('انصراف','mb-secondary',function(){picker.remove();}));

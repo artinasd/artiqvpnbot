@@ -65,6 +65,8 @@
       state.draft.menus.filter(function (m) { return !options.excludeMenuId || m.id !== options.excludeMenuId || m.id === button.params.menuId; }).forEach(function (m) {
         var opt = el('option', m.name + ' (' + m.id + ')'); opt.value = m.id; opt.selected = m.id === button.params.menuId; menuSelect.appendChild(opt);
       });
+      // A native select visually chooses its first option by default, but that does not fire change; persist that ID immediately.
+      if (!button.params.menuId && menuSelect.options.length) button.params.menuId = menuSelect.value;
       menuSelect.addEventListener('change', function () { button.params.menuId = menuSelect.value; });
       menuField.appendChild(menuSelect); item.appendChild(menuField);
     }
@@ -85,8 +87,6 @@
         if (!group) { group = { key: key, buttons: [] }; groups.push(group); }
         group.buttons.push(button);
       });
-      // A native select visually chooses its first option by default, but that does not fire change; persist that ID immediately.
-      if (!button.params.menuId && menuSelect.options.length) button.params.menuId = menuSelect.value;
       return groups;
     }
     var rows = el('div', null, 'mb-rows');

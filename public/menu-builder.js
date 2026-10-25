@@ -14,11 +14,11 @@
   }
   function menu() { return state.draft.menus.find(function (item) { return item.id === state.selectedMenu; }) || state.draft.menus[0]; }
   var defaultScreens = {
-    service_test: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'success', buttonControls: {} },
-    service_buy: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'primary', buttonControls: {} },
-    service_renew: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'success', buttonControls: {} },
-    plans_buy: { columns: 1, messageTemplate: '', customPlanButton: true, customPlanLabel: '🛠 ساخت بسته دلخواه (حجم و زمان)', homeButton: true, buttonStyle: 'primary', buttonControls: {} },
-    plans_renew: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'success', buttonControls: {} },
+    service_test: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'glass', buttonControls: {} },
+    service_buy: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'glass', buttonControls: {} },
+    service_renew: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'glass', buttonControls: {} },
+    plans_buy: { columns: 1, messageTemplate: '', customPlanButton: true, customPlanLabel: '🛠 ساخت بسته دلخواه (حجم و زمان)', homeButton: true, buttonStyle: 'glass', buttonControls: {} },
+    plans_renew: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'glass', buttonControls: {} },
     account_list: { columns: 3, messageTemplate: '', homeButton: true, detailLabel: '{title}', renewLabel: '🔁', removeLabel: '❌', buttonControls: {} },
     account_detail: { columns: 2, messageTemplate: '', openLabel: '🔗 باز کردن لینک', copyLabel: '📋 کپی لینک', renewLabel: '🔄 تمدید اشتراک', backLabel: '⬅️ بازگشت به اشتراک‌ها', homeButton: true, buttonControls: {} },
     account_remove: { columns: 2, messageTemplate: '', confirmLabel: '🗑️ بله، حذف اشتراک', cancelLabel: '↩️ انصراف', buttonControls: {} },
@@ -41,7 +41,11 @@
     if (!state.draft.screens || typeof state.draft.screens !== 'object') state.draft.screens = {};
     Object.keys(defaultScreens).forEach(function (id) {
       state.draft.screens[id] = Object.assign({}, defaultScreens[id], state.draft.screens[id] || {});
-      if (!Array.isArray(state.draft.screens[id].buttons)) state.draft.screens[id].buttons = [];
+      var cfg = state.draft.screens[id];
+      var legacyDefaultStyle = { service_test: 'success', service_buy: 'primary', service_renew: 'success', plans_buy: 'primary', plans_renew: 'success' }[id];
+      if (legacyDefaultStyle && cfg.buttonStyle === legacyDefaultStyle) cfg.buttonStyle = 'glass';
+      if (cfg.buttonControls && typeof cfg.buttonControls === 'object') Object.keys(cfg.buttonControls).forEach(function (role) { if (cfg.buttonControls[role] && cfg.buttonControls[role].style === 'default') cfg.buttonControls[role].style = 'glass'; });
+      if (!Array.isArray(cfg.buttons)) cfg.buttons = [];
     });
   }
   function renderManagedButton(button, options) {
@@ -177,7 +181,7 @@
       if (['service_test','service_buy','service_renew','plans_buy','plans_renew'].indexOf(id) !== -1) {
         var styleWrap = el('label', null, 'mb-field'); styleWrap.appendChild(el('span', 'رنگ پیش‌فرض دکمه‌های زنده'));
         var styleSelect = el('select');
-        [['default','پیش‌فرض'],['primary','آبی'],['success','سبز'],['danger','قرمز']].forEach(function (entry) { var opt = el('option',entry[1]); opt.value=entry[0]; opt.selected=(cfg.buttonStyle || 'glass')===entry[0]; styleSelect.appendChild(opt); });
+        [['glass','شیشه ای'],['primary','آبی'],['success','سبز'],['danger','قرمز']].forEach(function (entry) { var opt = el('option',entry[1]); opt.value=entry[0]; opt.selected=(cfg.buttonStyle || 'glass')===entry[0]; styleSelect.appendChild(opt); });
         styleSelect.addEventListener('change',function(){cfg.buttonStyle=styleSelect.value;renderPreview();}); styleWrap.appendChild(styleSelect); controls.appendChild(styleWrap);
       }
       var managedRoleGroups = {
@@ -291,7 +295,7 @@
                 var selectedRole=choices.find(function(role){return role.id===pickerSelect.value;});
                 if(!selectedRole)return showStatus('لطفاً یک دکمه انتخاب کنید.',false);
                 row.roles.push(selectedRole.id);
-                var control=cfg.buttonControls[selectedRole.id]||(cfg.buttonControls[selectedRole.id]={enabled:true,label:'{label}',action:'original',style:'default',params:{}});
+                var control=cfg.buttonControls[selectedRole.id]||(cfg.buttonControls[selectedRole.id]={enabled:true,label:'{label}',action:'original',style:'glass',params:{}});
                 control.enabled=true;
                 if(selectedRole.id==='home')cfg.homeButton=true;
                 render();
@@ -436,7 +440,7 @@
     var style = 'default';
     if (state.previewScreen === 'menu') {
       var selected = menu(); message = (selected.text || (state.botTexts && state.botTexts.start) || 'متن پیام در این قسمت نمایش داده می‌شود.').replace(/\\{debt\\}/g, '125,000');
-      rows = selected.rows.map(function (row) { return row.buttons.map(function (button) { return { label: button.label || 'Button', style: button.style || 'default' }; }); });
+      rows = selected.rows.map(function (row) { return row.buttons.map(function (button) { return { label: button.label || 'Button', style: button.style || 'glass' }; }); });
     } else {
       var cfg = state.draft.screens[state.previewScreen] || {};
       var samples = {
@@ -466,8 +470,8 @@
       var values = { service: 'سرویس اصلی', prompt: botTexts.planPrompt || 'لطفاً بسته مورد نظر را انتخاب کنید:', title: sample.title, mode: state.previewScreen.indexOf('renew') !== -1 ? 'تمدید' : 'خرید', support_username: 'نام کاربری پشتیبانی', debt: '125,000' };
       var template = cfg.messageTemplate != null && String(cfg.messageTemplate) !== '' ? String(cfg.messageTemplate) : (actualMessages[state.previewScreen] || sample.message);
       message = template.replace(/\{(service|prompt|title|mode|support_username|debt)\}/g, function (_, key) { return values[key] || ''; });
-      rows = sample.rows.map(function (row) { return row.map(function (label) { return { label: label, style: 'default' }; }); });
-      style = cfg.buttonStyle || 'default';
+      rows = sample.rows.map(function (row) { return row.map(function (label) { return { label: label, style: 'glass' }; }); });
+      style = cfg.buttonStyle || 'glass';
       if (state.previewScreen === 'plans_buy') {
         if (cfg.customPlanButton === false) rows = rows.filter(function (row) { return row[0].label !== '🛠 ساخت بسته دلخواه'; });
         else if (cfg.customPlanLabel) rows[rows.length - 2][0].label = cfg.customPlanLabel;
@@ -513,7 +517,7 @@
           if (control) {
             if (control.enabled === false) return null;
             button.label = String(control.label || '{label}').replace(/\{label\}/g, button.label);
-            button.style = control.style || 'default';
+            button.style = control.style || 'glass';
           }
           return { button: button, role: roleId };
         }).filter(Boolean);
@@ -539,7 +543,7 @@
         var key = button.rowId || ('legacy:' + (button.id || index));
         var group = extraPreviewRows.find(function (item) { return item.key === key; });
         if (!group) { group = { key: key, buttons: [] }; extraPreviewRows.push(group); }
-        group.buttons.push({ label: button.label || 'دکمه جدید', style: button.style || 'default' });
+        group.buttons.push({ label: button.label || 'دکمه جدید', style: button.style || 'glass' });
       });
       extraPreviewRows.forEach(function (group) { rows.push(group.buttons); });
       if (Array.isArray(cfg.buttonRows)) {

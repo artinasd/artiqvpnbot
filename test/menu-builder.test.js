@@ -69,6 +69,12 @@ test('menu API requires authentication and rejects unsafe or invalid menu docume
   assert.equal(styleResult.status, 400);
   assert.ok(styleResult.body.errors.some((error) => error.includes('Unsupported Telegram button style')));
 
+  const badScreenButton = structuredClone(initial.body.draft);
+  badScreenButton.screens.support.buttons = [{ id: 'unsafe', label: 'bad', action: 'open_url', params: { url: 'http://example.com' } }];
+  const screenButtonResult = await request({ action: 'save_draft', document: badScreenButton });
+  assert.equal(screenButtonResult.status, 400);
+  assert.ok(screenButtonResult.body.errors.some((error) => error.includes('Only HTTPS links are allowed')));
+
   const badTarget = structuredClone(initial.body.draft);
   badTarget.menus[0].rows[0].buttons[0] = {
     id: 'nav', label: 'Go', action: 'navigate_menu', params: { menuId: 'missing' },
@@ -125,6 +131,10 @@ test('published runtime routes registered actions and rejects missing submenu ta
   assert.match(source('public/menu-builder.js'), /style: button\.style \|\| 'default'/);
   assert.match(index, /getMenuKeyboard\('main'\)/);
   assert.match(runtime, /arrangeScreenRows/);
+  assert.match(runtime, /getScreenExtraRows/);
+  assert.match(runtime, /renderRegisteredButton/);
+  assert.match(api, /Screen buttons must be an array/);
+  assert.match(source('public/menu-builder.js'), /دکمه‌های اضافی این منو/);
   assert.match(runtime, /formatScreenMessage/);
   assert.match(index, /plans_buy/);
   assert.match(index, /account_detail/);

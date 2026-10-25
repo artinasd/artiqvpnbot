@@ -41,7 +41,39 @@
     if (!state.draft.screens || typeof state.draft.screens !== 'object') state.draft.screens = {};
     Object.keys(defaultScreens).forEach(function (id) {
       state.draft.screens[id] = Object.assign({}, defaultScreens[id], state.draft.screens[id] || {});
+      if (!Array.isArray(state.draft.screens[id].buttons)) state.draft.screens[id].buttons = [];
     });
+  }
+  function renderScreenButtons(screenId, cfg) {
+    var wrap = el('section', null, 'mb-row');
+    wrap.appendChild(el('strong', 'دکمه‌های اضافی این منو', 'mb-screen-title'));
+    wrap.appendChild(el('p', 'این دکمه‌ها کنار دکمه‌های زندهٔ سرویس/پلن/اشتراک نمایش داده می‌شوند و عملکرد انتخابی‌شان اجرا می‌شود.', 'mb-description'));
+    (cfg.buttons || []).forEach(function (button, index) {
+      var item = el('div', null, 'mb-button-edit');
+      item.appendChild(field('متن دکمه', button.label, function (v) { button.label = v; renderPreview(); }));
+      var actionLabel = el('label', null, 'mb-field'); actionLabel.appendChild(el('span', 'عملکرد دکمه'));
+      var select = actionOptions(button.action); actionLabel.appendChild(select); item.appendChild(actionLabel);
+      select.addEventListener('change', function () { button.action = select.value; button.params = {}; render(); });
+      var styleLabel = el('label', null, 'mb-field'); styleLabel.appendChild(el('span', 'رنگ دکمه'));
+      var styleSelect = el('select');
+      [['default','پیش‌فرض'],['primary','آبی'],['success','سبز'],['danger','قرمز']].forEach(function (entry) { var opt = el('option', entry[1]); opt.value = entry[0]; opt.selected = (button.style || 'default') === entry[0]; styleSelect.appendChild(opt); });
+      styleSelect.addEventListener('change', function () { if (styleSelect.value === 'default') delete button.style; else button.style = styleSelect.value; renderPreview(); });
+      styleLabel.appendChild(styleSelect); item.appendChild(styleLabel);
+      if (button.action === 'navigate_menu') {
+        var menuField = el('label', null, 'mb-field'); menuField.appendChild(el('span', 'منوی مقصد'));
+        var menuSelect = el('select');
+        state.draft.menus.forEach(function (m) { var opt = el('option', m.name + ' (' + m.id + ')'); opt.value = m.id; opt.selected = m.id === (button.params || {}).menuId; menuSelect.appendChild(opt); });
+        menuSelect.addEventListener('change', function () { button.params.menuId = menuSelect.value; }); menuField.appendChild(menuSelect); item.appendChild(menuField);
+      }
+      if (button.action === 'open_url') item.appendChild(field('لینک HTTPS', (button.params || {}).url, function (v) { button.params.url = v; }, 'https://example.com'));
+      item.appendChild(btn('حذف دکمه', 'mb-danger', function () { cfg.buttons.splice(index, 1); render(); }));
+      wrap.appendChild(item);
+    });
+    wrap.appendChild(btn('+ افزودن دکمه', 'mb-secondary', function () {
+      if (cfg.buttons.length >= 20) return showStatus('برای هر منو حداکثر ۲۰ دکمهٔ اضافی مجاز است.', false);
+      cfg.buttons.push({ id: 'screen_button_' + Math.random().toString(36).slice(2, 7), label: 'دکمه جدید', action: 'back_home', params: {} }); render();
+    }));
+    return wrap;
   }
   function renderDynamicScreens(selectedScreen) {
     ensureScreens();
@@ -96,7 +128,7 @@
         controls.appendChild(field('متن دکمه تأیید حذف', cfg.confirmLabel, function (v) { cfg.confirmLabel = v; }));
         controls.appendChild(field('متن دکمه انصراف', cfg.cancelLabel, function (v) { cfg.cancelLabel = v; }));
       }
-      section.appendChild(controls); details.appendChild(section);
+      section.appendChild(controls); section.appendChild(renderScreenButtons(id, cfg)); details.appendChild(section);
     });
     return details;
   }
@@ -250,6 +282,7 @@
       var template = String(cfg.messageTemplate || '').trim() || sample.message;
       message = template.replace(/\{(service|prompt|title|mode)\}/g, function (_, key) { return values[key] || ''; });
       rows = sample.rows.map(function (row) { return row.map(function (label) { return { label: label, style: 'default' }; }); });
+      (cfg.buttons || []).forEach(function (button) { rows.push([{ label: button.label || 'دکمه جدید', style: button.style || 'default' }]); });
       style = cfg.buttonStyle || 'default';
       if (state.previewScreen === 'plans_buy') {
         if (cfg.customPlanButton === false) rows = rows.filter(function (row) { return row[0].label !== '🛠 ساخت بسته دلخواه'; });

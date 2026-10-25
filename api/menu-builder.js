@@ -5,9 +5,9 @@ const KEY = 'cms:menu-builder';
 const ACTIONS = Object.freeze({
   test_services: { label: 'نمایش سرویس‌های اکانت تست', params: [] },
   buy_services: { label: 'نمایش سرویس‌های خرید', params: [] },
-  wallet: { label: 'باز کردن کیف پول', params: [] },
+  wallet: { label: 'باز کردن کیف پول', params: [], buttons: [] },
   account: { label: 'نمایش اشتراک‌های من', params: [] },
-  support: { label: 'نمایش اطلاعات پشتیبانی', params: [] },
+  support: { label: 'نمایش اطلاعات پشتیبانی', params: [], buttons: [] },
   renew: { label: 'شروع فرایند تمدید', params: [] },
   navigate_menu: { label: 'باز کردن منوی دیگر', params: ['menuId'] },
   open_url: { label: 'باز کردن لینک HTTPS', params: ['url'] },
@@ -16,14 +16,14 @@ const ACTIONS = Object.freeze({
 const DEFAULT_DOCUMENT = {
   version: 1,
   screens: {
-    service_test: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'success' },
-    service_buy: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'primary' },
-    service_renew: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'success' },
-    plans_buy: { columns: 1, messageTemplate: '', customPlanButton: true, customPlanLabel: '🛠 ساخت بسته دلخواه (حجم و زمان)', homeButton: true, buttonStyle: 'primary' },
-    plans_renew: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'success' },
-    account_list: { columns: 1, messageTemplate: '', homeButton: true, detailLabel: '{title}', renewLabel: '🔁', removeLabel: '❌' },
-    account_detail: { messageTemplate: '', openLabel: '🔗 باز کردن لینک', copyLabel: '📋 کپی لینک', renewLabel: '🔄 تمدید اشتراک', backLabel: '⬅️ بازگشت به اشتراک‌ها', homeButton: true },
-    account_remove: { messageTemplate: '', confirmLabel: '🗑️ بله، حذف اشتراک', cancelLabel: '↩️ انصراف' },
+    service_test: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'success', buttons: [] },
+    service_buy: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'primary', buttons: [] },
+    service_renew: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'success', buttons: [] },
+    plans_buy: { columns: 1, messageTemplate: '', customPlanButton: true, customPlanLabel: '🛠 ساخت بسته دلخواه (حجم و زمان)', homeButton: true, buttonStyle: 'primary', buttons: [] },
+    plans_renew: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'success', buttons: [] },
+    account_list: { columns: 1, messageTemplate: '', homeButton: true, detailLabel: '{title}', renewLabel: '🔁', removeLabel: '❌', buttons: [] },
+    account_detail: { messageTemplate: '', openLabel: '🔗 باز کردن لینک', copyLabel: '📋 کپی لینک', renewLabel: '🔄 تمدید اشتراک', backLabel: '⬅️ بازگشت به اشتراک‌ها', homeButton: true, buttons: [] },
+    account_remove: { messageTemplate: '', confirmLabel: '🗑️ بله، حذف اشتراک', cancelLabel: '↩️ انصراف', buttons: [] },
     wallet: { messageTemplate: '', homeButton: true },
     support: { messageTemplate: '', homeButton: true },
   },
@@ -64,6 +64,20 @@ function validateDocument(input) {
     for (const key of ['messageTemplate', 'customPlanLabel', 'detailLabel', 'renewLabel', 'removeLabel', 'openLabel', 'copyLabel', 'backLabel', 'confirmLabel', 'cancelLabel']) if (screen[key] !== undefined && (typeof screen[key] !== 'string' || screen[key].length > 500)) errors.push('Invalid ' + key + ' for screen: ' + screenId);
     for (const key of ['homeButton', 'customPlanButton']) if (screen[key] !== undefined && typeof screen[key] !== 'boolean') errors.push(key + ' must be true or false for screen: ' + screenId);
     if (screen.buttonStyle !== undefined && !['default', 'primary', 'success', 'danger'].includes(screen.buttonStyle)) errors.push('Unsupported Telegram button style for screen: ' + screenId);
+    if (screen.buttons !== undefined && (!Array.isArray(screen.buttons) || screen.buttons.length > 20)) errors.push('Screen buttons must be an array with at most 20 entries: ' + screenId);
+    for (const button of (Array.isArray(screen.buttons) ? screen.buttons : [])) {
+      buttonCount++;
+      if (!button || !/^[a-zA-Z0-9_-]{1,40}$/.test(String(button.id || ''))) errors.push('Every screen button needs a valid ID: ' + screenId);
+      if (!String(button.label || '').trim() || String(button.label).length > 64) errors.push('Screen button labels must contain 1–64 characters: ' + screenId);
+      if (!Object.prototype.hasOwnProperty.call(ACTIONS, button.action)) { errors.push('Unregistered screen action: ' + String(button.action || '')); continue; }
+      if (button.style !== undefined && !['default', 'primary', 'success', 'danger'].includes(button.style)) errors.push('Unsupported Telegram button style for screen button: ' + String(button.id || ''));
+      const params = button.params && typeof button.params === 'object' ? button.params : {};
+      if (button.action === 'navigate_menu' && !/^[a-zA-Z0-9_-]{1,32}$/.test(String(params.menuId || ''))) errors.push('Screen navigation requires a valid target menu ID: ' + screenId);
+      if (button.action === 'open_url') {
+        try { const url = new URL(String(params.url || '')); if (url.protocol !== 'https:') errors.push('Only HTTPS links are allowed.'); }
+        catch (_) { errors.push('Screen open URL actions require a valid HTTPS URL.'); }
+      }
+    }
   }
   for (const menu of input.menus) {
     if (!menu || !/^[a-zA-Z0-9_-]{1,32}$/.test(String(menu.id || ''))) { errors.push('Every menu needs a valid ID.'); continue; }

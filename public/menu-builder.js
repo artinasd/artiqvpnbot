@@ -208,7 +208,7 @@
             cfg.buttonRows = [
               { id:'managed_row_subscription', roles:['subscription_detail','subscription_renew','subscription_remove'] },
               { id:'managed_row_home', roles:['home'] }
-            ].filter(function (row) { return row.roles.some(function (roleId) { return roleDefs.some(function (role) { return role.id === roleId; }); }); });
+            ].filter(function (row) { return row.roles.some(function (roleId) { return roleDefs.some(function (role) { return role.id === roleId; }) && !(cfg.buttonControls[roleId] && cfg.buttonControls[roleId].enabled === false); }); });
           }
           if (id === 'account_detail' && cfg.buttonRows.length) {
             cfg.buttonRows = [
@@ -461,8 +461,8 @@
       function previewRole(label) {
         if (label === '🏠 منوی اصلی') return 'home';
         if (state.previewScreen.indexOf('service_') === 0 && /سرویس/.test(label)) return 'services';
-        if (state.previewScreen.indexOf('plans_') === 0 && /پلن/.test(label)) return 'plans';
         if (state.previewScreen === 'plans_buy' && /ساخت بسته دلخواه/.test(label)) return 'custom_plan';
+        if (state.previewScreen.indexOf('plans_') === 0 && /پلن/.test(label)) return 'plans';
         if (state.previewScreen === 'account_list') {
           if (/اشتراک من/.test(label)) return 'subscription_detail';
           if (/🔁|تمدید/.test(label)) return 'subscription_renew';

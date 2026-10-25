@@ -355,7 +355,7 @@
     var rows = [];
     var style = 'default';
     if (state.previewScreen === 'menu') {
-      var selected = menu(); message = selected.text || 'متن پیام در این قسمت نمایش داده می‌شود.';
+      var selected = menu(); message = selected.text || (state.botTexts && state.botTexts.start) || 'متن پیام در این قسمت نمایش داده می‌شود.';
       rows = selected.rows.map(function (row) { return row.buttons.map(function (button) { return { label: button.label || 'Button', style: button.style || 'default' }; }); });
     } else {
       var cfg = state.draft.screens[state.previewScreen] || {};

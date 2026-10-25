@@ -282,7 +282,6 @@
       var template = String(cfg.messageTemplate || '').trim() || sample.message;
       message = template.replace(/\{(service|prompt|title|mode)\}/g, function (_, key) { return values[key] || ''; });
       rows = sample.rows.map(function (row) { return row.map(function (label) { return { label: label, style: 'default' }; }); });
-      (cfg.buttons || []).forEach(function (button) { rows.push([{ label: button.label || 'دکمه جدید', style: button.style || 'default' }]); });
       style = cfg.buttonStyle || 'default';
       if (state.previewScreen === 'plans_buy') {
         if (cfg.customPlanButton === false) rows = rows.filter(function (row) { return row[0].label !== '🛠 ساخت بسته دلخواه'; });
@@ -299,6 +298,7 @@
       }
       if (state.previewScreen === 'account_remove') { rows[0][0].label = cfg.confirmLabel || '🗑️ بله، حذف اشتراک'; rows[1][0].label = cfg.cancelLabel || '↩️ انصراف'; }
       if (cfg.homeButton === false && ['service_test','service_buy','service_renew','plans_buy','plans_renew','account_list','wallet','support'].indexOf(state.previewScreen) !== -1) rows = rows.filter(function (row) { return row[0] && row[0].label !== '🏠 منوی اصلی'; });
+      (cfg.buttons || []).forEach(function (button) { rows.push([{ label: button.label || 'دکمه جدید', style: button.style || 'default' }]); });
     }
     preview.appendChild(el('div', title, 'mb-preview-name'));
     preview.appendChild(el('div', message || 'متن پیام در این قسمت نمایش داده می‌شود.', 'mb-preview-text'));

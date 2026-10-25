@@ -64,6 +64,8 @@
       var menuSelect = el('select');
       state.draft.menus.filter(function (m) { return !options.excludeMenuId || m.id !== options.excludeMenuId || m.id === button.params.menuId; }).forEach(function (m) {
         var opt = el('option', m.name + ' (' + m.id + ')'); opt.value = m.id; opt.selected = m.id === button.params.menuId; menuSelect.appendChild(opt);
+      // A native select visually chooses its first option by default, but that does not fire change; persist that ID immediately.
+      if (!button.params.menuId && menuSelect.options.length) button.params.menuId = menuSelect.value;
       });
       menuSelect.addEventListener('change', function () { button.params.menuId = menuSelect.value; });
       menuField.appendChild(menuSelect); item.appendChild(menuField);
@@ -256,6 +258,8 @@
               var targetWrap = el('label',null,'mb-field'); targetWrap.appendChild(el('span','منوی مقصد'));
               var targetSelect = el('select');
               state.draft.menus.forEach(function(m){var opt=el('option',m.name+' ('+m.id+')');opt.value=m.id;opt.selected=m.id===(control.params||{}).menuId;targetSelect.appendChild(opt);});
+              // Keep the implicit first option in sync with the stored navigation target.
+              if (!control.params) control.params = {}; if (!control.params.menuId && targetSelect.options.length) control.params.menuId = targetSelect.value;
               targetSelect.addEventListener('change',function(){control.params.menuId=targetSelect.value;});
               targetWrap.appendChild(targetSelect); item.appendChild(targetWrap);
             }

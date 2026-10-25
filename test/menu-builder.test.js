@@ -153,3 +153,10 @@ test('available-plan service placeholder uses the exact CMS name without emoji d
   assert.match(index, /const displayServiceName = serviceName\(service\);/);
   assert.match(index, /\{ service: displayServiceName, prompt, mode:/);
 });
+
+
+test('menu navigation selectors persist the default target menu ID', () => {
+  const ui = source('public/menu-builder.js');
+  assert.match(ui, /if \(!button\.params\.menuId && menuSelect\.options\.length\) button\.params\.menuId = menuSelect\.value;/);
+  assert.match(ui, /if \(!control\.params\.menuId && targetSelect\.options\.length\) control\.params\.menuId = targetSelect\.value;/);
+});

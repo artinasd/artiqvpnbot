@@ -189,9 +189,9 @@ async function sendAccountList(ctx, requestedPage = 0, { edit = false } = {}) {
   const totalPages = Math.max(1, Math.ceil(subscriptions.length / ACCOUNT_SUBSCRIPTIONS_PER_PAGE));
   const page = Math.max(0, Math.min(totalPages - 1, Number.isFinite(Number(requestedPage)) ? Math.floor(Number(requestedPage)) : 0));
   const current = subscriptions.slice(page * ACCOUNT_SUBSCRIPTIONS_PER_PAGE, (page + 1) * ACCOUNT_SUBSCRIPTIONS_PER_PAGE);
-  const fallback = '👤 <b>حساب من</b>\\n\\nاشتراک موردنظر را انتخاب کنید:';
+  const fallback = '👤 <b>حساب من</b>\n\nاشتراک موردنظر را انتخاب کنید:';
   let message = await formatScreenMessage('account_list', fallback, { title: '👤 حساب من' });
-  if (totalPages > 1) message += `\\n\\nصفحه ${page + 1} از ${totalPages}`;
+  if (totalPages > 1) message += `\n\nصفحه ${page + 1} از ${totalPages}`;
   const rows = accountUI.subscriptionKeyboard(current, { ...screen, homeButton, pagination: { page, totalPages } });
   let remaining = Math.max(0, 100 - rows.flat().length);
   for (const row of extraRows) {

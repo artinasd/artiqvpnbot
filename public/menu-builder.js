@@ -19,11 +19,11 @@
     service_renew: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'success', buttonControls: {} },
     plans_buy: { columns: 1, messageTemplate: '', customPlanButton: true, customPlanLabel: '🛠 ساخت بسته دلخواه (حجم و زمان)', homeButton: true, buttonStyle: 'primary', buttonControls: {} },
     plans_renew: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'success', buttonControls: {} },
-    account_list: { columns: 1, messageTemplate: '', homeButton: true, detailLabel: '{title}', renewLabel: '🔁', removeLabel: '❌' },
-    account_detail: { messageTemplate: '', openLabel: '🔗 باز کردن لینک', copyLabel: '📋 کپی لینک', renewLabel: '🔄 تمدید اشتراک', backLabel: '⬅️ بازگشت به اشتراک‌ها', homeButton: true },
-    account_remove: { messageTemplate: '', confirmLabel: '🗑️ بله، حذف اشتراک', cancelLabel: '↩️ انصراف' },
-    wallet: { messageTemplate: '', homeButton: true },
-    support: { messageTemplate: '', homeButton: true }
+    account_list: { columns: 3, messageTemplate: '', homeButton: true, detailLabel: '{title}', renewLabel: '🔁', removeLabel: '❌', buttonControls: {} },
+    account_detail: { columns: 2, messageTemplate: '', openLabel: '🔗 باز کردن لینک', copyLabel: '📋 کپی لینک', renewLabel: '🔄 تمدید اشتراک', backLabel: '⬅️ بازگشت به اشتراک‌ها', homeButton: true, buttonControls: {} },
+    account_remove: { columns: 2, messageTemplate: '', confirmLabel: '🗑️ بله، حذف اشتراک', cancelLabel: '↩️ انصراف', buttonControls: {} },
+    wallet: { columns: 1, messageTemplate: '', homeButton: true, buttonControls: {} },
+    support: { columns: 1, messageTemplate: '', homeButton: true, buttonControls: {} }
   };
   var screenNames = {
     service_test: 'انتخاب سرویس اکانت تست',
@@ -168,6 +168,33 @@
           builtInWrap.appendChild(card);
         });
         section.appendChild(builtInWrap);
+      }
+      var roleGroups = {
+        account_list: [{id:'subscription_detail',label:'باز کردن جزئیات اشتراک'},{id:'subscription_renew',label:'تمدید اشتراک'},{id:'subscription_remove',label:'حذف اشتراک'},{id:'home',label:'منوی اصلی'}],
+        account_detail: [{id:'open_link',label:'باز کردن لینک اشتراک'},{id:'copy_link',label:'کپی لینک اشتراک'},{id:'renew_subscription',label:'تمدید اشتراک'},{id:'back_to_list',label:'بازگشت به فهرست'},{id:'home',label:'منوی اصلی'}],
+        account_remove: [{id:'confirm_remove',label:'تأیید حذف'},{id:'cancel_remove',label:'انصراف از حذف'}]
+      };
+      if (roleGroups[id]) {
+        if (!cfg.buttonControls || typeof cfg.buttonControls !== 'object') cfg.buttonControls = {};
+        var rolesWrap = el('section', null, 'mb-row');
+        rolesWrap.appendChild(el('strong', 'کنترل جداگانه دکمه‌های موجود', 'mb-screen-title'));
+        rolesWrap.appendChild(el('p', 'هر دکمه را مستقل پنهان کنید، متن و رنگش را عوض کنید یا عملکردش را تغییر دهید. برای حفظ شناسه اشتراک و عملکرد اصلی، «عملکرد اصلی ربات» را انتخاب کنید.', 'mb-description'));
+        roleGroups[id].forEach(function (role) {
+          var c = cfg.buttonControls[role.id] || (cfg.buttonControls[role.id] = { enabled: true, label: '{label}', action: 'original', style: 'default', params: {} });
+          var item = el('div', null, 'mb-button-edit'), showWrap = el('label', null, 'mb-check-field'), show = el('input'); show.type = 'checkbox'; show.checked = c.enabled !== false;
+          show.addEventListener('change', function () { c.enabled = show.checked; renderPreview(); }); showWrap.appendChild(show); showWrap.appendChild(el('span', 'نمایش ' + role.label)); item.appendChild(showWrap);
+          item.appendChild(field('الگوی متن (' + role.label + ')', c.label || '{label}', function (v) { c.label = v; }));
+          var aw = el('label', null, 'mb-field'); aw.appendChild(el('span', 'عملکرد')); var as = el('select');
+          [['original','عملکرد اصلی ربات']].concat(Object.keys(state.actions).map(function (k) { return [k,state.actions[k].label]; })).forEach(function (x) { var o = el('option',x[1]); o.value=x[0]; o.selected=(c.action||'original')===x[0]; as.appendChild(o); });
+          as.addEventListener('change',function(){c.action=as.value;c.params={};render();}); aw.appendChild(as); item.appendChild(aw);
+          var sw=el('label',null,'mb-field'); sw.appendChild(el('span','رنگ')); var ss=el('select');
+          [['default','پیش‌فرض'],['primary','آبی'],['success','سبز'],['danger','قرمز']].forEach(function(x){var o=el('option',x[1]);o.value=x[0];o.selected=(c.style||'default')===x[0];ss.appendChild(o);});
+          ss.addEventListener('change',function(){c.style=ss.value;renderPreview();});sw.appendChild(ss);item.appendChild(sw);
+          if(c.action==='navigate_menu'){var tw=el('label',null,'mb-field');tw.appendChild(el('span','منوی مقصد'));var ts=el('select');state.draft.menus.forEach(function(m){var o=el('option',m.name+' ('+m.id+')');o.value=m.id;o.selected=m.id===(c.params||{}).menuId;ts.appendChild(o);});ts.addEventListener('change',function(){c.params.menuId=ts.value;});tw.appendChild(ts);item.appendChild(tw);}
+          if(c.action==='open_url')item.appendChild(field('لینک HTTPS',(c.params||{}).url,function(v){c.params.url=v;},'https://example.com'));
+          rolesWrap.appendChild(item);
+        });
+        section.appendChild(rolesWrap);
       }
       section.appendChild(controls); section.appendChild(renderScreenButtons(id, cfg)); details.appendChild(section);
     });
@@ -352,6 +379,13 @@
           if (matches) { button.label = String(control.label || '{label}').replace(/\{label\}/g, button.label); button.style = control.style || 'default'; }
         }); });
       });
+      if (cfg.buttonControls) {
+        var roles = {account_list:['subscription_detail','subscription_renew','subscription_remove','home'],account_detail:['open_link','copy_link','renew_subscription','back_to_list','home'],account_remove:['confirm_remove','cancel_remove']}[state.previewScreen] || [];
+        var matchers = {subscription_detail:/اشتراک من/,subscription_renew:/🔁/,subscription_remove:/❌/,open_link:/باز کردن لینک/,copy_link:/کپی لینک/,renew_subscription:/تمدید اشتراک/,back_to_list:/بازگشت به اشتراک‌ها/,confirm_remove:/بله، حذف اشتراک/,cancel_remove:/انصراف/,home:/منوی اصلی/};
+        roles.forEach(function(id){var c=cfg.buttonControls[id];if(!c)return;rows.forEach(function(row){row.forEach(function(b){if(!matchers[id].test(b.label))return;if(c.enabled===false)b.__hidden=true;else{b.label=String(c.label||'{label}').replace(/\\{label\\}/g,b.label);b.style=c.style||'default';}});});});
+        rows=rows.map(function(row){return row.filter(function(b){return !b.__hidden;});}).filter(function(row){return row.length;});
+      }
+      if (Number(cfg.columns)>0) { var width=Math.max(1,Math.min(4,Number(cfg.columns)||1)), flat=rows.flat(); rows=[]; for(var ri=0;ri<flat.length;ri+=width) rows.push(flat.slice(ri,ri+width)); }
       (cfg.buttons || []).forEach(function (button) { rows.push([{ label: button.label || 'دکمه جدید', style: button.style || 'default' }]); });
     }
     preview.appendChild(el('div', title, 'mb-preview-name'));

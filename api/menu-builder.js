@@ -21,11 +21,11 @@ const DEFAULT_DOCUMENT = {
     service_renew: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'success', buttonControls: {}, buttons: [] },
     plans_buy: { columns: 1, messageTemplate: '', customPlanButton: true, customPlanLabel: '🛠 ساخت بسته دلخواه (حجم و زمان)', homeButton: true, buttonStyle: 'primary', buttonControls: {}, buttons: [] },
     plans_renew: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'success', buttonControls: {}, buttons: [] },
-    account_list: { columns: 1, messageTemplate: '', homeButton: true, detailLabel: '{title}', renewLabel: '🔁', removeLabel: '❌', buttons: [] },
-    account_detail: { messageTemplate: '', openLabel: '🔗 باز کردن لینک', copyLabel: '📋 کپی لینک', renewLabel: '🔄 تمدید اشتراک', backLabel: '⬅️ بازگشت به اشتراک‌ها', homeButton: true, buttons: [] },
-    account_remove: { messageTemplate: '', confirmLabel: '🗑️ بله، حذف اشتراک', cancelLabel: '↩️ انصراف', buttons: [] },
-    wallet: { messageTemplate: '', homeButton: true, buttons: [] },
-    support: { messageTemplate: '', homeButton: true, buttons: [] },
+    account_list: { columns: 3, messageTemplate: '', homeButton: true, detailLabel: '{title}', renewLabel: '🔁', removeLabel: '❌', buttonControls: {}, buttons: [] },
+    account_detail: { columns: 2, messageTemplate: '', openLabel: '🔗 باز کردن لینک', copyLabel: '📋 کپی لینک', renewLabel: '🔄 تمدید اشتراک', backLabel: '⬅️ بازگشت به اشتراک‌ها', homeButton: true, buttonControls: {}, buttons: [] },
+    account_remove: { columns: 2, messageTemplate: '', confirmLabel: '🗑️ بله، حذف اشتراک', cancelLabel: '↩️ انصراف', buttonControls: {}, buttons: [] },
+    wallet: { columns: 1, messageTemplate: '', homeButton: true, buttonControls: {}, buttons: [] },
+    support: { columns: 1, messageTemplate: '', homeButton: true, buttonControls: {}, buttons: [] },
   },
   menus: [{
     id: 'main',
@@ -66,7 +66,7 @@ function validateDocument(input) {
     if (screen.buttonStyle !== undefined && !['default', 'primary', 'success', 'danger'].includes(screen.buttonStyle)) errors.push('Unsupported Telegram button style for screen: ' + screenId);
     if (screen.buttonControls !== undefined && (!screen.buttonControls || typeof screen.buttonControls !== 'object' || Array.isArray(screen.buttonControls))) errors.push('Button controls must be an object: ' + screenId);
     for (const [controlId, control] of Object.entries(screen.buttonControls || {})) {
-      if (!['services', 'plans', 'custom_plan'].includes(controlId)) errors.push('Unknown built-in button group: ' + controlId);
+      const allowedControls = { service_test: ['services'], service_buy: ['services'], service_renew: ['services'], plans_buy: ['plans', 'custom_plan'], plans_renew: ['plans'], account_list: ['subscription_detail', 'subscription_renew', 'subscription_remove', 'home'], account_detail: ['open_link', 'copy_link', 'renew_subscription', 'back_to_list', 'home'], account_remove: ['confirm_remove', 'cancel_remove'] }[screenId] || [];\n      if (!allowedControls.includes(controlId)) errors.push('Unknown built-in button control: ' + screenId + '/' + controlId);
       if (!control || typeof control !== 'object' || Array.isArray(control)) { errors.push('Invalid built-in button control: ' + controlId); continue; }
       if (control.enabled !== undefined && typeof control.enabled !== 'boolean') errors.push('Button enabled must be true or false: ' + controlId);
       if (control.label !== undefined && (typeof control.label !== 'string' || control.label.length > 64 || !control.label.trim())) errors.push('Button label must contain 1–64 characters: ' + controlId);

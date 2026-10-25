@@ -54,10 +54,10 @@
     select.addEventListener('change', function () { button.action = select.value; button.params = {}; render(); });
     var styleLabel = el('label', null, 'mb-field'); styleLabel.appendChild(el('span', 'رنگ دکمه در تلگرام'));
     var styleSelect = el('select');
-    [['default','پیش‌فرض'],['primary','آبی'],['success','سبز'],['danger','قرمز']].forEach(function (entry) {
-      var opt = el('option', entry[1]); opt.value = entry[0]; opt.selected = (button.style || 'default') === entry[0]; styleSelect.appendChild(opt);
+    [['glass','شیشه ای'],['primary','آبی'],['success','سبز'],['danger','قرمز']].forEach(function (entry) {
+      var opt = el('option', entry[1]); opt.value = entry[0]; opt.selected = (button.style || 'glass') === entry[0]; styleSelect.appendChild(opt);
     });
-    styleSelect.addEventListener('change', function () { if (styleSelect.value === 'default') delete button.style; else button.style = styleSelect.value; renderPreview(); });
+    styleSelect.addEventListener('change', function () { button.style = styleSelect.value; renderPreview(); });
     styleLabel.appendChild(styleSelect); item.appendChild(styleLabel);
     if (button.action === 'navigate_menu') {
       var menuField = el('label', null, 'mb-field'); menuField.appendChild(el('span', 'منوی مقصد'));
@@ -177,7 +177,7 @@
       if (['service_test','service_buy','service_renew','plans_buy','plans_renew'].indexOf(id) !== -1) {
         var styleWrap = el('label', null, 'mb-field'); styleWrap.appendChild(el('span', 'رنگ پیش‌فرض دکمه‌های زنده'));
         var styleSelect = el('select');
-        [['default','پیش‌فرض'],['primary','آبی'],['success','سبز'],['danger','قرمز']].forEach(function (entry) { var opt = el('option',entry[1]); opt.value=entry[0]; opt.selected=(cfg.buttonStyle || 'default')===entry[0]; styleSelect.appendChild(opt); });
+        [['default','پیش‌فرض'],['primary','آبی'],['success','سبز'],['danger','قرمز']].forEach(function (entry) { var opt = el('option',entry[1]); opt.value=entry[0]; opt.selected=(cfg.buttonStyle || 'glass')===entry[0]; styleSelect.appendChild(opt); });
         styleSelect.addEventListener('change',function(){cfg.buttonStyle=styleSelect.value;renderPreview();}); styleWrap.appendChild(styleSelect); controls.appendChild(styleWrap);
       }
       var managedRoleGroups = {
@@ -266,7 +266,7 @@
             if (roleId === 'home' && control.action === 'open_url') item.appendChild(field('لینک HTTPS',(control.params||{}).url,function(value){control.params.url=value;},'https://example.com'));
             var styleWrap = el('label', null, 'mb-field'); styleWrap.appendChild(el('span','رنگ دکمه در تلگرام'));
             var styleSelect = el('select');
-            [['default','پیش‌فرض'],['primary','آبی'],['success','سبز'],['danger','قرمز']].forEach(function (entry) { var option = el('option',entry[1]); option.value=entry[0]; option.selected=(control.style||'default')===entry[0]; styleSelect.appendChild(option); });
+            [['default','پیش‌فرض'],['primary','آبی'],['success','سبز'],['danger','قرمز']].forEach(function (entry) { var option = el('option',entry[1]); option.value=entry[0]; option.selected=(control.style||'glass')===entry[0]; styleSelect.appendChild(option); });
             styleSelect.addEventListener('change',function(){control.style=styleSelect.value;renderPreview();});
             styleWrap.appendChild(styleSelect); item.appendChild(styleWrap);
             var itemControls = el('div',null,'mb-item-controls');

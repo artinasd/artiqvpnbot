@@ -188,6 +188,7 @@
       // Use the same simple, persistent message input as the main menu.
       // The extra columns/style/template controls were redundant and confusing.
       section.appendChild(field('متن پیام', cfg.messageTemplate != null && String(cfg.messageTemplate) !== '' ? String(cfg.messageTemplate) : defaultScreenMessageTemplate(id), function (v) { cfg.messageTemplate = v; state.previewScreen = id; }));
+      if (id === 'wallet') section.appendChild(el('small', 'متغیر موجودی فعلی: {balance} (نمونه در پیش‌نمایش: ۱۲۵,۰۰۰)', 'mb-help'));
       var managedRoleGroups = {
         service_test: state.panels.filter(function(panel){return panel.testEnabled !== false;}).map(function(panel){return {id:'panel_'+panel.panelId,label:panel.name,panelButton:true};}).concat([{id:'home',label:'منوی اصلی'}]),
         service_buy: state.panels.filter(function(panel){return panel.purchaseEnabled !== false;}).map(function(panel){return {id:'panel_'+panel.panelId,label:panel.name,panelButton:true};}).concat([{id:'home',label:'منوی اصلی'}]),
@@ -495,9 +496,9 @@
         support: botTexts.support
       };
       if (state.previewScreen === 'plans_buy' || state.previewScreen === 'plans_renew') actualMessages[state.previewScreen] = '{service}\n\n' + (botTexts.planPrompt || 'لطفاً بسته مورد نظر را انتخاب کنید:');
-      var values = { service: 'سرویس اصلی', prompt: botTexts.planPrompt || 'لطفاً بسته مورد نظر را انتخاب کنید:', title: sample.title, mode: state.previewScreen.indexOf('renew') !== -1 ? 'تمدید' : 'خرید', support_username: 'نام کاربری پشتیبانی', debt: '125,000' };
+      var values = { service: 'سرویس اصلی', prompt: botTexts.planPrompt || 'لطفاً بسته مورد نظر را انتخاب کنید:', title: sample.title, mode: state.previewScreen.indexOf('renew') !== -1 ? 'تمدید' : 'خرید', support_username: 'نام کاربری پشتیبانی', debt: '125,000', balance: '125,000' };
       var template = cfg.messageTemplate != null && String(cfg.messageTemplate) !== '' ? String(cfg.messageTemplate) : (actualMessages[state.previewScreen] || sample.message);
-      message = template.replace(/\{(service|prompt|title|mode|support_username|debt)\}/g, function (_, key) { return values[key] || ''; });
+      message = template.replace(/\{(service|prompt|title|mode|support_username|debt|balance)\}/g, function (_, key) { return values[key] || ''; });
       rows = sample.rows.map(function (row) { return row.map(function (label) { return { label: label, style: 'glass' }; }); });
       if (state.previewScreen === 'service_test' || state.previewScreen === 'service_buy') {
         var eligiblePanels = state.panels.filter(function(panel){return state.previewScreen === 'service_test' ? panel.testEnabled !== false : panel.purchaseEnabled !== false;});

@@ -52,6 +52,11 @@ function authorized(req) {
   return Boolean(PASSWORD) && req.headers['x-admin-password'] === PASSWORD;
 }
 function clone(value) { return JSON.parse(JSON.stringify(value)); }
+const BUILTIN_SCREEN_IDS = ['service_test', 'service_buy', 'service_renew', 'plans_buy', 'plans_renew', 'account_list', 'account_detail', 'account_remove', 'wallet', 'support'];
+function isNavigationTarget(target, menuIds) {
+  const value = String(target || '');
+  return menuIds.has(value) || (value.startsWith('screen_') && BUILTIN_SCREEN_IDS.includes(value.slice('screen_'.length)));
+}
 function validateDocument(input) {
   const errors = [];
   if (!input || typeof input !== 'object' || !Array.isArray(input.menus)) return { errors: ['A menu document is required.'] };
@@ -139,10 +144,10 @@ function validateDocument(input) {
   if (buttonCount > 100) errors.push('A document can contain at most 100 buttons.');
   for (const [screenId, screen] of Object.entries(input.screens || {})) {
     for (const [controlId, control] of Object.entries(screen?.buttonControls || {})) {
-      if (control?.action === 'navigate_menu' && !ids.has(String((control.params && control.params.menuId) || ''))) errors.push('Built-in button navigation target does not exist: ' + String((control.params && control.params.menuId) || ''));
+      if (control?.action === 'navigate_menu' && !isNavigationTarget((control.params && control.params.menuId), ids)) errors.push('Built-in button navigation target does not exist: ' + String((control.params && control.params.menuId) || ''));
     }
     for (const button of (Array.isArray(screen?.buttons) ? screen.buttons : [])) {
-      if (button?.action === 'navigate_menu' && !ids.has(String((button.params && button.params.menuId) || ''))) errors.push('Screen navigation target does not exist: ' + String((button.params && button.params.menuId) || ''));
+      if (button?.action === 'navigate_menu' && !isNavigationTarget((button.params && button.params.menuId), ids)) errors.push('Screen navigation target does not exist: ' + String((button.params && button.params.menuId) || ''));
     }
   }
   for (const menu of input.menus) {
@@ -150,7 +155,7 @@ function validateDocument(input) {
     for (const row of menu.rows) {
       if (!row || !Array.isArray(row.buttons)) continue;
       for (const button of row.buttons) {
-        if (button && button.action === 'navigate_menu' && !ids.has(String((button.params && button.params.menuId) || ''))) errors.push('Navigation target does not exist: ' + String((button.params && button.params.menuId) || ''));
+        if (button && button.action === 'navigate_menu' && !isNavigationTarget((button.params && button.params.menuId), ids)) errors.push('Navigation target does not exist: ' + String((button.params && button.params.menuId) || ''));
       }
     }
   }

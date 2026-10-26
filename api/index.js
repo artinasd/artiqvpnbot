@@ -192,11 +192,26 @@ async function sendAccountList(ctx, requestedPage = 0, { edit = false } = {}) {
   const fallback = '👤 <b>حساب من</b>\n\nاشتراک موردنظر را انتخاب کنید:';
   let message = await formatScreenMessage('account_list', fallback, { title: '👤 حساب من' });
   if (totalPages > 1) message += `\n\nصفحه ${page + 1} از ${totalPages}`;
-  // Subscription detail buttons are essential navigation, so do not pass them
-  // through Menu Maker's row-role rearranger: published layouts can drop these rows.
-  // Keep labels/styles/enablement from screen settings and append configured extra rows.
-  const generatedRows = accountUI.subscriptionKeyboard(current, { ...screen, homeButton, pagination: { page, totalPages } });
-  const rows = [...generatedRows, ...extraRows];
+  // Build each subscription row directly. Do not delegate essential account navigation
+  // to Menu Maker or presentation controls: every listed subscription must be clickable.
+  const rows = current.map((subscription) => [{
+    text: String(subscription.title || 'اشتراک').slice(0, 64),
+    callback_data: `account_sub:${subscription.id}`,
+  }, ...(screen.buttonControls?.subscription_renew?.enabled === false ? [] : [{
+    text: String(screen.renewLabel || '🔁').slice(0, 64),
+    callback_data: `account_renew:${subscription.id}`,
+  }]), ...(screen.buttonControls?.subscription_remove?.enabled === false ? [] : [{
+    text: String(screen.removeLabel || '❌').slice(0, 64),
+    callback_data: `account_remove:${subscription.id}`,
+  }])]);
+  if (totalPages > 1) {
+    const navigation = [];
+    if (page > 0) navigation.push({ text: '⬅️ قبلی', callback_data: `account_page:${page - 1}` });
+    if (page + 1 < totalPages) navigation.push({ text: 'بعدی ➡️', callback_data: `account_page:${page + 1}` });
+    if (navigation.length) rows.push(navigation);
+  }
+  if (homeButton) rows.push([{ text: '🏠 منوی اصلی', callback_data: 'main_home' }]);
+  rows.push(...extraRows);
   const options = { parse_mode: 'HTML', reply_markup: { inline_keyboard: rows } };
   if (edit) return ctx.editMessageText(message, options);
   return ctx.reply(message, options);

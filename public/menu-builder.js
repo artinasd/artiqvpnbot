@@ -77,7 +77,7 @@
     if (button.action === 'navigate_menu') {
       var menuField = el('label', null, 'mb-field'); menuField.appendChild(el('span', 'منوی مقصد'));
       var menuSelect = el('select');
-      state.draft.menus.filter(function (m) { return !options.excludeMenuId || m.id !== options.excludeMenuId || m.id === button.params.menuId; }).forEach(function (m) {
+      state.draft.menus.forEach(function (m) {
         var opt = el('option', m.name + ' (' + m.id + ')'); opt.value = m.id; opt.selected = m.id === button.params.menuId; menuSelect.appendChild(opt);
       });
       // A native select visually chooses its first option by default, but that does not fire change; persist that ID immediately.
@@ -416,7 +416,7 @@
       rowCard.appendChild(rowHead);
       var buttons = el('div', null, 'mb-button-edit-grid');
       row.buttons.forEach(function (button, buttonIndex) {
-        var item = renderManagedButton(button, { excludeMenuId: selected.id });
+        var item = renderManagedButton(button);
         var controls = el('div', null, 'mb-item-controls');
         controls.appendChild(btn('←', 'mb-icon-button', function () { if (buttonIndex > 0) { row.buttons.splice(buttonIndex, 1); row.buttons.splice(buttonIndex - 1, 0, button); render(); } }));
         controls.appendChild(btn('→', 'mb-icon-button', function () { if (buttonIndex < row.buttons.length - 1) { row.buttons.splice(buttonIndex, 1); row.buttons.splice(buttonIndex + 1, 0, button); render(); } }));

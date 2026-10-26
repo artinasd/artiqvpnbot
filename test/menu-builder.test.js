@@ -139,6 +139,10 @@ test('published runtime routes registered actions and rejects missing submenu ta
   assert.match(runtime, /formatScreenMessage/);
   assert.match(index, /plans_buy/);
   assert.match(index, /account_detail/);
+  assert.match(runtime, /accountUI\.subscriptionKeyboard\(current, \{/);
+  assert.match(runtime, /arrangeScreenRows\('account_list', generatedRows\)/);
+  assert.doesNotMatch(runtime, /const rows = current\.map\(\(subscription\) => \[\{/);
+
   assert.match(source('lib/account-ui.js'), /options\.confirmLabel/);
   assert.match(source('public/menu-builder.js'), /تنظیمات منوهای پویا/);
   assert.match(source('public/menu-builder.js'), /رنگ دکمه در تلگرام/);

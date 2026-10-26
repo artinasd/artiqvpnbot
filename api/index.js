@@ -26,6 +26,22 @@ const TEST_HWID_LIMIT = Number(process.env.TEST_HWID_LIMIT ?? 0);
 
 if (!BOT_TOKEN || !ADMIN_ID) console.error('Missing BOT_TOKEN or ADMIN_ID');
 const bot = new Telegraf(BOT_TOKEN || 'INVALID_TOKEN');
+
+// Apply Telegram HTML parsing consistently to every outgoing bot message that contains
+// actual Telegram-supported HTML tags, including CMS screens and custom submenu text.
+// Explicit parse_mode settings always win; plain text is left untouched.
+const nativeCallApi = bot.telegram.callApi.bind(bot.telegram);
+const telegramHtmlTag = /<\\/?(?:b|strong|i|em|u|ins|s|strike|del|span|tg-spoiler|a|code|pre|blockquote|tg-emoji)(?:\\s|>)/i;
+bot.telegram.callApi = function(method, payload = {}, ...args) {
+  const nextPayload = { ...payload };
+  if (!nextPayload.parse_mode) {
+    const text = ['sendMessage', 'editMessageText'].includes(method) ? nextPayload.text
+      : ['sendPhoto', 'sendDocument', 'sendVideo', 'sendAnimation', 'sendAudio', 'sendVoice', 'editMessageCaption'].includes(method) ? nextPayload.caption
+      : null;
+    if (typeof text === 'string' && telegramHtmlTag.test(text)) nextPayload.parse_mode = 'HTML';
+  }
+  return nativeCallApi(method, nextPayload, ...args);
+};
 registerAdminMessaging(bot, { storage, isAdmin, log });
 
 function escapeHtml(value) {

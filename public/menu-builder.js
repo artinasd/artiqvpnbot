@@ -40,7 +40,18 @@
   function ensureScreens() {
     if (!state.draft.screens || typeof state.draft.screens !== 'object') state.draft.screens = {};
     Object.keys(defaultScreens).forEach(function (id) {
-      state.draft.screens[id] = Object.assign({}, defaultScreens[id], state.draft.screens[id] || {});
+      // Keep each screen config object stable. Inputs hold a reference to this
+      // object; replacing it on every preview render detaches them after the
+      // first keystroke and causes the preview/save draft to retain stale text.
+      if (!state.draft.screens[id] || typeof state.draft.screens[id] !== 'object') {
+        state.draft.screens[id] = Object.assign({}, defaultScreens[id]);
+      } else {
+        Object.keys(defaultScreens[id]).forEach(function (key) {
+          if (typeof state.draft.screens[id][key] === 'undefined') {
+            state.draft.screens[id][key] = defaultScreens[id][key];
+          }
+        });
+      }
       var cfg = state.draft.screens[id];
       var legacyDefaultStyle = { service_test: 'success', service_buy: 'primary', service_renew: 'success', plans_buy: 'primary', plans_renew: 'success' }[id];
       if (legacyDefaultStyle && cfg.buttonStyle === legacyDefaultStyle) cfg.buttonStyle = 'glass';

@@ -488,6 +488,11 @@
       var template = cfg.messageTemplate != null && String(cfg.messageTemplate) !== '' ? String(cfg.messageTemplate) : (actualMessages[state.previewScreen] || sample.message);
       message = template.replace(/\{(service|prompt|title|mode|support_username|debt)\}/g, function (_, key) { return values[key] || ''; });
       rows = sample.rows.map(function (row) { return row.map(function (label) { return { label: label, style: 'glass' }; }); });
+      if (state.previewScreen === 'service_test' || state.previewScreen === 'service_buy') {
+        var eligiblePanels = state.panels.filter(function(panel){return state.previewScreen === 'service_test' ? panel.testEnabled !== false : panel.purchaseEnabled !== false;});
+        rows = eligiblePanels.map(function(panel){return [{label:panel.name,style:'glass',role:'panel_'+panel.panelId}];});
+        if (cfg.homeButton !== false) rows.push([{label:'🏠 منوی اصلی',style:'glass',role:'home'}]);
+      }
       style = cfg.buttonStyle || 'glass';
       if (state.previewScreen === 'plans_buy') {
         if (cfg.customPlanButton === false) rows = rows.filter(function (row) { return row[0].label !== '🛠 ساخت بسته دلخواه'; });
@@ -504,7 +509,8 @@
       }
       if (state.previewScreen === 'account_remove') { rows[0][0].label = cfg.confirmLabel || '🗑️ بله، حذف اشتراک'; rows[1][0].label = cfg.cancelLabel || '↩️ انصراف'; }
       if (cfg.homeButton === false && ['service_test','service_buy','service_renew','plans_buy','plans_renew','account_list','wallet','support'].indexOf(state.previewScreen) !== -1) rows = rows.filter(function (row) { return row[0] && row[0].label !== '🏠 منوی اصلی'; });
-      function previewRole(label) {
+      function previewRole(label, button) {
+        if (button && button.role) return button.role;
         if (label === '🏠 منوی اصلی') return 'home';
         if (state.previewScreen.indexOf('service_') === 0 && /سرویس/.test(label)) return 'services';
         if (state.previewScreen === 'plans_buy' && /ساخت بسته دلخواه/.test(label)) return 'custom_plan';
@@ -529,11 +535,11 @@
       var sourcePreviewRows = rows;
       var controlledPreviewRows = sourcePreviewRows.map(function (row) {
         return row.map(function (button) {
-          var roleId = previewRole(button.label);
+          var roleId = previewRole(button.label, button);
           var control = roleId && cfg.buttonControls && cfg.buttonControls[roleId];
           if (control) {
             if (control.enabled === false) return null;
-            button.label = String(control.label || '{label}').replace(/\{label\}/g, button.label);
+            if (!/^panel_/.test(roleId)) button.label = String(control.label || '{label}').replace(/\{label\}/g, button.label);
             button.style = control.style || 'glass';
           }
           return { button: button, role: roleId };
@@ -541,7 +547,11 @@
       });
       if (Array.isArray(cfg.buttonRows)) {
         rows = [];
-        controlledPreviewRows.forEach(function (sourceRow) {
+        if (state.previewScreen === 'service_test' || state.previewScreen === 'service_buy') {
+          var allPreviewItems = controlledPreviewRows.flat(); var assignedPreview = [];
+          cfg.buttonRows.forEach(function(layoutRow){var roles=Array.isArray(layoutRow.roles)?layoutRow.roles:[];var chosen=allPreviewItems.filter(function(item){return item.role && roles.indexOf(item.role)!==-1 && assignedPreview.indexOf(item)===-1;});chosen.forEach(function(item){assignedPreview.push(item);});if(chosen.length)rows.push(chosen.map(function(item){return item.button;}));});
+          allPreviewItems.filter(function(item){return assignedPreview.indexOf(item)===-1;}).forEach(function(item){rows.push([item.button]);});
+        } else controlledPreviewRows.forEach(function (sourceRow) {
           var assigned = [];
           cfg.buttonRows.forEach(function (layoutRow) {
             var roles = Array.isArray(layoutRow.roles) ? layoutRow.roles : [];

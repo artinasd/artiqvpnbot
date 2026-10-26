@@ -73,6 +73,7 @@
         byId('panel-plan-title').textContent = 'پلن‌های پنل: ' + panel.name;
         byId('panel-plan-id').value = '';
         byId('panel-plan-name').value = '';
+        byId('panel-plan-custom-label').value = '';
         byId('panel-plan-price').value = '';
         byId('panel-plan-traffic').value = '10';
         byId('panel-plan-duration').value = '30';
@@ -127,7 +128,7 @@
       var actions = node('div', null, 'actions');
       var editPlan = node('button', 'ویرایش', 'secondary'); editPlan.type = 'button';
       editPlan.addEventListener('click', function () {
-        byId('panel-plan-id').value = plan.id; byId('panel-plan-name').value = plan.name;
+        byId('panel-plan-id').value = plan.id; byId('panel-plan-name').value = plan.name; byId('panel-plan-custom-label').value = plan.customLabel || '';
         byId('panel-plan-price').value = plan.priceOverride === null || plan.priceOverride === undefined ? '' : plan.priceOverride; byId('panel-plan-traffic').value = Math.round(Number(plan.trafficBytes || 0) / (1024 ** 3));
         byId('panel-plan-duration').value = plan.durationDays || 0; byId('panel-plan-reseller-price').value = plan.resellerPrice == null ? '' : plan.resellerPrice;
         byId('panel-plan-hwid').value = plan.hwidLimit || 0; byId('panel-plan-type').value = plan.type || 'traffic';
@@ -264,6 +265,7 @@
     }
     planField('شناسه پلن', 'panel-plan-id', 'مثلاً west_10g');
     planField('نام پلن', 'panel-plan-name', 'مثلاً 10 GB / 30 days');
+    planField('برچسب دلخواه دکمه (اختیاری)', 'panel-plan-custom-label', 'خالی = نمایش نام فعلی پلن');
     planField('قیمت', 'panel-plan-price', 'قیمت به تومان', 'number');
     planField('حجم گیگابایت (۰ = نامحدود)', 'panel-plan-traffic', '10', 'number');
     planField('مدت روز (۰ = بدون انقضا)', 'panel-plan-duration', '30', 'number');
@@ -285,6 +287,7 @@
         var priceText = byId('panel-plan-price').value.trim();
         var plan = {
           id: byId('panel-plan-id').value.trim(), name: byId('panel-plan-name').value.trim(),
+          customLabel: byId('panel-plan-custom-label').value.trim(),
           buttonText: byId('panel-plan-name').value.trim(), price: priceText === '' ? null : Number(priceText),
           resellerPrice: resellerText === '' ? null : Number(resellerText), service: 'tunnel',
           type: byId('panel-plan-type').value, trafficBytes: trafficGb * (1024 ** 3),

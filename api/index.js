@@ -185,7 +185,7 @@ async function showWalletPage(ctx) {
   const balance = await wallet.getBalance(ctx.from.id);
   await storage.setState('user', ctx.from.id, { stage: 'AWAITING_WALLET_AMOUNT', orderId: null, requiredAmount: 0, balance });
   const fallback = `💰 <b>کیف پول من</b>\n\nموجودی فعلی: <b>${balance.toLocaleString('en-US')} تومان</b>\n\nمبلغی که می‌خواهید کیف پول را شارژ کنید به تومان وارد کنید.\n\nپس از ارسال رسید و تأیید مدیر، مبلغ به موجودی شما اضافه می‌شود.`;
-  const message = await formatScreenMessage('wallet', fallback, { title: 'کیف پول من', mode: 'wallet' });
+  const message = await formatScreenMessage('wallet', fallback, { title: 'کیف پول من', mode: 'wallet', balance: balance.toLocaleString('en-US') });
   const rows = await arrangeScreenRows('wallet', []);
   return ctx.reply(message, { parse_mode: 'HTML', reply_markup: { inline_keyboard: rows } });
 }

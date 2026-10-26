@@ -166,7 +166,7 @@
       section.appendChild(el('strong', screenNames[id], 'mb-screen-title'));
       // Use the same simple, persistent message input as the main menu.
       // The extra columns/style/template controls were redundant and confusing.
-      section.appendChild(field('متن پیام', cfg.messageTemplate != null && String(cfg.messageTemplate) !== '' ? String(cfg.messageTemplate) : defaultScreenMessageTemplate(id), function (v) { cfg.messageTemplate = v; }));
+      section.appendChild(field('متن پیام', cfg.messageTemplate != null && String(cfg.messageTemplate) !== '' ? String(cfg.messageTemplate) : defaultScreenMessageTemplate(id), function (v) { cfg.messageTemplate = v; state.previewScreen = id; }));
       var managedRoleGroups = {
         service_test: [{id:'services',label:'سرویس‌های اکانت تست'},{id:'home',label:'منوی اصلی'}],
         service_buy: [{id:'services',label:'سرویس‌های خرید'},{id:'home',label:'منوی اصلی'}],

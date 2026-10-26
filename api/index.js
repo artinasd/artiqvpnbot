@@ -196,7 +196,7 @@ async function sendAccountList(ctx, requestedPage = 0, { edit = false } = {}) {
   // through Menu Maker's row-role rearranger: published layouts can drop these rows.
   // Keep labels/styles/enablement from screen settings and append configured extra rows.
   const generatedRows = accountUI.subscriptionKeyboard(current, { ...screen, homeButton, pagination: { page, totalPages } });
-  const rows = [...generatedRows, ...(await getScreenExtraRows('account_list'))];
+  const rows = [...generatedRows, ...extraRows];
   const options = { parse_mode: 'HTML', reply_markup: { inline_keyboard: rows } };
   if (edit) return ctx.editMessageText(message, options);
   return ctx.reply(message, options);

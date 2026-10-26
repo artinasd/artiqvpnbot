@@ -157,7 +157,7 @@ async function sendPlanMenu(ctx, mode = 'buy', serviceId = 'tunnel') {
   const screenId = mode === 'renew' ? 'plans_renew' : 'plans_buy';
   if (!plans.length && mode !== 'buy') return ctx.reply(await formatScreenMessage(screenId, await getMessage('noPlans', { service_name: displayServiceName }), { service: displayServiceName, prompt: await getMessage('planPrompt'), mode: 'تمدید', title: displayServiceName }), { parse_mode: 'HTML' });
   const screen = await getPublishedScreen(screenId) || {};
-  const buttons = plans.map((plan) => [Markup.button.callback(`${plan.buttonText || plan.name} - ${Number(plan.price).toLocaleString('en-US')} ${config.payment?.currency || plan.currency || 'تومان'}`, `${mode === 'renew' ? 'renew_plan_' : 'select_plan_'}${plan.id}`)]);
+  const buttons = plans.map((plan) => [Markup.button.callback(`${plan.customLabel || plan.buttonText || plan.name} - ${Number(plan.price).toLocaleString('en-US')} ${config.payment?.currency || plan.currency || 'تومان'}`, `${mode === 'renew' ? 'renew_plan_' : 'select_plan_'}${plan.id}`)]);
   if (mode === 'buy' && screen.customPlanButton !== false) buttons.push([Markup.button.callback(String(screen.customPlanLabel || '🛠 ساخت بسته دلخواه (حجم و زمان)'), `select_custom_${service.id}`)]);
   if (!buttons.length) return ctx.reply(await formatScreenMessage(screenId, await getMessage('noPlans', { service_name: displayServiceName }), { service: displayServiceName, prompt: await getMessage('planPrompt'), mode: mode === 'renew' ? 'تمدید' : 'خرید', title: displayServiceName }), { parse_mode: 'HTML' });
   const prompt = await getMessage('planPrompt');

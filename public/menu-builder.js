@@ -550,7 +550,7 @@
         rows = [];
         if (state.previewScreen === 'service_test' || state.previewScreen === 'service_buy') {
           var allPreviewItems = controlledPreviewRows.flat(); var assignedPreview = [];
-          cfg.buttonRows.forEach(function(layoutRow){var roles=Array.isArray(layoutRow.roles)?layoutRow.roles:[];var chosen=allPreviewItems.filter(function(item){return item.role && roles.indexOf(item.role)!==-1 && assignedPreview.indexOf(item)===-1;});chosen.forEach(function(item){assignedPreview.push(item);});if(chosen.length)rows.push(chosen.map(function(item){return item.button;}));});
+          cfg.buttonRows.forEach(function(layoutRow){var roles=Array.isArray(layoutRow.roles)?layoutRow.roles:[];var chosen=[];roles.forEach(function(roleId){allPreviewItems.forEach(function(item){if(item.role===roleId&&assignedPreview.indexOf(item)===-1&&chosen.indexOf(item)===-1)chosen.push(item);});});chosen.forEach(function(item){assignedPreview.push(item);});if(chosen.length)rows.push(chosen.map(function(item){return item.button;}));});
           allPreviewItems.filter(function(item){return assignedPreview.indexOf(item)===-1;}).forEach(function(item){rows.push([item.button]);});
         } else controlledPreviewRows.forEach(function (sourceRow) {
           var assigned = [];

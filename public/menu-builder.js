@@ -37,6 +37,18 @@
     wallet: 'صفحه کیف پول',
     support: 'صفحه پشتیبانی'
   };
+  function appendNavigationTargets(select, selectedId) {
+    var menuGroup = el('optgroup'); menuGroup.label = 'منوهای سفارشی';
+    state.draft.menus.forEach(function (m) {
+      var opt = el('option', m.name + ' (' + m.id + ')'); opt.value = m.id; opt.selected = m.id === selectedId; menuGroup.appendChild(opt);
+    });
+    select.appendChild(menuGroup);
+    var screenGroup = el('optgroup'); screenGroup.label = 'صفحه‌های داخلی ربات';
+    Object.keys(screenNames).forEach(function (id) {
+      var opt = el('option', screenNames[id]); opt.value = 'screen_' + id; opt.selected = opt.value === selectedId; screenGroup.appendChild(opt);
+    });
+    select.appendChild(screenGroup);
+  }
   function ensureScreens() {
     if (!state.draft.screens || typeof state.draft.screens !== 'object') state.draft.screens = {};
     Object.keys(defaultScreens).forEach(function (id) {
@@ -77,9 +89,7 @@
     if (button.action === 'navigate_menu') {
       var menuField = el('label', null, 'mb-field'); menuField.appendChild(el('span', 'منوی مقصد'));
       var menuSelect = el('select');
-      state.draft.menus.forEach(function (m) {
-        var opt = el('option', m.name + ' (' + m.id + ')'); opt.value = m.id; opt.selected = m.id === button.params.menuId; menuSelect.appendChild(opt);
-      });
+      appendNavigationTargets(menuSelect, button.params.menuId);
       // A native select visually chooses its first option by default, but that does not fire change; persist that ID immediately.
       if (!button.params.menuId && menuSelect.options.length) button.params.menuId = menuSelect.value;
       menuSelect.addEventListener('change', function () { button.params.menuId = menuSelect.value; });
@@ -275,7 +285,7 @@
             if (roleId === 'home' && control.action === 'navigate_menu') {
               var targetWrap = el('label',null,'mb-field'); targetWrap.appendChild(el('span','منوی مقصد'));
               var targetSelect = el('select');
-              state.draft.menus.forEach(function(m){var opt=el('option',m.name+' ('+m.id+')');opt.value=m.id;opt.selected=m.id===(control.params||{}).menuId;targetSelect.appendChild(opt);});
+              appendNavigationTargets(targetSelect, (control.params || {}).menuId);
               // Keep the implicit first option in sync with the stored navigation target.
               if (!control.params) control.params = {}; if (!control.params.menuId && targetSelect.options.length) control.params.menuId = targetSelect.value;
               targetSelect.addEventListener('change',function(){control.params.menuId=targetSelect.value;});

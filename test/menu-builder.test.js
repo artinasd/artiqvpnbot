@@ -134,6 +134,8 @@ test('published runtime routes registered actions and rejects missing submenu ta
   assert.match(index, /getMenuKeyboard\('main'\)/);
   assert.match(runtime, /arrangeScreenRows/);
   assert.match(runtime, /getScreenExtraRows/);
+  assert.match(runtime, /const rows = groups\.map\(\(group\) => group\.buttons\)/);
+  assert.match(runtime, /arranged\.push\(group\.buttons\)/);
   assert.match(runtime, /renderRegisteredButton/);
   assert.match(api, /Screen buttons must be an array/);
   assert.match(source('public/menu-builder.js'), /دکمه‌های اضافی این منو/);

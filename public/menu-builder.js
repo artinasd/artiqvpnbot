@@ -4,7 +4,7 @@
   window.__artiqMenuBuilderLoaded = true;
   var app = document.getElementById('app');
   if (!app) return;
-  var state = { actions: {}, draft: null, published: null, history: [], botTexts: {}, botButtons: {}, selectedMenu: 'main', editorMode: 'menu', selectedScreen: 'service_test', previewScreen: 'menu' };
+  var state = { actions: {}, draft: null, published: null, history: [], botTexts: {}, botButtons: {}, panels: [], selectedMenu: 'main', editorMode: 'menu', selectedScreen: 'service_test', previewScreen: 'menu' };
   var card, editor, preview, status;
   function el(tag, text, cls) { var node = document.createElement(tag); if (text !== undefined && text !== null) node.textContent = text; if (cls) node.className = cls; return node; }
   function api(action, extra) {
@@ -179,8 +179,8 @@
       // The extra columns/style/template controls were redundant and confusing.
       section.appendChild(field('متن پیام', cfg.messageTemplate != null && String(cfg.messageTemplate) !== '' ? String(cfg.messageTemplate) : defaultScreenMessageTemplate(id), function (v) { cfg.messageTemplate = v; state.previewScreen = id; }));
       var managedRoleGroups = {
-        service_test: [{id:'services',label:'سرویس‌های اکانت تست'},{id:'home',label:'منوی اصلی'}],
-        service_buy: [{id:'services',label:'سرویس‌های خرید'},{id:'home',label:'منوی اصلی'}],
+        service_test: state.panels.filter(function(panel){return panel.testEnabled !== false;}).map(function(panel){return {id:'panel_'+panel.panelId,label:panel.name,panelButton:true};}).concat([{id:'home',label:'منوی اصلی'}]),
+        service_buy: state.panels.filter(function(panel){return panel.purchaseEnabled !== false;}).map(function(panel){return {id:'panel_'+panel.panelId,label:panel.name,panelButton:true};}).concat([{id:'home',label:'منوی اصلی'}]),
         service_renew: [{id:'services',label:'سرویس‌های تمدید'},{id:'home',label:'منوی اصلی'}],
         plans_buy: [{id:'plans',label:'پلن‌های خرید'},{id:'custom_plan',label:'ساخت بسته دلخواه'},{id:'home',label:'منوی اصلی'}],
         plans_renew: [{id:'plans',label:'پلن‌های تمدید'},{id:'home',label:'منوی اصلی'}],
@@ -193,6 +193,26 @@
       var roleDefs = managedRoleGroups[id] || [];
       if (roleDefs.length) {
         if (!cfg.buttonControls || typeof cfg.buttonControls !== 'object') cfg.buttonControls = {};
+        if (['service_test','service_buy'].includes(id) && Array.isArray(cfg.buttonRows) && cfg.buttonRows.some(function(row){return (row.roles||[]).includes('services');})) {
+          var panelRoles = roleDefs.filter(function(role){return role.panelButton;});
+          var legacyControl = cfg.buttonControls.services || {};
+          if (panelRoles.length) {
+            var migratedRows = [];
+            cfg.buttonRows.forEach(function(row){
+              var roles = Array.isArray(row.roles) ? row.roles.slice() : [];
+              if (!roles.includes('services')) { migratedRows.push(row); return; }
+              roles = roles.filter(function(role){return role !== 'services';});
+              var homeRoles = roles.filter(function(role){return role === 'home';});
+              var firstPanel = panelRoles.shift();
+              if (firstPanel) migratedRows.push(Object.assign({},row,{roles:[firstPanel.id]}));
+              panelRoles.forEach(function(role){migratedRows.push({id:'managed_row_'+role.id,roles:[role.id]});});
+              panelRoles = [];
+              if (homeRoles.length) migratedRows.push({id:'managed_row_home',roles:homeRoles});
+            });
+            cfg.buttonRows = migratedRows;
+          }
+          roleDefs.filter(function(role){return role.panelButton;}).forEach(function(role){ if(!cfg.buttonControls[role.id]) cfg.buttonControls[role.id]={enabled:legacyControl.enabled !== false,style:legacyControl.style || 'glass',action:'original',params:{}}; });
+        }
         if (!Array.isArray(cfg.buttonRows)) {
           cfg.buttonRows = [];
           roleDefs.forEach(function (role) {
@@ -241,7 +261,8 @@
             var role = roleDef(roleId); if (!role) return;
             var control = cfg.buttonControls[roleId] || (cfg.buttonControls[roleId] = { enabled:true, label:'{label}', action:'original', style:'glass', params:{} });
             var item = el('div', null, 'mb-button-edit');
-            item.appendChild(field('متن دکمه در تلگرام (' + role.label + ')', control.label || '{label}', function (value) { control.label = value; renderPreview(); }));
+            if (!role.panelButton) item.appendChild(field('متن دکمه در تلگرام (' + role.label + ')', control.label || '{label}', function (value) { control.label = value; renderPreview(); }));
+            else item.appendChild(el('p', 'دکمهٔ پنل: ' + role.label + ' · نام و برچسب از بخش «پنل‌ها و پلن‌ها» گرفته می‌شود.', 'mb-description'));
             var actionWrap = el('label', null, 'mb-field'); actionWrap.appendChild(el('span','عملکرد دکمه'));
             var actionSelect = el('select');
             var originalOpt = el('option','عملکرد اصلی ربات'); originalOpt.value = 'original'; originalOpt.selected = (control.action || 'original') === 'original'; actionSelect.appendChild(originalOpt);
@@ -270,7 +291,9 @@
             var itemControls = el('div',null,'mb-item-controls');
             itemControls.appendChild(btn('←','mb-icon-button',function(){if(buttonIndex>0){var value=row.roles[buttonIndex-1];row.roles[buttonIndex-1]=roleId;row.roles[buttonIndex]=value;render();}}));
             itemControls.appendChild(btn('→','mb-icon-button',function(){if(buttonIndex<row.roles.length-1){var value=row.roles[buttonIndex+1];row.roles[buttonIndex+1]=roleId;row.roles[buttonIndex]=value;render();}}));
-            itemControls.appendChild(btn('حذف دکمه','mb-danger',function(){row.roles.splice(buttonIndex,1);control.enabled=false;if(roleId==='home')cfg.homeButton=false;render();}));
+            if (role.panelButton) {
+              var visibility = el('label', null, 'mb-field'); var visibilityInput = el('input'); visibilityInput.type = 'checkbox'; visibilityInput.checked = control.enabled !== false; visibilityInput.addEventListener('change', function(){control.enabled = visibilityInput.checked; renderPreview();}); visibility.appendChild(visibilityInput); visibility.appendChild(el('span','نمایش این پنل در این منو')); item.appendChild(visibility);
+            } else itemControls.appendChild(btn('حذف دکمه','mb-danger',function(){row.roles.splice(buttonIndex,1);control.enabled=false;if(roleId==='home')cfg.homeButton=false;render();}));
             item.appendChild(itemControls); grid.appendChild(item);
           });
           rowCard.appendChild(grid);
@@ -295,7 +318,7 @@
                 render();
               }));
             }
-            picker.appendChild(btn('ساخت دکمهٔ سفارشی در این ردیف','mb-button',function(){
+            if (!['service_test','service_buy'].includes(id)) picker.appendChild(btn('ساخت دکمهٔ سفارشی در این ردیف','mb-button',function(){
               if(!Array.isArray(cfg.buttons))cfg.buttons=[];
               if(cfg.buttons.length>=20)return showStatus('برای هر منو حداکثر ۲۰ دکمهٔ اضافی مجاز است.',false);
               cfg.buttons.push({id:'screen_button_'+Math.random().toString(36).slice(2,7),rowId:row.id,label:'دکمه جدید',action:'back_home',params:{}});
@@ -578,7 +601,7 @@
     card.appendChild(actions); status = el('div'); card.appendChild(status);
     app.insertBefore(card, app.firstChild);
     api().then(function (data) {
-      state.actions = data.actions || {}; state.botTexts = data.botTexts || {}; state.botButtons = data.botButtons || {}; state.draft = data.draft; ensureScreens(); state.published = data.published; state.history = data.history || [];
+      state.actions = data.actions || {}; state.botTexts = data.botTexts || {}; state.botButtons = data.botButtons || {}; state.panels = Array.isArray(data.panels) ? data.panels : []; state.draft = data.draft; ensureScreens(); state.published = data.published; state.history = data.history || [];
       historySelect.replaceChildren();
       state.history.forEach(function (item) { var opt = el('option', 'نسخه ' + item.version + (item.publishedAt ? ' · ' + item.publishedAt : '')); opt.value = item.version; historySelect.appendChild(opt); });
       if (!state.history.length) { var opt = el('option', 'نسخه قبلی وجود ندارد'); opt.value = ''; historySelect.appendChild(opt); }

@@ -31,7 +31,7 @@ const bot = new Telegraf(BOT_TOKEN || 'INVALID_TOKEN');
 // actual Telegram-supported HTML tags, including CMS screens and custom submenu text.
 // Explicit parse_mode settings always win; plain text is left untouched.
 const nativeCallApi = bot.telegram.callApi.bind(bot.telegram);
-const telegramHtmlTag = /<\\/?(?:b|strong|i|em|u|ins|s|strike|del|span|tg-spoiler|a|code|pre|blockquote|tg-emoji)(?:\\s|>)/i;
+const telegramHtmlTag = /<\/?(?:b|strong|i|em|u|ins|s|strike|del|span|tg-spoiler|a|code|pre|blockquote|tg-emoji)(?:\s|>)/i;
 bot.telegram.callApi = function(method, payload = {}, ...args) {
   const nextPayload = { ...payload };
   if (!nextPayload.parse_mode) {

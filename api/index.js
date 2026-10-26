@@ -127,7 +127,7 @@ async function sendServiceMenu(ctx, mode = 'buy') {
   const title = await formatScreenMessage(screenId, fallbackTitle, { title: fallbackTitle, mode });
   const prefix = mode === 'test' ? 'service_test_' : mode === 'renew' ? 'service_renew_' : 'service_buy_';
   const buttons = await serviceButtonsWithPanels(prefix, config, mode === 'test' ? 'test' : 'purchase');
-  if (!buttons.length) return ctx.reply(await getMessage('serviceUnavailable'));
+  if (!buttons.length) return ctx.reply(await formatScreenMessage(screenId, await getMessage('serviceUnavailable'), { title: fallbackTitle, mode }));
   const rows = await arrangeScreenRows(screenId, buttons);
   await ctx.reply(title, Markup.inlineKeyboard(rows));
 }
@@ -138,12 +138,12 @@ async function sendPlanMenu(ctx, mode = 'buy', serviceId = 'tunnel') {
   if (!service) return ctx.reply(await getMessage('invalidService'));
   const plans = service.panelId ? await planStore.listActiveByPanel(service.panelId) : await planStore.listActiveByService(service.id);
   const displayServiceName = serviceName(service);
-  if (!plans.length && mode !== 'buy') return ctx.reply(await getMessage('noPlans', { service_name: displayServiceName }));
   const screenId = mode === 'renew' ? 'plans_renew' : 'plans_buy';
+  if (!plans.length && mode !== 'buy') return ctx.reply(await formatScreenMessage(screenId, await getMessage('noPlans', { service_name: displayServiceName }), { service: displayServiceName, prompt: await getMessage('planPrompt'), mode: 'تمدید', title: displayServiceName }));
   const screen = await getPublishedScreen(screenId) || {};
   const buttons = plans.map((plan) => [Markup.button.callback(`${plan.buttonText || plan.name} - ${Number(plan.price).toLocaleString('en-US')} ${config.payment?.currency || plan.currency || 'تومان'}`, `${mode === 'renew' ? 'renew_plan_' : 'select_plan_'}${plan.id}`)]);
   if (mode === 'buy' && screen.customPlanButton !== false) buttons.push([Markup.button.callback(String(screen.customPlanLabel || '🛠 ساخت بسته دلخواه (حجم و زمان)'), `select_custom_${service.id}`)]);
-  if (!buttons.length) return ctx.reply(await getMessage('noPlans', { service_name: displayServiceName }));
+  if (!buttons.length) return ctx.reply(await formatScreenMessage(screenId, await getMessage('noPlans', { service_name: displayServiceName }), { service: displayServiceName, prompt, mode: mode === 'renew' ? 'تمدید' : 'خرید', title: displayServiceName }));
   const prompt = await getMessage('planPrompt');
   const fallbackText = `${displayServiceName}\n\n${prompt}`;
   // {service} is the exact CMS-defined service name. Keep emoji decoration out of the
@@ -182,7 +182,8 @@ async function sendAccountList(ctx, requestedPage = 0, { edit = false } = {}) {
   const homeButton = screen.homeButton !== false && !hasConfiguredHome;
   if (!subscriptions.length) {
     const rows = [...extraRows, ...(homeButton ? [[Markup.button.callback('🏠 منوی اصلی', 'main_home')]] : [])];
-    const message = await getMessage('accountNoSubscription');
+    const fallback = await getMessage('accountNoSubscription');
+    const message = await formatScreenMessage('account_list', fallback, { title: '👤 حساب من' });
     if (edit) return ctx.editMessageText(message, { reply_markup: { inline_keyboard: rows } });
     return ctx.reply(message, { reply_markup: { inline_keyboard: rows } });
   }

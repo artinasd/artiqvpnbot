@@ -70,7 +70,7 @@ function validateDocument(input) {
       else {
         const seenRoles = new Set();
         for (const row of screen.buttonRows) {
-          if (!row || typeof row !== 'object' || !/^[a-zA-Z0-9_-]{1,40}$/.test(String(row.id || '')) || !Array.isArray(row.roles) || row.roles.length > 8) { errors.push('Invalid managed button row: ' + screenId); continue; }
+          if (!row || typeof row !== 'object' || !/^[a-zA-Z0-9_-]{1,80}$/.test(String(row.id || '')) || !Array.isArray(row.roles) || row.roles.length > 8) { errors.push('Invalid managed button row: ' + screenId); continue; }
           for (const role of row.roles) {
             const isPanelRole = ['service_test', 'service_buy'].includes(screenId) && /^panel_[a-zA-Z0-9_-]{1,48}$/.test(String(role));
             if (!allowedRowRoles.includes(role) && !isPanelRole) errors.push('Unknown managed button role: ' + screenId + '/' + String(role));

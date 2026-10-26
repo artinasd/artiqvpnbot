@@ -299,7 +299,7 @@
         rolesWrap.appendChild(btn('+ افزودن ردیف', 'mb-secondary', function () { cfg.buttonRows.push({id:'managed_row_'+Math.random().toString(36).slice(2,7),roles:[]}); render(); }));
         section.appendChild(rolesWrap);
       }
-      section.appendChild(controls); section.appendChild(renderScreenButtons(id, cfg)); details.appendChild(section);
+      section.appendChild(renderScreenButtons(id, cfg)); details.appendChild(section);
     });
     return details;
   }

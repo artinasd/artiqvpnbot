@@ -1,5 +1,6 @@
 const storage = require('../lib/storage');
 const { getConfig } = require('../lib/bot-config');
+const { getConfiguredServicesWithPanels } = require('../lib/services');
 
 const PASSWORD = process.env.ADMIN_CMS_PASSWORD || '';
 const KEY = 'cms:menu-builder';
@@ -71,7 +72,8 @@ function validateDocument(input) {
         for (const row of screen.buttonRows) {
           if (!row || typeof row !== 'object' || !/^[a-zA-Z0-9_-]{1,40}$/.test(String(row.id || '')) || !Array.isArray(row.roles) || row.roles.length > 8) { errors.push('Invalid managed button row: ' + screenId); continue; }
           for (const role of row.roles) {
-            if (!allowedRowRoles.includes(role)) errors.push('Unknown managed button role: ' + screenId + '/' + String(role));
+            const isPanelRole = ['service_test', 'service_buy'].includes(screenId) && /^panel_[a-zA-Z0-9_-]{1,48}$/.test(String(role));
+            if (!allowedRowRoles.includes(role) && !isPanelRole) errors.push('Unknown managed button role: ' + screenId + '/' + String(role));
             if (seenRoles.has(role)) errors.push('Duplicate managed button role: ' + screenId + '/' + String(role));
             seenRoles.add(role);
           }
@@ -84,7 +86,8 @@ function validateDocument(input) {
     if (screen.buttonControls !== undefined && (!screen.buttonControls || typeof screen.buttonControls !== 'object' || Array.isArray(screen.buttonControls))) errors.push('Button controls must be an object: ' + screenId);
     for (const [controlId, control] of Object.entries(screen.buttonControls || {})) {
       const allowedControls = { service_test: ['services', 'home'], service_buy: ['services', 'home'], service_renew: ['services', 'home'], plans_buy: ['plans', 'custom_plan', 'home'], plans_renew: ['plans', 'home'], account_list: ['subscription_detail', 'subscription_renew', 'subscription_remove', 'home'], account_detail: ['open_link', 'copy_link', 'renew_subscription', 'back_to_list', 'home'], account_remove: ['confirm_remove', 'cancel_remove'], wallet: ['home'], support: ['home'] }[screenId] || [];
-      if (!allowedControls.includes(controlId)) errors.push('Unknown built-in button control: ' + screenId + '/' + controlId);
+      const isPanelControl = ['service_test', 'service_buy'].includes(screenId) && /^panel_[a-zA-Z0-9_-]{1,48}$/.test(String(controlId));
+      if (!allowedControls.includes(controlId) && !isPanelControl) errors.push('Unknown built-in button control: ' + screenId + '/' + controlId);
       if (!control || typeof control !== 'object' || Array.isArray(control)) { errors.push('Invalid built-in button control: ' + controlId); continue; }
       if (control.enabled !== undefined && typeof control.enabled !== 'boolean') errors.push('Button enabled must be true or false: ' + controlId);
       if (control.label !== undefined && (typeof control.label !== 'string' || control.label.length > 64 || !control.label.trim())) errors.push('Button label must contain 1–64 characters: ' + controlId);
@@ -160,7 +163,8 @@ module.exports = async function menuBuilderApi(req, res) {
     const state = await storage.get(KEY) || { draft: clone(DEFAULT_DOCUMENT), published: null, history: [] };
     if (req.method === 'GET') {
       const botConfig = await getConfig();
-      return json(res, 200, { actions: ACTIONS, draft: state.draft || clone(DEFAULT_DOCUMENT), published: state.published || null, history: (state.history || []).slice(0, 10), botTexts: botConfig.messages || {}, botButtons: botConfig.buttons || {} });
+      const panels = await getConfiguredServicesWithPanels(botConfig);
+      return json(res, 200, { actions: ACTIONS, draft: state.draft || clone(DEFAULT_DOCUMENT), published: state.published || null, history: (state.history || []).slice(0, 10), botTexts: botConfig.messages || {}, botButtons: botConfig.buttons || {}, panels: panels.map((panel) => ({ id: panel.id, panelId: String(panel.panelId), name: panel.name, testEnabled: panel.testEnabled !== false, purchaseEnabled: panel.purchaseEnabled !== false })) });
     }
     if (req.method !== 'POST') return json(res, 405, { error: 'METHOD_NOT_ALLOWED' });
     const body = req.body || {};

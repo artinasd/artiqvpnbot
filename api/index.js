@@ -127,9 +127,9 @@ async function sendServiceMenu(ctx, mode = 'buy') {
   const title = await formatScreenMessage(screenId, fallbackTitle, { title: fallbackTitle, mode });
   const prefix = mode === 'test' ? 'service_test_' : mode === 'renew' ? 'service_renew_' : 'service_buy_';
   const buttons = await serviceButtonsWithPanels(prefix, config, mode === 'test' ? 'test' : 'purchase');
-  if (!buttons.length) return ctx.reply(await formatScreenMessage(screenId, await getMessage('serviceUnavailable'), { title: fallbackTitle, mode }));
+  if (!buttons.length) return ctx.reply(await formatScreenMessage(screenId, await getMessage('serviceUnavailable'), { title: fallbackTitle, mode }), { parse_mode: 'HTML' });
   const rows = await arrangeScreenRows(screenId, buttons);
-  await ctx.reply(title, Markup.inlineKeyboard(rows));
+  await ctx.reply(title, { ...Markup.inlineKeyboard(rows), parse_mode: 'HTML' });
 }
 
 async function sendPlanMenu(ctx, mode = 'buy', serviceId = 'tunnel') {
@@ -139,18 +139,18 @@ async function sendPlanMenu(ctx, mode = 'buy', serviceId = 'tunnel') {
   const plans = service.panelId ? await planStore.listActiveByPanel(service.panelId) : await planStore.listActiveByService(service.id);
   const displayServiceName = serviceName(service);
   const screenId = mode === 'renew' ? 'plans_renew' : 'plans_buy';
-  if (!plans.length && mode !== 'buy') return ctx.reply(await formatScreenMessage(screenId, await getMessage('noPlans', { service_name: displayServiceName }), { service: displayServiceName, prompt: await getMessage('planPrompt'), mode: 'تمدید', title: displayServiceName }));
+  if (!plans.length && mode !== 'buy') return ctx.reply(await formatScreenMessage(screenId, await getMessage('noPlans', { service_name: displayServiceName }), { service: displayServiceName, prompt: await getMessage('planPrompt'), mode: 'تمدید', title: displayServiceName }), { parse_mode: 'HTML' });
   const screen = await getPublishedScreen(screenId) || {};
   const buttons = plans.map((plan) => [Markup.button.callback(`${plan.buttonText || plan.name} - ${Number(plan.price).toLocaleString('en-US')} ${config.payment?.currency || plan.currency || 'تومان'}`, `${mode === 'renew' ? 'renew_plan_' : 'select_plan_'}${plan.id}`)]);
   if (mode === 'buy' && screen.customPlanButton !== false) buttons.push([Markup.button.callback(String(screen.customPlanLabel || '🛠 ساخت بسته دلخواه (حجم و زمان)'), `select_custom_${service.id}`)]);
-  if (!buttons.length) return ctx.reply(await formatScreenMessage(screenId, await getMessage('noPlans', { service_name: displayServiceName }), { service: displayServiceName, prompt: await getMessage('planPrompt'), mode: mode === 'renew' ? 'تمدید' : 'خرید', title: displayServiceName }));
+  if (!buttons.length) return ctx.reply(await formatScreenMessage(screenId, await getMessage('noPlans', { service_name: displayServiceName }), { service: displayServiceName, prompt: await getMessage('planPrompt'), mode: mode === 'renew' ? 'تمدید' : 'خرید', title: displayServiceName }), { parse_mode: 'HTML' });
   const prompt = await getMessage('planPrompt');
   const fallbackText = `${displayServiceName}\n\n${prompt}`;
   // {service} is the exact CMS-defined service name. Keep emoji decoration out of the
   // placeholder so custom message templates don't inherit an unexpected prefix.
   const messageText = await formatScreenMessage(screenId, fallbackText, { service: displayServiceName, prompt, mode: mode === 'renew' ? 'تمدید' : 'خرید', title: displayServiceName });
   const rows = await arrangeScreenRows(screenId, buttons);
-  await ctx.reply(messageText, Markup.inlineKeyboard(rows));
+  await ctx.reply(messageText, { ...Markup.inlineKeyboard(rows), parse_mode: 'HTML' });
 }
 
 async function createTestForService(ctx, serviceId) {
@@ -184,8 +184,8 @@ async function sendAccountList(ctx, requestedPage = 0, { edit = false } = {}) {
     const rows = [...extraRows, ...(homeButton ? [[Markup.button.callback('🏠 منوی اصلی', 'main_home')]] : [])];
     const fallback = await getMessage('accountNoSubscription');
     const message = await formatScreenMessage('account_list', fallback, { title: '👤 حساب من' });
-    if (edit) return ctx.editMessageText(message, { reply_markup: { inline_keyboard: rows } });
-    return ctx.reply(message, { reply_markup: { inline_keyboard: rows } });
+    if (edit) return ctx.editMessageText(message, { parse_mode: 'HTML', reply_markup: { inline_keyboard: rows } });
+    return ctx.reply(message, { parse_mode: 'HTML', reply_markup: { inline_keyboard: rows } });
   }
   const totalPages = Math.max(1, Math.ceil(subscriptions.length / ACCOUNT_SUBSCRIPTIONS_PER_PAGE));
   const page = Math.max(0, Math.min(totalPages - 1, Number.isFinite(Number(requestedPage)) ? Math.floor(Number(requestedPage)) : 0));
@@ -221,7 +221,7 @@ async function sendAccountList(ctx, requestedPage = 0, { edit = false } = {}) {
 bot.catch((error,ctx)=>{log('BOT_ERROR',{update_type:ctx?.updateType,error:error?.message||String(error)});});
 bot.use(async(ctx,next)=>{if(isAdmin(ctx))return next();const config=await getConfig();if(config.bot?.maintenanceMode)return ctx.reply(await getMessage('maintenance'));return next();});
 bot.start(async(ctx)=>{let newUserReport=null;try{newUserReport=await userReport.recordFirstStart(storage,ctx.from);}catch(error){log('NEW_USER_REPORT_FAILED',{telegram_user_id:ctx.from?.id,error:error?.message||String(error)});}await persistUser(ctx);if(newUserReport)await bot.telegram.sendMessage(ADMIN_ID,newUserReport,{parse_mode:'HTML'}).catch(error=>log('NEW_USER_REPORT_SEND_FAILED',{telegram_user_id:ctx.from?.id,error:error?.message||String(error)}));await storage.deleteState('user',ctx.from.id);const config=await getConfig();const b=config.buttons||{};const testText=b.test||'🎁 دریافت اکانت تست';const buyText=b.buy||'🛒 خرید اشتراک';const accountText=b.account||'👤 حساب من';const walletText=b.wallet||'💰 کیف پول من';const supportText=b.support||'🎯 پشتیبانی';const mainMenu=await getPublishedMenu('main');const message=mainMenu?.text?(await formatPublishedMenuText('main',ctx.from.id)):await getMessage('start');const configuredKeyboard=await getMenuKeyboard('main');await ctx.reply(message,{...(configuredKeyboard||Markup.keyboard([[testText],[buyText],[walletText],[accountText],[supportText]]).resize()),parse_mode:'HTML'});});
-bot.hears(/.*/,async(ctx,next)=>{const config=await getConfig();const b=config.buttons||{};const text=ctx.message?.text;if(text===(b.support||'🎯 پشتیبانی')){await persistUser(ctx);const username=config.payment.supportUsername||SUPPORT_USERNAME;const fallback=await getMessage('support',{support_username:username});const message=await formatScreenMessage('support',fallback,{title:'پشتیبانی',mode:'support'});return ctx.reply(message,{reply_markup:{inline_keyboard:await arrangeScreenRows('support',[])}});}if(text===(b.buy||'🛒 خرید اشتراک')){await persistUser(ctx);return sendServiceMenu(ctx,'buy');}if(text===(b.test||'🎁 دریافت اکانت تست')){return sendServiceMenu(ctx,'test');}if(text===(b.wallet||'💰 کیف پول من')){await persistUser(ctx);return showWalletPage(ctx);}if(text===(b.account||'👤 حساب من')){await persistUser(ctx);return sendAccountList(ctx,0);}return next();});
+bot.hears(/.*/,async(ctx,next)=>{const config=await getConfig();const b=config.buttons||{};const text=ctx.message?.text;if(text===(b.support||'🎯 پشتیبانی')){await persistUser(ctx);const username=config.payment.supportUsername||SUPPORT_USERNAME;const fallback=await getMessage('support',{support_username:username});const message=await formatScreenMessage('support',fallback,{title:'پشتیبانی',mode:'support'});return ctx.reply(message,{parse_mode:'HTML',reply_markup:{inline_keyboard:await arrangeScreenRows('support',[])}});}if(text===(b.buy||'🛒 خرید اشتراک')){await persistUser(ctx);return sendServiceMenu(ctx,'buy');}if(text===(b.test||'🎁 دریافت اکانت تست')){return sendServiceMenu(ctx,'test');}if(text===(b.wallet||'💰 کیف پول من')){await persistUser(ctx);return showWalletPage(ctx);}if(text===(b.account||'👤 حساب من')){await persistUser(ctx);return sendAccountList(ctx,0);}return next();});
 bot.hears('🛒 خرید اشتراک',async(ctx)=>{await persistUser(ctx);await sendServiceMenu(ctx,'buy');});
 bot.hears('🎁 دریافت اکانت تست',async(ctx)=>{await sendServiceMenu(ctx,'test');});
 
@@ -262,7 +262,7 @@ bot.on('callback_query',async(ctx)=>{
     const message = await formatScreenMessage('account_remove', fallback, { title: escapeHtml(username), service: escapeHtml(order.service || '') });
     return ctx.reply(message, { parse_mode: 'HTML', reply_markup: { inline_keyboard: await arrangeScreenRows('account_remove', accountUI.removeConfirmationKeyboard(id, { ...screen, homeButton: false })) } });
   }
-  if(data.startsWith('account_sub:')){const id=data.slice('account_sub:'.length);const raw=await accountService.getSubscription(ctx.from.id,id);if(!raw)return ctx.reply('❌ این اشتراک پیدا نشد.');const sub=accountService.summary(raw);const screen=await getPublishedScreen('account_detail')||{};const message=await formatScreenMessage('account_detail',accountUI.formatDetail(sub),{title:sub.planName||'اشتراک',service:sub.service||'Tunnel',mode:sub.status||''});return ctx.reply(message,{reply_markup:{inline_keyboard:await arrangeScreenRows('account_detail',accountUI.detailKeyboard(sub,{...screen,homeButton:false}))}});}
+  if(data.startsWith('account_sub:')){const id=data.slice('account_sub:'.length);const raw=await accountService.getSubscription(ctx.from.id,id);if(!raw)return ctx.reply('❌ این اشتراک پیدا نشد.');const sub=accountService.summary(raw);const screen=await getPublishedScreen('account_detail')||{};const message=await formatScreenMessage('account_detail',accountUI.formatDetail(sub),{title:sub.planName||'اشتراک',service:sub.service||'Tunnel',mode:sub.status||''});return ctx.reply(message,{parse_mode:'HTML',reply_markup:{inline_keyboard:await arrangeScreenRows('account_detail',accountUI.detailKeyboard(sub,{...screen,homeButton:false}))}});}
   if(data.startsWith('copy_sub:')){const id=data.slice('copy_sub:'.length);const raw=await accountService.getSubscription(ctx.from.id,id);const url=raw?.subUrl||raw?.subscriptionUrl;if(!url)return ctx.reply('❌ لینک اشتراک در دسترس نیست.');return ctx.reply('📋 لینک اشتراک:',{reply_markup:{inline_keyboard:[[{text:'📋 کپی لینک اشتراک',copy_text:{text:url}}],[{text:'⬅️ بازگشت',callback_data:`account_sub:${id}`}]]}});}
   if(data.startsWith('account_renew:')){const id=data.slice('account_renew:'.length);const raw=await accountService.getSubscription(ctx.from.id,id);if(!raw||!accountService.canRenew(raw))return ctx.reply('❌ این اشتراک قابل تمدید نیست.');try{const order=await createRenewalOrderForSubscription(ctx,raw);return showWalletCheckout(ctx,order);}catch(error){log('ACCOUNT_RENEWAL_CREATE_FAILED',{telegram_user_id:ctx.from.id,source_order_id:id,error:error?.message||String(error)});return ctx.reply('❌ تمدید این اشتراک در حال حاضر ممکن نیست.');}}
   if(data.startsWith('service_test_'))return createTestForService(ctx,data.slice('service_test_'.length));

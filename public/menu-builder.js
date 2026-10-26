@@ -159,31 +159,14 @@
     if (selectedScreen) details.open = true;
     var summary = el('summary', selectedScreen ? 'تنظیمات منوی انتخاب‌شده' : 'تنظیمات منوهای پویا (سرویس‌ها، پلن‌ها و اشتراک‌ها)', 'mb-heading');
     details.appendChild(summary);
-    details.appendChild(el('p', 'این صفحه‌ها از اطلاعات زنده پنل‌ها، پلن‌ها و حساب کاربر ساخته می‌شوند. دکمه‌های موجود را در ردیف‌های زیر مدیریت کنید؛ تعداد دکمه در هر ردیف فقط روی دکمه‌های اضافی اعمال می‌شود. متن پیام از {service}، {prompt}، {title} و {mode} پشتیبانی می‌کند.', 'mb-description'));
+    details.appendChild(el('p', 'این صفحه‌ها از اطلاعات زنده پنل‌ها، پلن‌ها و حساب کاربر ساخته می‌شوند. متن پیام را مثل منوی اصلی در ورودی ساده ویرایش کنید؛ دکمه‌های موجود و اضافی را در بخش‌های زیر مدیریت کنید. متن پیام از {service}، {prompt}، {title} و {mode} پشتیبانی می‌کند.', 'mb-description'));
     Object.keys(defaultScreens).filter(function (id) { return !selectedScreen || id === selectedScreen; }).forEach(function (id) {
       var cfg = state.draft.screens[id];
       var section = el('section', null, 'mb-row');
       section.appendChild(el('strong', screenNames[id], 'mb-screen-title'));
-      var controls = el('div', null, 'mb-screen-controls');
-      controls.appendChild(el('strong', 'چیدمان دکمه‌ها', 'mb-screen-title'));
-      controls.appendChild(el('p', 'تعداد دکمه در هر ردیف و چیدمان مستقل هر ردیف را برای این صفحه تنظیم کنید؛ این تنظیمات روی دکمه‌های زنده و دکمه‌های اضافی اعمال می‌شوند.', 'mb-description'));
-      if (['service_test','service_buy','service_renew','plans_buy','plans_renew','account_list','account_detail','account_remove','wallet','support'].indexOf(id) !== -1) {
-        var colWrap = el('label', null, 'mb-field'); colWrap.appendChild(el('span', 'تعداد دکمه در هر ردیف'));
-        var colSelect = el('select');
-        [1,2,3,4].forEach(function (n) { var opt = el('option', String(n)); opt.value = String(n); opt.selected = Number(cfg.columns || 1) === n; colSelect.appendChild(opt); });
-        colSelect.addEventListener('change', function () { cfg.columns = Number(colSelect.value); renderPreview(); });
-        colWrap.appendChild(colSelect); controls.appendChild(colWrap);
-
-      }
-      var msgWrap = el('label', null, 'mb-field'); msgWrap.appendChild(el('span', 'قالب متن پیام'));
-      var msg = el('textarea'); msg.rows = 4; msg.value = cfg.messageTemplate != null && String(cfg.messageTemplate) !== '' ? String(cfg.messageTemplate) : defaultScreenMessageTemplate(id); msg.placeholder = '{service}\\n\\n{prompt}'; msg.addEventListener('input', function () { cfg.messageTemplate = msg.value; renderPreview(); });
-      msgWrap.appendChild(msg); controls.appendChild(msgWrap);
-      if (['service_test','service_buy','service_renew','plans_buy','plans_renew'].indexOf(id) !== -1) {
-        var styleWrap = el('label', null, 'mb-field'); styleWrap.appendChild(el('span', 'رنگ پیش‌فرض دکمه‌های زنده'));
-        var styleSelect = el('select');
-        [['glass','شیشه ای'],['primary','آبی'],['success','سبز'],['danger','قرمز']].forEach(function (entry) { var opt = el('option',entry[1]); opt.value=entry[0]; opt.selected=(cfg.buttonStyle || 'glass')===entry[0]; styleSelect.appendChild(opt); });
-        styleSelect.addEventListener('change',function(){cfg.buttonStyle=styleSelect.value;renderPreview();}); styleWrap.appendChild(styleSelect); controls.appendChild(styleWrap);
-      }
+      // Use the same simple, persistent message input as the main menu.
+      // The extra columns/style/template controls were redundant and confusing.
+      section.appendChild(field('متن پیام', cfg.messageTemplate != null && String(cfg.messageTemplate) !== '' ? String(cfg.messageTemplate) : defaultScreenMessageTemplate(id), function (v) { cfg.messageTemplate = v; }));
       var managedRoleGroups = {
         service_test: [{id:'services',label:'سرویس‌های اکانت تست'},{id:'home',label:'منوی اصلی'}],
         service_buy: [{id:'services',label:'سرویس‌های خرید'},{id:'home',label:'منوی اصلی'}],

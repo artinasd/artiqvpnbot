@@ -18,6 +18,7 @@ function createMenuApi() {
   const runModule = new Function('require', 'module', 'process', source('api/menu-builder.js'));
   runModule((id) => {
     if (id === '../lib/storage') return storage;
+    if (id === '../lib/bot-config') return { getConfig: async () => ({}) };
     throw new Error('Unexpected module: ' + id);
   }, mod, { env: { ADMIN_CMS_PASSWORD: 'test-password' } });
   async function request({ method = 'POST', action, document, version, password = 'test-password' } = {}) {

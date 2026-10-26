@@ -241,10 +241,9 @@
         rolesWrap.appendChild(el('p', 'دکمه‌های موجود را مانند منوی اصلی در ردیف‌ها بچینید. برای دکمه‌های وابسته به شناسه اشتراک یا سرویس، عملکرد اصلی قفل است تا لینک، تمدید، حذف و callback امن باقی بماند؛ متن، رنگ و جایگاه قابل تنظیم است.', 'mb-description'));
         function roleDef(roleId) { return roleDefs.find(function (role) { return role.id === roleId; }); }
         function roleLabel(roleId) { var role = roleDef(roleId); return role ? role.label : roleId; }
-        function availableRoles() {
-          var used = [];
-          cfg.buttonRows.forEach(function (row) { (row.roles || []).forEach(function (roleId) { if (used.indexOf(roleId) < 0) used.push(roleId); }); });
-          return roleDefs.filter(function (role) { return used.indexOf(role.id) < 0; });
+        function availableRoles(targetRow) {
+          // Existing managed buttons can be moved from another row, but cannot be duplicated.
+          return roleDefs.filter(function (role) { return !(targetRow.roles || []).includes(role.id); });
         }
         var managedRows = el('div', null, 'mb-rows');
         cfg.buttonRows.forEach(function (row, rowIndex) {
@@ -298,7 +297,7 @@
           });
           rowCard.appendChild(grid);
           rowCard.appendChild(btn('+ افزودن دکمه به این ردیف','mb-secondary',function(){
-            var choices=availableRoles();
+            var choices=availableRoles(row);
             // Keep this picker inline; native prompt dialogs are suppressed in some embedded panels.
             var existingPicker = rowCard.querySelector('.mb-add-role-picker');
             if(existingPicker){existingPicker.remove();return;}
@@ -311,6 +310,8 @@
               picker.appendChild(btn('افزودن دکمهٔ موجود','mb-button',function(){
                 var selectedRole=choices.find(function(role){return role.id===pickerSelect.value;});
                 if(!selectedRole)return showStatus('لطفاً یک دکمه انتخاب کنید.',false);
+                // Moving an existing button between rows must remove it from its previous row first.
+                cfg.buttonRows.forEach(function(otherRow){ if(otherRow !== row && Array.isArray(otherRow.roles)){ otherRow.roles = otherRow.roles.filter(function(roleId){ return roleId !== selectedRole.id; }); } });
                 row.roles.push(selectedRole.id);
                 var control=cfg.buttonControls[selectedRole.id]||(cfg.buttonControls[selectedRole.id]={enabled:true,label:'{label}',action:'original',style:'glass',params:{}});
                 control.enabled=true;

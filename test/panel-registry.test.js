@@ -96,23 +96,13 @@ test('panel URL validation rejects local hostnames and accepts only HTTPS withou
 });
 
 
-test('master panels require two distinct active PasarGuard source panels and need no credentials', async () => {
+test('Master Panels are not accepted by the ordinary PasarGuard panel registry', async () => {
+  assert.throws(() => validatePanelInput({ name: 'Combined', type: 'master', panelAId: 'west', panelBId: 'east' }), /UNSUPPORTED_PANEL_TYPE/);
   let stored = [];
   const registry = createPanelRegistry({
     get: async () => stored,
     set: async (_key, value) => { stored = structuredClone(value); return 'OK'; },
     encryptionKey: key,
   });
-  const a = await registry.save(valid);
-  const b = await registry.save({ ...valid, id: '', name: 'Reseller East', baseUrl: 'https://east.example.com' });
-  await registry.setStatus(a.id, 'active');
-  await registry.setStatus(b.id, 'active');
-  assert.throws(() => validatePanelInput({ name: 'Bad Master', type: 'master', panelAId: a.id, panelBId: a.id }), /MASTER_PANEL_REQUIRES_TWO_DISTINCT_PANELS/);
-  const master = await registry.save({ name: 'Combined West + East', type: 'master', panelAId: a.id, panelBId: b.id });
-  assert.equal(master.type, 'master');
-  assert.equal(master.panelAId, a.id);
-  assert.equal(master.panelBId, b.id);
-  assert.equal(master.hasCredentials, false);
-  assert.equal('credentials' in master, false);
-  await assert.rejects(registry.save({ name: 'Inactive source', type: 'master', panelAId: a.id, panelBId: 'missing-panel' }), /MASTER_SOURCE_PANEL_NOT_ACTIVE/);
+  await assert.rejects(registry.save({ name: 'Combined', type: 'master', panelAId: 'west', panelBId: 'east' }), /UNSUPPORTED_PANEL_TYPE/);
 });

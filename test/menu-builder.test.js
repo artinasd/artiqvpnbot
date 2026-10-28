@@ -8,7 +8,7 @@ const { serviceName, serviceLabel } = require('../lib/services');
 const root = path.join(__dirname, '..');
 const source = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 
-function createMenuApi() {
+function createMenuApi(panelCatalog = []) {
   const values = new Map();
   const storage = {
     async get(key) { return values.get(key) ?? null; },
@@ -19,6 +19,7 @@ function createMenuApi() {
   runModule((id) => {
     if (id === '../lib/storage') return storage;
     if (id === '../lib/bot-config') return { getConfig: async () => ({}) };
+    if (id === '../lib/services') return { getConfiguredServicesWithPanels: async () => panelCatalog };
     throw new Error('Unexpected module: ' + id);
   }, mod, { env: { ADMIN_CMS_PASSWORD: 'test-password' } });
   async function request({ method = 'POST', action, document, version, password = 'test-password' } = {}) {
@@ -161,6 +162,42 @@ test('available-plan service placeholder uses the exact CMS name without emoji d
   assert.match(index, /\{ service: displayServiceName, prompt, mode:/);
 });
 
+
+
+test('Menu Maker supports selecting a specific enabled panel for purchase or test', async () => {
+  const apiSource = source('api/menu-builder.js');
+  const ui = source('public/menu-builder.js');
+  const runtime = source('lib/bot-config.js');
+  assert.match(apiSource, /select_panel_buy: \{ label: 'انتخاب پنل مشخص برای خرید'/);
+  assert.match(apiSource, /select_panel_test: \{ label: 'انتخاب پنل مشخص برای اکانت تست'/);
+  assert.match(ui, /function panelActionField/);
+  assert.match(ui, /پنل مقصد برای اکانت تست/);
+  assert.match(runtime, /service_buy_panel_/);
+  assert.match(runtime, /service_test_panel_/);
+
+  const { request } = createMenuApi([
+    { id: 'panel_panelA', panelId: 'panelA', testEnabled: false, purchaseEnabled: true },
+    { id: 'master_masterB', panelId: 'masterB', testEnabled: false, purchaseEnabled: true },
+  ]);
+  const initial = await request({ method: 'GET' });
+  const draft = structuredClone(initial.body.draft);
+  draft.menus[0].rows[0].buttons[0] = {
+    id: 'buy-panel-a', label: 'خرید از پنل A', action: 'select_panel_buy', params: { serviceId: 'panel_panelA' },
+  };
+  assert.equal((await request({ action: 'save_draft', document: draft })).status, 200);
+
+  draft.menus[0].rows[0].buttons[0] = {
+    id: 'test-panel-a', label: 'تست از پنل A', action: 'select_panel_test', params: { serviceId: 'panel_panelA' },
+  };
+  const disabledTestPanel = await request({ action: 'save_draft', document: draft });
+  assert.equal(disabledTestPanel.status, 400);
+  assert.ok(disabledTestPanel.body.errors.some((error) => error.includes('selected panel is unavailable')));
+
+  draft.menus[0].rows[0].buttons[0] = {
+    id: 'buy-master-b', label: 'خرید از مستر B', action: 'select_panel_buy', params: { serviceId: 'master_masterB' },
+  };
+  assert.equal((await request({ action: 'save_draft', document: draft })).status, 200);
+});
 
 test('menu navigation selectors persist the default target menu ID', () => {
   const ui = source('public/menu-builder.js');

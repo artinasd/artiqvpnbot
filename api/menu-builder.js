@@ -12,6 +12,8 @@ const ACTIONS = Object.freeze({
   support: { label: 'نمایش اطلاعات پشتیبانی', params: [] },
   renew: { label: 'شروع فرایند تمدید', params: [] },
   navigate_menu: { label: 'باز کردن منوی دیگر', params: ['menuId'] },
+  select_panel_buy: { label: 'انتخاب پنل مشخص برای خرید', params: ['serviceId'] },
+  select_panel_test: { label: 'انتخاب پنل مشخص برای اکانت تست', params: ['serviceId'] },
   open_url: { label: 'باز کردن لینک HTTPS', params: ['url'] },
   back_home: { label: 'بازگشت به منوی اصلی', params: [] },
 });
@@ -51,14 +53,45 @@ function json(res, status, body) {
 function authorized(req) {
   return Boolean(PASSWORD) && req.headers['x-admin-password'] === PASSWORD;
 }
+function containsPanelSelection(document) {
+  const actionIsPanelSelection = (item) => item && (item.action === 'select_panel_buy' || item.action === 'select_panel_test');
+  if ((document.menus || []).some((menu) => (menu.rows || []).some((row) => (row.buttons || []).some(actionIsPanelSelection)))) return true;
+  return Object.values(document.screens || {}).some((screen) =>
+    (screen.buttons || []).some(actionIsPanelSelection) ||
+    Object.values(screen.buttonControls || {}).some(actionIsPanelSelection)
+  );
+}
+async function validateDocumentWithPanels(document) {
+  const checked = validateDocument(document);
+  if (checked.errors.length || !containsPanelSelection(document)) return checked;
+  const panels = await getConfiguredServicesWithPanels(await getConfig());
+  return validateDocument(document, panels.map((panel) => ({
+    id: String(panel.id),
+    testEnabled: panel.testEnabled !== false,
+    purchaseEnabled: panel.purchaseEnabled !== false,
+  })));
+}
 function clone(value) { return JSON.parse(JSON.stringify(value)); }
 const BUILTIN_SCREEN_IDS = ['service_test', 'service_buy', 'service_renew', 'plans_buy', 'plans_renew', 'account_list', 'account_detail', 'account_remove', 'wallet', 'support'];
 function isNavigationTarget(target, menuIds) {
   const value = String(target || '');
   return menuIds.has(value) || (value.startsWith('screen_') && BUILTIN_SCREEN_IDS.includes(value.slice('screen_'.length)));
 }
-function validateDocument(input) {
+function validateDocument(input, panelCatalog = null) {
   const errors = [];
+  function validatePanelTarget(action, params, context) {
+    if (action !== 'select_panel_buy' && action !== 'select_panel_test') return;
+    const serviceId = String(params.serviceId || '');
+    if (!/^(?:panel|master)_[a-zA-Z0-9_-]{1,45}$/.test(serviceId)) {
+      errors.push(context + ' requires a valid panel selection.');
+      return;
+    }
+    if (Array.isArray(panelCatalog)) {
+      const panel = panelCatalog.find((item) => String(item.id) === serviceId);
+      const enabled = action === 'select_panel_test' ? panel?.testEnabled !== false : panel?.purchaseEnabled !== false;
+      if (!panel || !enabled) errors.push(context + ' selected panel is unavailable for this action: ' + serviceId);
+    }
+  }
   if (!input || typeof input !== 'object' || !Array.isArray(input.menus)) return { errors: ['A menu document is required.'] };
   if (input.menus.length < 1 || input.menus.length > 12) errors.push('Create between 1 and 12 menus.');
   const ids = new Set();
@@ -99,6 +132,7 @@ function validateDocument(input) {
       if (control.action !== undefined && control.action !== 'original' && !Object.prototype.hasOwnProperty.call(ACTIONS, control.action)) errors.push('Unregistered built-in button action: ' + String(control.action));
       if (control.style !== undefined && !['default', 'glass', 'primary', 'success', 'danger'].includes(control.style)) errors.push('Unsupported built-in button style: ' + controlId);
       const params = control.params && typeof control.params === 'object' ? control.params : {};
+      validatePanelTarget(control.action, params, 'Built-in button ' + controlId);
       if (control.action === 'navigate_menu' && !/^[a-zA-Z0-9_-]{1,32}$/.test(String(params.menuId || ''))) errors.push('Built-in button navigation requires a valid target menu ID: ' + controlId);
       if (control.action === 'open_url') { try { const url = new URL(String(params.url || '')); if (url.protocol !== 'https:') errors.push('Only HTTPS links are allowed.'); } catch (_) { errors.push('Built-in open URL actions require a valid HTTPS URL.'); } }
     }
@@ -110,6 +144,7 @@ function validateDocument(input) {
       if (!Object.prototype.hasOwnProperty.call(ACTIONS, button.action)) { errors.push('Unregistered screen action: ' + String(button.action || '')); continue; }
       if (button.style !== undefined && !['default', 'glass', 'primary', 'success', 'danger'].includes(button.style)) errors.push('Unsupported Telegram button style for screen button: ' + String(button.id || ''));
       const params = button.params && typeof button.params === 'object' ? button.params : {};
+      validatePanelTarget(button.action, params, 'Screen button ' + screenId);
       if (button.action === 'navigate_menu' && !/^[a-zA-Z0-9_-]{1,32}$/.test(String(params.menuId || ''))) errors.push('Screen navigation requires a valid target menu ID: ' + screenId);
       if (button.action === 'open_url') {
         try { const url = new URL(String(params.url || '')); if (url.protocol !== 'https:') errors.push('Only HTTPS links are allowed.'); }
@@ -133,6 +168,7 @@ function validateDocument(input) {
         if (button.style !== undefined && !['default', 'glass', 'primary', 'success', 'danger'].includes(button.style)) errors.push('Unsupported Telegram button style for button: ' + String(button.id || ''));
         if (!Object.prototype.hasOwnProperty.call(ACTIONS, button.action)) { errors.push('Unregistered action: ' + String(button.action || '')); continue; }
         const params = button.params && typeof button.params === 'object' ? button.params : {};
+        validatePanelTarget(button.action, params, 'Menu button');
         if (button.action === 'navigate_menu' && !/^[a-zA-Z0-9_-]{1,32}$/.test(String(params.menuId || ''))) errors.push('Menu navigation requires a valid target menu ID.');
         if (button.action === 'open_url') {
           try { const url = new URL(String(params.url || '')); if (url.protocol !== 'https:') errors.push('Only HTTPS links are allowed.'); }
@@ -174,7 +210,7 @@ module.exports = async function menuBuilderApi(req, res) {
     if (req.method !== 'POST') return json(res, 405, { error: 'METHOD_NOT_ALLOWED' });
     const body = req.body || {};
     if (body.action === 'save_draft') {
-      const checked = validateDocument(body.document);
+      const checked = await validateDocumentWithPanels(body.document);
       if (checked.errors.length) return json(res, 400, { error: 'VALIDATION_FAILED', errors: checked.errors });
       state.draft = clone(body.document);
       state.draft.version = Number(state.draft.version || 1);
@@ -182,7 +218,7 @@ module.exports = async function menuBuilderApi(req, res) {
       return json(res, 200, { ok: true, draft: state.draft });
     }
     if (body.action === 'publish') {
-      const checked = validateDocument(state.draft);
+      const checked = await validateDocumentWithPanels(state.draft);
       if (checked.errors.length) return json(res, 400, { error: 'VALIDATION_FAILED', errors: checked.errors });
       if (state.published) state.history = [{ ...clone(state.published), archivedAt: new Date().toISOString() }, ...(state.history || [])].slice(0, 10);
       const highestVersion = Math.max(Number(state.published?.version || 0), ...(state.history || []).map((item) => Number(item.version || 0)));

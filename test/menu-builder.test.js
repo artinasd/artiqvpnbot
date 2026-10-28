@@ -175,7 +175,10 @@ test('Menu Maker supports selecting a specific enabled panel for purchase or tes
   assert.match(runtime, /service_buy_panel_/);
   assert.match(runtime, /service_test_panel_/);
 
-  const { request } = createMenuApi([{ id: 'panel_panelA', panelId: 'panelA', testEnabled: false, purchaseEnabled: true }]);
+  const { request } = createMenuApi([
+    { id: 'panel_panelA', panelId: 'panelA', testEnabled: false, purchaseEnabled: true },
+    { id: 'master_masterB', panelId: 'masterB', testEnabled: false, purchaseEnabled: true },
+  ]);
   const initial = await request({ method: 'GET' });
   const draft = structuredClone(initial.body.draft);
   draft.menus[0].rows[0].buttons[0] = {
@@ -189,6 +192,11 @@ test('Menu Maker supports selecting a specific enabled panel for purchase or tes
   const disabledTestPanel = await request({ action: 'save_draft', document: draft });
   assert.equal(disabledTestPanel.status, 400);
   assert.ok(disabledTestPanel.body.errors.some((error) => error.includes('selected panel is unavailable')));
+
+  draft.menus[0].rows[0].buttons[0] = {
+    id: 'buy-master-b', label: 'خرید از مستر B', action: 'select_panel_buy', params: { serviceId: 'master_masterB' },
+  };
+  assert.equal((await request({ action: 'save_draft', document: draft })).status, 200);
 });
 
 test('menu navigation selectors persist the default target menu ID', () => {

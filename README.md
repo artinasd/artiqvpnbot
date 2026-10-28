@@ -159,3 +159,12 @@ npm test
 The included tests cover username and plan behavior plus dynamic panel registry validation, encrypted credentials, connection checks, service selection, and CMS-managed panel provisioning. These automated tests do not replace a controlled end-to-end test against the real PasarGuard panel.
 
 <!-- production redeploy trigger -->
+
+
+## Master Panel setup
+
+A Master Panel combines two active PasarGuard panels. In the CMS, create a **Master Panel**, choose two distinct active PasarGuard source panels, save it, then run its connection test. Create plans under that Master Panel as usual. Master Panel sales create one source account on each panel and send their subscription URLs only to the configured master-subscription API; customers receive only the returned `master_url`.
+
+Set `MASTER_PANEL_API_SECRET` in the deployment environment to the bearer secret accepted by `https://artiq-network.vercel.app/api/bot/subscriptions`. The API must accept the documented JSON payload and return `{"success":true,"master_url":"https://..."}`. Renewals update both source accounts and POST the refreshed source URLs to that endpoint using the same username. The receiving API should upsert by username so renewal updates the existing master subscription rather than creating duplicates.
+
+If either source account cannot be created or the master API call fails, the bot attempts to delete both source accounts, marks fulfillment as failed, and applies the existing wallet-refund flow where eligible. Confirm the receiving API's update/upsert behavior before enabling paid Master Panel sales.

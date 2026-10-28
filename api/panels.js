@@ -59,6 +59,12 @@ module.exports = async function panelsApi(req, res) {
       const panel = await registry.getById(id);
       if (!panel) return json(res, 404, { error: 'PANEL_NOT_FOUND' });
       if (panel.status === 'disabled') return json(res, 400, { error: 'PANEL_DISABLED' });
+      if (panel.type === 'master') {
+        const [a, b] = await Promise.all([registry.getById(panel.panelAId), registry.getById(panel.panelBId)]);
+        if (!a || !b || a.type !== 'pasarguard' || b.type !== 'pasarguard' || a.status !== 'active' || b.status !== 'active') return json(res, 400, { error: 'MASTER_SOURCE_PANEL_NOT_ACTIVE' });
+        const updated = await registry.setStatus(id, 'active');
+        return json(res, 200, { panel: updated, connection: { ok: true, sourcePanels: [a.id, b.id] } });
+      }
       const credentials = await registry.getCredentials(id);
       try {
         const result = await testPasarGuardConnection({ ...panel, credentials });
@@ -72,7 +78,7 @@ module.exports = async function panelsApi(req, res) {
     }
     return json(res, 400, { error: 'UNKNOWN_ACTION' });
   } catch (error) {
-    const allowed = new Set(['INVALID_PANEL', 'INVALID_PANEL_ID', 'INVALID_PANEL_NAME', 'INVALID_PANEL_URL', 'PANEL_URL_HOST_NOT_ALLOWED', 'UNSUPPORTED_PANEL_TYPE', 'PANEL_CREDENTIAL_REQUIRED', 'PANEL_ENCRYPTION_KEY_MUST_BE_32_BYTES', 'PANEL_NOT_FOUND', 'PANEL_NOT_ACTIVE', 'PANEL_REQUIRED', 'PLAN_PANEL_MISMATCH', 'INVALID_PANEL_STATUS', 'INVALID_PANEL_REGISTRY']);
+    const allowed = new Set(['INVALID_PANEL', 'INVALID_PANEL_ID', 'INVALID_PANEL_NAME', 'INVALID_PANEL_URL', 'PANEL_URL_HOST_NOT_ALLOWED', 'UNSUPPORTED_PANEL_TYPE', 'PANEL_CREDENTIAL_REQUIRED', 'PANEL_ENCRYPTION_KEY_MUST_BE_32_BYTES', 'PANEL_NOT_FOUND', 'PANEL_NOT_ACTIVE', 'PANEL_REQUIRED', 'PLAN_PANEL_MISMATCH', 'INVALID_PANEL_STATUS', 'INVALID_PANEL_REGISTRY', 'MASTER_PANEL_REQUIRES_TWO_DISTINCT_PANELS', 'MASTER_SOURCE_PANEL_NOT_ACTIVE']);
     return json(res, 400, { error: allowed.has(error.message) ? error.message : 'PANEL_REQUEST_FAILED' });
   }
 };

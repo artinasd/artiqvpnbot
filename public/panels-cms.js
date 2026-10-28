@@ -219,7 +219,7 @@
     typeWrap.appendChild(node('label', 'نوع پنل'));
     var typeSelect = node('select');
     typeSelect.id = 'panel-type';
-    [['pasarguard','PasarGuard'],['master','Master Panel (دو پنل منبع)']].forEach(function (entry) { var option = node('option', entry[1]); option.value = entry[0]; typeSelect.appendChild(option); });
+    [['pasarguard','PasarGuard']].forEach(function (entry) { var option = node('option', entry[1]); option.value = entry[0]; typeSelect.appendChild(option); });
     typeSelect.addEventListener('change', syncPanelFields);
     typeWrap.appendChild(typeSelect); form.appendChild(typeWrap);
     function sourceField(labelText, id) {
@@ -230,7 +230,7 @@
     sourceField('پنل منبع A', 'panel-source-a');
     sourceField('پنل منبع B', 'panel-source-b');
     function syncPanelFields() {
-      var master = byId('panel-type').value === 'master';
+      var master = false;
       ['panel-url','panel-username','panel-password'].forEach(function (id) { byId(id).parentElement.style.display = master ? 'none' : ''; });
       ['panel-source-a','panel-source-b'].forEach(function (id) { byId(id).parentElement.style.display = master ? '' : 'none'; });
     }
@@ -252,11 +252,9 @@
         var payload = {
           id: byId('panel-id').value.trim() || undefined,
           name: byId('panel-name').value.trim(),
-          baseUrl: byId('panel-type').value === 'master' ? undefined : byId('panel-url').value.trim(),
+          baseUrl: byId('panel-url').value.trim(),
           type: byId('panel-type').value,
-          panelAId: byId('panel-source-a').value,
-          panelBId: byId('panel-source-b').value,
-          credentials: byId('panel-type').value === 'master' ? undefined : ((byId('panel-username').value.trim() && byId('panel-password').value) ? { username: byId('panel-username').value.trim(), password: byId('panel-password').value } : undefined),
+          credentials: ((byId('panel-username').value.trim() && byId('panel-password').value) ? { username: byId('panel-username').value.trim(), password: byId('panel-password').value } : undefined),
         };
         var result = await api('save', { panel: payload });
         byId('panel-password').value = '';

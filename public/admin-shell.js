@@ -4,10 +4,14 @@
   var app = document.getElementById('app');
   if (!app || app.dataset.cmsShellReady === '1') return;
 
+  var masterScript = document.createElement('script');
+  masterScript.src = '/master-panels-cms.js'; masterScript.async = true; document.head.appendChild(masterScript);
+
   var definitions = [
     { id: 'overview', label: 'نمای کلی', description: 'نمایی سریع از وضعیت پنل‌ها و ابزارهای مدیریتی', icon: '◫', group: 'MAIN' },
     { id: 'menus', label: 'سازنده منو', description: 'طراحی منوها، چیدمان دکمه‌ها و اتصال به عملیات ثبت‌شده ربات', icon: '⌘', group: 'BOT', selectors: ['#menuBuilderCard'] },
     { id: 'panels', label: 'پنل‌ها و پلن‌ها', description: 'اتصال پنل‌ها، مدیریت پلن‌ها و قیمت‌گذاری اختصاصی', icon: '▦', group: 'OPERATIONS', selectors: ['#panels-cms-card'] },
+    { id: 'master-panels', label: 'Master Panels', description: 'مدیریت مستقل پنل‌های ترکیبی و پلن‌های آن‌ها', icon: '🔗', group: 'OPERATIONS', selectors: ['#master-panels-cms-card'] },
     { id: 'settings', label: 'تنظیمات ربات', description: 'تنظیمات پرداخت، محدودیت‌ها و رفتار ربات', icon: '⚙', group: 'BOT', selectors: ['#cardNumber', '#tunnelName', '#button_test'] },
     { id: 'messages', label: 'متن‌های ربات', description: 'مدیریت پیام‌ها، متن‌های نمایشی و متغیرهای قابل استفاده', icon: '☷', group: 'BOT', selectors: ['#message_start'] },
     { id: 'users', label: 'کاربران فعال', description: 'مشاهده کاربران و آخرین وضعیت فعالیت آن‌ها', icon: '♙', group: 'PEOPLE', selectors: ['#activeUsersCmsCard'] },
@@ -78,7 +82,7 @@
   var refresh = element('button', 'cms-refresh', '↻ بروزرسانی');
   refresh.type = 'button';
   refresh.addEventListener('click', function () {
-    if (currentPage === 'panels') {
+    if (currentPage === 'panels' || currentPage === 'master-panels') {
       window.dispatchEvent(new CustomEvent('artiq-cms-refresh'));
     } else if (currentPage === 'users') {
       var usersRefresh = document.getElementById('refreshActiveUsers');

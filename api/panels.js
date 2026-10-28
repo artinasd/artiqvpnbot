@@ -59,12 +59,6 @@ module.exports = async function panelsApi(req, res) {
       const panel = await registry.getById(id);
       if (!panel) return json(res, 404, { error: 'PANEL_NOT_FOUND' });
       if (panel.status === 'disabled') return json(res, 400, { error: 'PANEL_DISABLED' });
-      if (panel.type === 'master') {
-        const [a, b] = await Promise.all([registry.getById(panel.panelAId), registry.getById(panel.panelBId)]);
-        if (!a || !b || a.type !== 'pasarguard' || b.type !== 'pasarguard' || a.status !== 'active' || b.status !== 'active') return json(res, 400, { error: 'MASTER_SOURCE_PANEL_NOT_ACTIVE' });
-        const updated = await registry.setStatus(id, 'active');
-        return json(res, 200, { panel: updated, connection: { ok: true, sourcePanels: [a.id, b.id] } });
-      }
       const credentials = await registry.getCredentials(id);
       try {
         const result = await testPasarGuardConnection({ ...panel, credentials });

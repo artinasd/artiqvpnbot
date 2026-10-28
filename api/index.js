@@ -318,4 +318,26 @@ bot.command('failed',async(ctx)=>{if(!isAdmin(ctx))return;const orders=(await st
 bot.command('users',async(ctx)=>{if(!isAdmin(ctx))return;const users=await storage.smembers('bot_users');await ctx.reply(`📊 تعداد کاربران ثبت‌شده: ${users.length}`);});
 bot.command('broadcast',async(ctx)=>{if(!isAdmin(ctx))return;const messageText=ctx.message.text.replace(/^\/broadcast\s*/,'').trim();if(!messageText)return ctx.reply('❌ استفاده: /broadcast متن پیام');const users=await storage.smembers('bot_users');let success=0;let failed=0;for(const id of users){try{await bot.telegram.sendMessage(id,messageText);success++;}catch(error){failed++;if(String(error.description||'').includes('blocked'))await storage.srem('bot_users',id);}await new Promise(resolve=>setTimeout(resolve,50));}await ctx.reply(`✅ ارسال پایان یافت. موفق: ${success} | ناموفق: ${failed}`);});
 
-module.exports=async(req,res)=>{if(req.method!=='POST')return res.status(200).send('ArtiQ VPN Bot is running.');if(WEBHOOK_SECRET&&req.headers['x-telegram-bot-api-secret-token']!==WEBHOOK_SECRET)return res.status(403).send('Unauthorized');try{await bot.handleUpdate(req.body);return res.status(200).send('OK');}catch(error){log('WEBHOOK_ERROR',{error:error.message||String(error)});return res.status(200).send('OK');}};
+module.exports=async(req,res)=>{
+  if(req.method!=='POST')return res.status(200).send('ArtiQ VPN Bot is running.');
+  if(WEBHOOK_SECRET&&req.headers['x-telegram-bot-api-secret-token']!==WEBHOOK_SECRET)return res.status(403).send('Unauthorized');
+  const startedAt=Date.now();
+  const update=req.body||{};
+  const callbackData=String(update.callback_query?.data||'');
+  const messageText=String(update.message?.text||'');
+  const diagnosticFields={
+    update_id:update.update_id,
+    update_type:update.callback_query?'callback_query':update.message?'message':update.pre_checkout_query?'pre_checkout_query':Object.keys(update).find((key)=>key!=='update_id')||'unknown',
+    callback_action:callbackData?callbackData.split('_').slice(0,3).join('_'):undefined,
+    message_command:messageText.startsWith('/')?messageText.split(/\\s+/)[0].slice(0,40):undefined,
+  };
+  log('WEBHOOK_DIAGNOSTIC_START',diagnosticFields);
+  try{
+    await bot.handleUpdate(req.body);
+    log('WEBHOOK_DIAGNOSTIC_COMPLETE',{...diagnosticFields,duration_ms:Date.now()-startedAt});
+    return res.status(200).send('OK');
+  }catch(error){
+    log('WEBHOOK_ERROR',{...diagnosticFields,duration_ms:Date.now()-startedAt,error:error.message||String(error)});
+    return res.status(200).send('OK');
+  }
+};

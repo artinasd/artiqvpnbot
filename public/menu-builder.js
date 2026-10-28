@@ -283,6 +283,17 @@
             ].map(function (row) { row.roles = row.roles.filter(function (roleId) { return roleDefs.some(function (role) { return role.id === roleId; }) && !(cfg.buttonControls[roleId] && cfg.buttonControls[roleId].enabled === false) && !(roleId === 'home' && cfg.homeButton === false); }); return row; }).filter(function (row) { return row.roles.length > 0; });
           }
         }
+        // A panel can be added after this screen's button rows were first saved.
+        // Reconcile only genuinely new service IDs so they appear in the editor,
+        // while respecting an existing control/row removal as an intentional choice.
+        if (id === 'service_test' || id === 'service_buy') {
+          roleDefs.filter(function (role) { return role.panelButton; }).forEach(function (role) {
+            if (Object.prototype.hasOwnProperty.call(cfg.buttonControls, role.id)) return;
+            cfg.buttonControls[role.id] = { enabled: true, style: 'glass', action: 'original', params: {} };
+            var alreadyPlaced = cfg.buttonRows.some(function (row) { return (row.roles || []).includes(role.id); });
+            if (!alreadyPlaced) cfg.buttonRows.push({ id: 'managed_row_' + role.id, roles: [role.id] });
+          });
+        }
         var rolesWrap = el('section', null, 'mb-row');
         rolesWrap.appendChild(el('strong', 'چیدمان و کنترل دکمه‌های موجود', 'mb-screen-title'));
         rolesWrap.appendChild(el('p', 'دکمه‌های موجود را مانند منوی اصلی در ردیف‌ها بچینید. برای دکمه‌های وابسته به شناسه اشتراک یا سرویس، عملکرد اصلی قفل است تا لینک، تمدید، حذف و callback امن باقی بماند؛ متن، رنگ و جایگاه قابل تنظیم است.', 'mb-description'));

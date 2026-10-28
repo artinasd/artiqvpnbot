@@ -12,8 +12,8 @@ const ACTIONS = Object.freeze({
   support: { label: 'نمایش اطلاعات پشتیبانی', params: [] },
   renew: { label: 'شروع فرایند تمدید', params: [] },
   navigate_menu: { label: 'باز کردن منوی دیگر', params: ['menuId'] },
-  select_panel_buy: { label: 'انتخاب پنل مشخص برای خرید', params: ['panelId'] },
-  select_panel_test: { label: 'انتخاب پنل مشخص برای اکانت تست', params: ['panelId'] },
+  select_panel_buy: { label: 'انتخاب پنل مشخص برای خرید', params: ['serviceId'] },
+  select_panel_test: { label: 'انتخاب پنل مشخص برای اکانت تست', params: ['serviceId'] },
   open_url: { label: 'باز کردن لینک HTTPS', params: ['url'] },
   back_home: { label: 'بازگشت به منوی اصلی', params: [] },
 });
@@ -66,7 +66,7 @@ async function validateDocumentWithPanels(document) {
   if (checked.errors.length || !containsPanelSelection(document)) return checked;
   const panels = await getConfiguredServicesWithPanels(await getConfig());
   return validateDocument(document, panels.map((panel) => ({
-    panelId: String(panel.panelId),
+    id: String(panel.id),
     testEnabled: panel.testEnabled !== false,
     purchaseEnabled: panel.purchaseEnabled !== false,
   })));
@@ -81,15 +81,15 @@ function validateDocument(input, panelCatalog = null) {
   const errors = [];
   function validatePanelTarget(action, params, context) {
     if (action !== 'select_panel_buy' && action !== 'select_panel_test') return;
-    const panelId = String(params.panelId || '');
-    if (!/^[a-zA-Z0-9_-]{1,45}$/.test(panelId)) {
+    const serviceId = String(params.serviceId || '');
+    if (!/^(?:panel|master)_[a-zA-Z0-9_-]{1,45}$/.test(serviceId)) {
       errors.push(context + ' requires a valid panel selection.');
       return;
     }
     if (Array.isArray(panelCatalog)) {
-      const panel = panelCatalog.find((item) => String(item.panelId) === panelId);
+      const panel = panelCatalog.find((item) => String(item.id) === serviceId);
       const enabled = action === 'select_panel_test' ? panel?.testEnabled !== false : panel?.purchaseEnabled !== false;
-      if (!panel || !enabled) errors.push(context + ' selected panel is unavailable for this action: ' + panelId);
+      if (!panel || !enabled) errors.push(context + ' selected panel is unavailable for this action: ' + serviceId);
     }
   }
   if (!input || typeof input !== 'object' || !Array.isArray(input.menus)) return { errors: ['A menu document is required.'] };

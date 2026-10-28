@@ -13,6 +13,7 @@ function json(res, status, body) {
 }
 
 module.exports = async function panelsApi(req, res) {
+  if (String(req.query?.feature || '') === 'master-panels') return require('../lib/master-panels-api')(req, res);
   if (!authorized(req)) return json(res, 401, { error: 'UNAUTHORIZED' });
   try {
     if (req.method === 'GET') {

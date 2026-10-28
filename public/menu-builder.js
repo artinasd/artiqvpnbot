@@ -79,8 +79,8 @@
     var wrap = el('label', null, 'mb-field');
     wrap.appendChild(el('span', isTest ? 'پنل مقصد برای اکانت تست' : 'پنل مقصد برای خرید'));
     var select = el('select');
-    var selectedId = String(params.panelId || '');
-    if (selectedId && !candidates.some(function (panel) { return String(panel.panelId) === selectedId; })) {
+    var selectedId = String(params.serviceId || '');
+    if (selectedId && !candidates.some(function (panel) { return String(panel.id) === selectedId; })) {
       var stale = el('option', 'پنل انتخاب‌شده در دسترس نیست (' + selectedId + ')');
       stale.value = selectedId; stale.selected = true; stale.disabled = true; select.appendChild(stale);
     }
@@ -90,13 +90,13 @@
     } else {
       candidates.forEach(function (panel) {
         var option = el('option', panel.name);
-        option.value = String(panel.panelId);
+        option.value = String(panel.id);
         option.selected = option.value === selectedId;
         select.appendChild(option);
       });
       if (!selectedId) {
-        selectedId = String(candidates[0].panelId);
-        params.panelId = selectedId;
+        selectedId = String(candidates[0].id);
+        params.serviceId = selectedId;
       }
       select.value = selectedId;
     }
@@ -130,7 +130,7 @@
     }
     if (button.action === 'open_url') item.appendChild(field('لینک HTTPS', button.params.url, function (v) { button.params.url = v; }, 'https://example.com'));
     if (button.action === 'select_panel_buy' || button.action === 'select_panel_test') {
-      item.appendChild(panelActionField(button.action, button.params, function (panelId) { button.params.panelId = panelId; }));
+      item.appendChild(panelActionField(button.action, button.params, function (serviceId) { button.params.serviceId = serviceId; }));
     }
     return item;
   }

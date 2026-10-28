@@ -226,8 +226,8 @@
       section.appendChild(field('متن پیام', cfg.messageTemplate != null && String(cfg.messageTemplate) !== '' ? String(cfg.messageTemplate) : defaultScreenMessageTemplate(id), function (v) { cfg.messageTemplate = v; state.previewScreen = id; }));
       if (id === 'wallet') section.appendChild(el('small', 'متغیر موجودی فعلی: {balance} (نمونه در پیش‌نمایش: ۱۲۵,۰۰۰)', 'mb-help'));
       var managedRoleGroups = {
-        service_test: state.panels.filter(function(panel){return panel.testEnabled !== false;}).map(function(panel){return {id:'panel_'+panel.panelId,label:panel.name,panelButton:true};}).concat([{id:'home',label:'منوی اصلی'}]),
-        service_buy: state.panels.filter(function(panel){return panel.purchaseEnabled !== false;}).map(function(panel){return {id:'panel_'+panel.panelId,label:panel.name,panelButton:true};}).concat([{id:'home',label:'منوی اصلی'}]),
+        service_test: state.panels.filter(function(panel){return panel.testEnabled !== false;}).map(function(panel){return {id:panel.id,label:panel.name,panelButton:true};}).concat([{id:'home',label:'منوی اصلی'}]),
+        service_buy: state.panels.filter(function(panel){return panel.purchaseEnabled !== false;}).map(function(panel){return {id:panel.id,label:panel.name,panelButton:true};}).concat([{id:'home',label:'منوی اصلی'}]),
         service_renew: [{id:'services',label:'سرویس‌های تمدید'},{id:'home',label:'منوی اصلی'}],
         plans_buy: [{id:'plans',label:'پلن‌های خرید'},{id:'custom_plan',label:'ساخت بسته دلخواه'},{id:'home',label:'منوی اصلی'}],
         plans_renew: [{id:'plans',label:'پلن‌های تمدید'},{id:'home',label:'منوی اصلی'}],
@@ -538,7 +538,7 @@
       rows = sample.rows.map(function (row) { return row.map(function (label) { return { label: label, style: 'glass' }; }); });
       if (state.previewScreen === 'service_test' || state.previewScreen === 'service_buy') {
         var eligiblePanels = state.panels.filter(function(panel){return state.previewScreen === 'service_test' ? panel.testEnabled !== false : panel.purchaseEnabled !== false;});
-        rows = eligiblePanels.map(function(panel){return [{label:panel.name,style:'glass',role:'panel_'+panel.panelId}];});
+        rows = eligiblePanels.map(function(panel){return [{label:panel.name,style:'glass',role:panel.id}];});
         if (cfg.homeButton !== false) rows.push([{label:'🏠 منوی اصلی',style:'glass',role:'home'}]);
       }
       style = cfg.buttonStyle || 'glass';
@@ -587,7 +587,7 @@
           var control = roleId && cfg.buttonControls && cfg.buttonControls[roleId];
           if (control) {
             if (control.enabled === false) return null;
-            if (!/^panel_/.test(roleId)) button.label = String(control.label || '{label}').replace(/\{label\}/g, button.label);
+            if (!/^(?:panel|master)_/.test(roleId)) button.label = String(control.label || '{label}').replace(/\{label\}/g, button.label);
             button.style = control.style || 'glass';
           }
           return { button: button, role: roleId };

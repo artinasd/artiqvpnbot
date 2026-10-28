@@ -149,7 +149,6 @@
   async function refresh() {
     var result = await api('list');
     renderPanels(byId('panel-list'), result.panels || []);
-    refreshSourceOptions();
     if (result.config) {
       var panelPricing = selectedPricingPanelId && result.config.pricingByPanel ? result.config.pricingByPanel[selectedPricingPanelId] : null;
       var pricing = panelPricing || result.config.pricing || { normalPerGb: 4000, resellerPerGb: null };

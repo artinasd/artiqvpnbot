@@ -175,16 +175,16 @@ test('Menu Maker supports selecting a specific enabled panel for purchase or tes
   assert.match(runtime, /service_buy_panel_/);
   assert.match(runtime, /service_test_panel_/);
 
-  const { request } = createMenuApi([{ panelId: 'panelA', testEnabled: false, purchaseEnabled: true }]);
+  const { request } = createMenuApi([{ id: 'panel_panelA', panelId: 'panelA', testEnabled: false, purchaseEnabled: true }]);
   const initial = await request({ method: 'GET' });
   const draft = structuredClone(initial.body.draft);
   draft.menus[0].rows[0].buttons[0] = {
-    id: 'buy-panel-a', label: 'خرید از پنل A', action: 'select_panel_buy', params: { panelId: 'panelA' },
+    id: 'buy-panel-a', label: 'خرید از پنل A', action: 'select_panel_buy', params: { serviceId: 'panel_panelA' },
   };
   assert.equal((await request({ action: 'save_draft', document: draft })).status, 200);
 
   draft.menus[0].rows[0].buttons[0] = {
-    id: 'test-panel-a', label: 'تست از پنل A', action: 'select_panel_test', params: { panelId: 'panelA' },
+    id: 'test-panel-a', label: 'تست از پنل A', action: 'select_panel_test', params: { serviceId: 'panel_panelA' },
   };
   const disabledTestPanel = await request({ action: 'save_draft', document: draft });
   assert.equal(disabledTestPanel.status, 400);

@@ -71,6 +71,39 @@
       if (!Array.isArray(cfg.buttons)) cfg.buttons = [];
     });
   }
+  function panelActionField(action, params, onChange) {
+    var isTest = action === 'select_panel_test';
+    var candidates = state.panels.filter(function (panel) {
+      return isTest ? panel.testEnabled !== false : panel.purchaseEnabled !== false;
+    });
+    var wrap = el('label', null, 'mb-field');
+    wrap.appendChild(el('span', isTest ? 'پنل مقصد برای اکانت تست' : 'پنل مقصد برای خرید'));
+    var select = el('select');
+    var selectedId = String(params.panelId || '');
+    if (selectedId && !candidates.some(function (panel) { return String(panel.panelId) === selectedId; })) {
+      var stale = el('option', 'پنل انتخاب‌شده در دسترس نیست (' + selectedId + ')');
+      stale.value = selectedId; stale.selected = true; stale.disabled = true; select.appendChild(stale);
+    }
+    if (!candidates.length) {
+      if (!selectedId) { var empty = el('option', 'پنل فعالی برای این عملیات وجود ندارد'); empty.value = ''; empty.disabled = true; empty.selected = true; select.appendChild(empty); }
+      select.disabled = true;
+    } else {
+      candidates.forEach(function (panel) {
+        var option = el('option', panel.name);
+        option.value = String(panel.panelId);
+        option.selected = option.value === selectedId;
+        select.appendChild(option);
+      });
+      if (!selectedId) {
+        selectedId = String(candidates[0].panelId);
+        params.panelId = selectedId;
+      }
+      select.value = selectedId;
+    }
+    select.addEventListener('change', function () { onChange(select.value); });
+    wrap.appendChild(select);
+    return wrap;
+  }
   function renderManagedButton(button, options) {
     options = options || {};
     if (!button.params || typeof button.params !== 'object') button.params = {};
@@ -96,6 +129,9 @@
       menuField.appendChild(menuSelect); item.appendChild(menuField);
     }
     if (button.action === 'open_url') item.appendChild(field('لینک HTTPS', button.params.url, function (v) { button.params.url = v; }, 'https://example.com'));
+    if (button.action === 'select_panel_buy' || button.action === 'select_panel_test') {
+      item.appendChild(panelActionField(button.action, button.params, function (panelId) { button.params.panelId = panelId; }));
+    }
     return item;
   }
   function renderScreenButtons(screenId, cfg) {
@@ -277,7 +313,7 @@
             var actionSelect = el('select');
             var originalOpt = el('option','عملکرد اصلی ربات'); originalOpt.value = 'original'; originalOpt.selected = (control.action || 'original') === 'original'; actionSelect.appendChild(originalOpt);
             if (roleId === 'home') {
-              Object.keys(state.actions).forEach(function (key) { var opt = el('option',state.actions[key].label); opt.value=key; opt.selected=(control.action||'original')===key; actionSelect.appendChild(opt); });
+              Object.keys(state.actions).filter(function (key) { return key !== 'select_panel_buy' && key !== 'select_panel_test'; }).forEach(function (key) { var opt = el('option',state.actions[key].label); opt.value=key; opt.selected=(control.action||'original')===key; actionSelect.appendChild(opt); });
               actionSelect.addEventListener('change',function(){control.action=actionSelect.value;control.params={};render();});
             } else {
               actionSelect.disabled = true; actionSelect.title = 'برای حفظ شناسه‌های زنده، عملکرد این دکمه قابل تغییر نیست.';

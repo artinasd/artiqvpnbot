@@ -110,7 +110,7 @@ function validateDocument(input, panelCatalog = null) {
         for (const row of screen.buttonRows) {
           if (!row || typeof row !== 'object' || !/^[a-zA-Z0-9_-]{1,80}$/.test(String(row.id || '')) || !Array.isArray(row.roles) || row.roles.length > 8) { errors.push('Invalid managed button row: ' + screenId); continue; }
           for (const role of row.roles) {
-            const isPanelRole = ['service_test', 'service_buy'].includes(screenId) && /^panel_[a-zA-Z0-9_-]{1,45}$/.test(String(role));
+            const isPanelRole = ['service_test', 'service_buy'].includes(screenId) && /^panel_[a-zA-Z0-9_-]{1,48}$/.test(String(role));
             if (!allowedRowRoles.includes(role) && !isPanelRole) errors.push('Unknown managed button role: ' + screenId + '/' + String(role));
             if (seenRoles.has(role)) errors.push('Duplicate managed button role: ' + screenId + '/' + String(role));
             seenRoles.add(role);
@@ -124,7 +124,7 @@ function validateDocument(input, panelCatalog = null) {
     if (screen.buttonControls !== undefined && (!screen.buttonControls || typeof screen.buttonControls !== 'object' || Array.isArray(screen.buttonControls))) errors.push('Button controls must be an object: ' + screenId);
     for (const [controlId, control] of Object.entries(screen.buttonControls || {})) {
       const allowedControls = { service_test: ['services', 'home'], service_buy: ['services', 'home'], service_renew: ['services', 'home'], plans_buy: ['plans', 'custom_plan', 'home'], plans_renew: ['plans', 'home'], account_list: ['subscription_detail', 'subscription_renew', 'subscription_remove', 'home'], account_detail: ['open_link', 'copy_link', 'renew_subscription', 'back_to_list', 'home'], account_remove: ['confirm_remove', 'cancel_remove'], wallet: ['home'], support: ['home'] }[screenId] || [];
-      const isPanelControl = ['service_test', 'service_buy'].includes(screenId) && /^panel_[a-zA-Z0-9_-]{1,45}$/.test(String(controlId));
+      const isPanelControl = ['service_test', 'service_buy'].includes(screenId) && /^panel_[a-zA-Z0-9_-]{1,48}$/.test(String(controlId));
       if (!allowedControls.includes(controlId) && !isPanelControl) errors.push('Unknown built-in button control: ' + screenId + '/' + controlId);
       if (!control || typeof control !== 'object' || Array.isArray(control)) { errors.push('Invalid built-in button control: ' + controlId); continue; }
       if (control.enabled !== undefined && typeof control.enabled !== 'boolean') errors.push('Button enabled must be true or false: ' + controlId);

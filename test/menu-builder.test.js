@@ -199,6 +199,14 @@ test('Menu Maker supports selecting a specific enabled panel for purchase or tes
   assert.equal((await request({ action: 'save_draft', document: draft })).status, 200);
 });
 
+test('Menu Maker adds newly configured Master Panel buttons to existing purchase/test screens', () => {
+  const ui = source('public/menu-builder.js');
+  assert.match(ui, /if \(id === 'service_test' \|\| id === 'service_buy'\)/);
+  assert.match(ui, /roleDefs\.filter\(function \(role\) \{ return role\.panelButton; \}\)\.forEach/);
+  assert.match(ui, /Object\.prototype\.hasOwnProperty\.call\(cfg\.buttonControls, role\.id\)/);
+  assert.match(ui, /if \(!alreadyPlaced\) cfg\.buttonRows\.push\(\{ id: 'managed_row_' \+ role\.id, roles: \[role\.id\] \}\)/);
+});
+
 test('menu navigation selectors persist the default target menu ID', () => {
   const ui = source('public/menu-builder.js');
   assert.match(ui, /if \(!button\.params\.menuId && menuSelect\.options\.length\) button\.params\.menuId = menuSelect\.value;/);

@@ -5,5 +5,11 @@
       "maxDuration": 30,
       "includeFiles": "bg.png"
     }
-  }
+  },
+  "rewrites": [
+    {
+      "source": "/api/master-panels",
+      "destination": "/api/panels?feature=master-panels"
+    }
+  ]
 }

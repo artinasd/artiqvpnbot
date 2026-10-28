@@ -37,7 +37,7 @@
       var card = node('div', null, 'plan');
       var info = node('div');
       info.appendChild(node('div', panel.name + ' · ' + panel.type, 'title'));
-      info.appendChild(node('div', panel.type === 'master' ? ('مصدر A: ' + ((cachedPanels.find(function (p) { return p.id === panel.panelAId; }) || {}).name || panel.panelAId) + ' · مصدر B: ' + ((cachedPanels.find(function (p) { return p.id === panel.panelBId; }) || {}).name || panel.panelBId)) : panel.baseUrl, 'meta'));
+      info.appendChild(node('div', panel.baseUrl, 'meta'));
       info.appendChild(node('div', 'وضعیت: ' + panel.status + (panel.hasCredentials ? ' · اطلاعات ورود ذخیره شده' : ' · اطلاعات ورود موجود نیست'), 'meta'));
       var actions = node('div', null, 'actions');
       var test = node('button', 'تست اتصال');
@@ -46,7 +46,7 @@
         test.disabled = true;
         try {
           var result = await api('test', { id: panel.id });
-          message(byId('panel-message'), panel.type === 'master' ? 'Master Panel فعال شد؛ هر دو پنل منبع فعال هستند.' : 'اتصال موفق بود؛ تعداد گروه‌ها: ' + result.connection.groupCount, true);
+          message(byId('panel-message'), 'اتصال موفق بود؛ تعداد گروه‌ها: ' + result.connection.groupCount, true);
           await refresh();
         } catch (error) {
           message(byId('panel-message'), 'تست اتصال ناموفق بود: ' + error.message, false);
@@ -61,9 +61,7 @@
         byId('panel-name').value = panel.name;
         byId('panel-url').value = panel.baseUrl;
         byId('panel-type').value = panel.type;
-        byId('panel-source-a').value = panel.panelAId || '';
-        byId('panel-source-b').value = panel.panelBId || '';
-        syncPanelFields();
+
         byId('panel-username').value = '';
         byId('panel-password').value = '';
         byId('panel-username').placeholder = 'برای حفظ اطلاعات فعلی خالی بگذارید';
@@ -220,28 +218,7 @@
     var typeSelect = node('select');
     typeSelect.id = 'panel-type';
     [['pasarguard','PasarGuard']].forEach(function (entry) { var option = node('option', entry[1]); option.value = entry[0]; typeSelect.appendChild(option); });
-    typeSelect.addEventListener('change', syncPanelFields);
     typeWrap.appendChild(typeSelect); form.appendChild(typeWrap);
-    function sourceField(labelText, id) {
-      var wrap = node('div'); var label = node('label', labelText); label.htmlFor = id;
-      var select = node('select'); select.id = id;
-      wrap.appendChild(label); wrap.appendChild(select); form.appendChild(wrap); return select;
-    }
-    sourceField('پنل منبع A', 'panel-source-a');
-    sourceField('پنل منبع B', 'panel-source-b');
-    function syncPanelFields() {
-      var master = false;
-      ['panel-url','panel-username','panel-password'].forEach(function (id) { byId(id).parentElement.style.display = master ? 'none' : ''; });
-      ['panel-source-a','panel-source-b'].forEach(function (id) { byId(id).parentElement.style.display = master ? '' : 'none'; });
-    }
-    function refreshSourceOptions() {
-      ['panel-source-a','panel-source-b'].forEach(function (id) {
-        var select = byId(id); var previous = select.value; select.replaceChildren(node('option', 'انتخاب پنل منبع'));
-        select.options[0].value = '';
-        cachedPanels.filter(function (p) { return p.type === 'pasarguard' && p.status === 'active'; }).forEach(function (p) { var opt = node('option', p.name); opt.value = p.id; select.appendChild(opt); });
-        if (previous) select.value = previous;
-      });
-    }
     card.appendChild(form);
     var actions = node('div', null, 'actions');
     var save = node('button', 'ذخیره پنل');
@@ -266,7 +243,6 @@
         // status stays pending and the panel is not selectable for new sales.
         message(byId('panel-message'), 'پنل ذخیره شد. اکنون «تست اتصال» را بزنید.', true);
         await refresh();
-        syncPanelFields();
       } catch (error) { message(byId('panel-message'), 'ذخیره ناموفق: ' + error.message, false); }
       finally { save.disabled = false; }
     });
@@ -333,7 +309,7 @@
     var planList = node('div'); planList.id = 'panel-plan-list'; planManager.appendChild(planList);
     card.appendChild(planManager);
     app.insertBefore(card, app.firstChild);
-    refresh().then(function () { refreshSourceOptions(); syncPanelFields(); }).catch(function (e) { message(status, 'بارگذاری پنل‌ها ناموفق بود: ' + e.message, false); });
+    refresh().catch(function (e) { message(status, 'بارگذاری پنل‌ها ناموفق بود: ' + e.message, false); });
   }
   window.addEventListener('artiq-cms-refresh', function () {
     if (!byId('panel-list')) return;

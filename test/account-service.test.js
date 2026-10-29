@@ -233,3 +233,28 @@ test('removeSubscriptionFromAccount rejects a different Telegram owner', async (
     storage.getOrder = originalGetOrder;
   }
 });
+
+
+test('listSubscriptions shows the original subscription but hides its renewal transaction', async () => {
+  const originalListUserOrders = storage.listUserOrders;
+  const originalOrder = {
+    orderId: 'original-purchase',
+    pasarguardUserId: 'same-panel-user',
+    fulfillmentStatus: 'FULFILLED',
+    renewal: false,
+  };
+  const renewalOrder = {
+    orderId: 'renewal-transaction',
+    pasarguardUserId: 'same-panel-user',
+    renewal: true,
+    renewalSourceOrderId: 'original-purchase',
+    fulfillmentStatus: 'FULFILLED',
+  };
+  storage.listUserOrders = async () => [originalOrder, renewalOrder];
+  try {
+    const result = await accountService.listSubscriptions(12345);
+    assert.deepEqual(result.map((order) => order.orderId), ['original-purchase']);
+  } finally {
+    storage.listUserOrders = originalListUserOrders;
+  }
+});

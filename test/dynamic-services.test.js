@@ -49,7 +49,7 @@ test('disabled panels are excluded from new selection while legacy service IDs r
 });
 
 
-test('active master panels become purchase services but never test services', async () => {
+test('active master panels become purchase and test services by default', async () => {
   const masterPanels = [
     ...panels,
     { id: 'master-1', name: 'West + East', type: 'master', status: 'active', panelAId: 'west-1', panelBId: 'east-1' },
@@ -58,7 +58,7 @@ test('active master panels become purchase services but never test services', as
   const options = { listPanels: async () => masterPanels };
   const service = await getConfiguredServiceWithPanels('master_master-1', {}, options);
   assert.equal(service.provider, 'master:master-1');
-  assert.equal(service.testEnabled, false);
+  assert.equal(service.testEnabled, true);
   assert.ok((await serviceButtonsWithPanels('service_buy_', {}, 'purchase', options)).flat().some((button) => button.callback_data === 'service_buy_master_master-1'));
-  assert.equal((await serviceButtonsWithPanels('service_test_', {}, 'test', options)).flat().some((button) => button.callback_data === 'service_test_master_master-1'), false);
+  assert.ok((await serviceButtonsWithPanels('service_test_', {}, 'test', options)).flat().some((button) => button.callback_data === 'service_test_master_master-1'));
 });

@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-const { serviceName, serviceLabel } = require('../lib/services');
+const { serviceName, serviceLabel, getConfiguredServicesWithPanels } = require('../lib/services');
 
 const root = path.join(__dirname, '..');
 const source = (file) => fs.readFileSync(path.join(root, file), 'utf8');
@@ -211,4 +211,18 @@ test('menu navigation selectors persist the default target menu ID', () => {
   const ui = source('public/menu-builder.js');
   assert.match(ui, /if \(!button\.params\.menuId && menuSelect\.options\.length\) button\.params\.menuId = menuSelect\.value;/);
   assert.match(ui, /if \(!control\.params\.menuId && targetSelect\.options\.length\) control\.params\.menuId = targetSelect\.value;/);
+});
+
+
+test('Master Panels support test accounts by default and respect an explicit testEnabled setting', async () => {
+  const listPanels = async () => [{ id: 'source_a', name: 'Source A', type: 'pasarguard', status: 'active' }];
+  const listMasterPanels = async () => [{ id: 'master_abc', name: 'Master A+B', type: 'master', panelAId: 'source_a', panelBId: 'source_b', status: 'active' }];
+  const defaults = await getConfiguredServicesWithPanels({}, { listPanels, listMasterPanels });
+  const master = defaults.find((service) => service.id === 'master_master_abc');
+  assert.ok(master);
+  assert.equal(master.testEnabled, true);
+  assert.equal(master.purchaseEnabled, true);
+
+  const disabled = await getConfiguredServicesWithPanels({ services: { master_master_abc: { testEnabled: false } } }, { listPanels, listMasterPanels });
+  assert.equal(disabled.find((service) => service.id === 'master_master_abc').testEnabled, false);
 });

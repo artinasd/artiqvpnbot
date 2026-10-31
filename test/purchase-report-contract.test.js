@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { isReportablePaidDelivery } = require('../lib/purchase-report-contract');
 
 function order(overrides = {}) {
-  return { orderId: 'order-1', orderType: 'subscription', planId: 'plan-1', price: 10000, walletCharged: true, walletChargedAmount: 10000, paymentStatus: 'WALLET_PAID', fulfillmentStatus: 'FULFILLED', deliveryStatus: 'DELIVERED', ...overrides };
+  return { orderId: 'order-1', telegramUserId: 12345, orderType: 'subscription', planId: 'plan-1', price: 10000, walletCharged: true, walletChargedAmount: 10000, paymentStatus: 'WALLET_PAID', fulfillmentStatus: 'FULFILLED', deliveryStatus: 'DELIVERED', ...overrides };
 }
 
 test('paid and delivered subscription qualifies', () => assert.equal(isReportablePaidDelivery(order()), true));
@@ -27,6 +27,10 @@ test('invalid and zero amounts do not qualify', () => {
   assert.equal(isReportablePaidDelivery(order({ walletChargedAmount: 'bad' })), false);
 });
 test('FULFILLED alone is not sufficient', () => assert.equal(isReportablePaidDelivery({ fulfillmentStatus: 'FULFILLED', paymentStatus: 'WALLET_PAID' }), false));
+test('missing order or customer identifiers are rejected', () => {
+  assert.equal(isReportablePaidDelivery(order({ orderId: '' })), false);
+  assert.equal(isReportablePaidDelivery(order({ telegramUserId: null })), false);
+});
 test('malformed input safely returns false', () => {
   assert.equal(isReportablePaidDelivery(null), false);
   assert.equal(isReportablePaidDelivery(undefined), false);

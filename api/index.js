@@ -13,6 +13,7 @@ const accountUI = require('../lib/account-ui');
 const { registerAdminMessaging } = require('../lib/admin-messaging');
 const userReport = require('../lib/user-report');
 const resellerAssignment = require('../lib/reseller-assignment');
+const purchaseReport = require('../lib/purchase-report');
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const ADMIN_ID = String(process.env.ADMIN_ID || '');
@@ -344,6 +345,16 @@ bot.command('unassignreseller', async (ctx) => {
   } catch (error) {
     const messages = { INVALID_CUSTOMER_ID: '❌ آیدی مشتری نامعتبر است.', CUSTOMER_NOT_FOUND: '❌ مشتری در ربات پیدا نشد.' };
     return ctx.reply(messages[error.message] || '❌ حذف ریسلر ناموفق بود.');
+  }
+});
+bot.command('retryreports', async (ctx) => {
+  if (!isAdmin(ctx)) return;
+  try {
+    const result = await purchaseReport.processPendingPurchaseReports(bot.telegram, { limit: 100 });
+    return ctx.reply(`📊 گزارش‌های خرید: ارسال‌شده ${result.sent}، ناموفق ${result.failed}، در انتظار زمان مجدد ${result.skipped}، قفل‌شده ${result.locked}.`);
+  } catch (error) {
+    log('PURCHASE_REPORT_MANUAL_RETRY_FAILED', { error: error?.message || String(error) });
+    return ctx.reply('❌ پردازش گزارش‌های خرید ناموفق بود.');
   }
 });
 bot.command('testreport',async(ctx)=>{if(!isAdmin(ctx))return;try{const now=new Date();const dayKey=userReport.gregorianTehranDateKey(now);const [todayIds,allIds]=await Promise.all([storage.smembers(`new_users:${dayKey}`),storage.smembers('bot_users')]);const message=['🧪 | گزارش آزمایشی (این کاربر واقعی نیست)','','👥 مشخصات کاربر','🆔 آیدی: 123456789','👤 اسم: Test User','⚡️ نام کاربری: @test_user','🌐 زبان تلگرام: en','','📈 آمار عضویت',`🆕 امروز: ${todayIds.length.toLocaleString('fa-IR')}`,`👥 مجموع کاربران: ${allIds.length.toLocaleString('fa-IR')}`,'',`🗓 ${userReport.formatJalaliDateTime(now)}`].join('\n');await bot.telegram.sendMessage(ADMIN_ID,message);return ctx.reply('✅ پیام آزمایشی به ADMIN_ID ارسال شد.');}catch(error){log('NEW_USER_REPORT_TEST_FAILED',{admin_id:ADMIN_ID,error:error?.message||String(error)});return ctx.reply(`❌ ارسال پیام آزمایشی ناموفق بود: ${error?.description||error?.message||'unknown error'}`);}});

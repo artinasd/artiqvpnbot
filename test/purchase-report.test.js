@@ -30,7 +30,17 @@ test('recognizes reseller customers by their account flag or CMS reseller list',
   assert.equal(isResellerCustomer({ telegramUserId: 123456 }, { resellerTelegramIds: [] }, 123456), false);
 });
 
-test('computes reseller-only daily sales totals and wallet balance in Tehran time', () => {\n  const today = { ...eligibleOrder, orderId: 'today', deliveredAt: '2026-10-31T08:00:00.000Z' };\n  const yesterday = { ...eligibleOrder, orderId: 'yesterday', deliveredAt: '2026-10-30T08:00:00.000Z', price: 100000, walletChargedAmount: 100000 };\n  const stats = computeResellerStats([today, yesterday, { ...today, orderId: 'topup', orderType: 'wallet_topup' }], 8750000, '2026-10-31T10:00:00.000Z');\n  assert.equal(stats.todayCount, 1);\n  assert.equal(stats.todayRevenue, 250000);\n  assert.equal(stats.yesterdayRevenue, 100000);\n  assert.equal(stats.walletBalance, 8750000);\n});\n\ntest('creates a stable report event with admin and optional reseller recipients', () => {
+test('computes reseller-only daily sales totals and wallet balance in Tehran time', () => {
+  const today = { ...eligibleOrder, orderId: 'today', deliveredAt: '2026-10-31T08:00:00.000Z' };
+  const yesterday = { ...eligibleOrder, orderId: 'yesterday', deliveredAt: '2026-10-30T08:00:00.000Z', price: 100000, walletChargedAmount: 100000 };
+  const stats = computeResellerStats([today, yesterday, { ...today, orderId: 'topup', orderType: 'wallet_topup' }], 8750000, '2026-10-31T10:00:00.000Z');
+  assert.equal(stats.todayCount, 1);
+  assert.equal(stats.todayRevenue, 250000);
+  assert.equal(stats.yesterdayRevenue, 100000);
+  assert.equal(stats.walletBalance, 8750000);
+});
+
+test('creates a stable report event with admin and optional reseller recipients', () => {
   const event = createPurchaseReportEvent(eligibleOrder, {
     adminTelegramId: '1000',
     resellerTelegramId: '2000',
@@ -40,7 +50,9 @@ test('computes reseller-only daily sales totals and wallet balance in Tehran tim
   assert.equal(event.recipients.admin.chatId, '1000');
   assert.equal(event.recipients.reseller.chatId, '2000');
   assert.equal(event.customer.telegramId, '123456');
-  assert.equal(event.payment.amount, 250000);\n  assert.equal(event.product.trafficLimitBytes, 10 * 1024 ** 3);\n  assert.equal(event.product.durationDays, 30);
+  assert.equal(event.payment.amount, 250000);
+  assert.equal(event.product.trafficLimitBytes, 10 * 1024 ** 3);
+  assert.equal(event.product.durationDays, 30);
 });
 
 test('uses reseller attribution already snapshotted on the order by the CMS flow', () => {
@@ -73,7 +85,10 @@ test('formats report text and escapes customer-controlled HTML', () => {
   const message = formatPurchaseReport(event);
   assert.match(message, /&lt;Ali&gt;/);
   assert.match(message, /@customer/);
-  assert.match(message, /۲۵۰,۰۰۰/);\n  assert.match(message, /۱۰ گیگابایت/);\n  assert.match(message, /۳۰ روزه/);\n  assert.match(message, /گزارش اختصاصی فروش/);
+  assert.match(message, /۲۵۰,۰۰۰/);
+  assert.match(message, /۱۰ گیگابایت/);
+  assert.match(message, /۳۰ روزه/);
+  assert.match(message, /گزارش اختصاصی فروش/);
   assert.match(message, /<blockquote>/);
   assert.match(message, /سرویس/);
   assert.doesNotMatch(message, /<Ali>/);

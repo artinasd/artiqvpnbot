@@ -74,6 +74,8 @@ test('formats report text and escapes customer-controlled HTML', () => {
   assert.match(message, /&lt;Ali&gt;/);
   assert.match(message, /@customer/);
   assert.match(message, /۲۵۰,۰۰۰/);\n  assert.match(message, /۱۰ گیگابایت/);\n  assert.match(message, /۳۰ روزه/);\n  assert.match(message, /گزارش اختصاصی فروش/);
+  assert.match(message, /<blockquote>/);
+  assert.match(message, /سرویس/);
   assert.doesNotMatch(message, /<Ali>/);
 });
 

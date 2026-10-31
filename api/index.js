@@ -12,6 +12,7 @@ const accountService = require('../lib/account-service');
 const accountUI = require('../lib/account-ui');
 const { registerAdminMessaging } = require('../lib/admin-messaging');
 const userReport = require('../lib/user-report');
+const resellerAssignment = require('../lib/reseller-assignment');
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const ADMIN_ID = String(process.env.ADMIN_ID || '');
@@ -60,8 +61,11 @@ async function createOrderForPlan(ctx, plan) {
   const id = orderId();
   const panel = plan.panelId ? ((await require('../lib/panel-registry').getById(plan.panelId)) || await require('../lib/master-panel-registry').getById(plan.panelId)) : null;
   const serviceId = plan.panelId ? (panel?.type === 'master' ? `master_${plan.panelId}` : `panel_${plan.panelId}`) : (plan.service || 'tunnel');
+  const customerRecord = await storage.getUserRaw(ctx.from.id);
+  const assignedResellerId = String(customerRecord?.assignedResellerTelegramId || '');
   const order = {
     orderId: id, telegramUserId: ctx.from.id, telegramUsername: ctx.from.username || null,
+    resellerTelegramId: /^\\d+$/.test(assignedResellerId) ? assignedResellerId : null,
     firstName: ctx.from.first_name || null, lastName: ctx.from.last_name || null,
     planId: plan.id, planName: plan.name, service: serviceId, serviceName: plan.panelName || null,
     panelId: panel?.type === 'master' ? null : (plan.panelId || null),
@@ -310,6 +314,38 @@ bot.on('message',async(ctx,next)=>{
 });
 
 bot.command('wallet',async(ctx)=>{await persistUser(ctx);return showWalletPage(ctx);});
+bot.command('assignreseller', async (ctx) => {
+  if (!isAdmin(ctx)) return;
+  const parts = String(ctx.message?.text || '').trim().split(/\\s+/);
+  const customerId = parts[1];
+  const resellerId = parts[2];
+  if (parts.length !== 3 || !customerId || !resellerId) return ctx.reply('استفاده: /assignreseller <customer_telegram_id> <reseller_telegram_id>');
+  try {
+    const config = await getConfig();
+    await resellerAssignment.assignCustomerToReseller(storage, customerId, resellerId, config);
+    return ctx.reply(`✅ ریسلر ${resellerId} برای مشتری ${customerId} ثبت شد. سفارش‌های جدید به این ریسلر نسبت داده می‌شوند.`);
+  } catch (error) {
+    const messages = {
+      INVALID_RESELLER_ASSIGNMENT: '❌ آیدی مشتری یا ریسلر نامعتبر است.',
+      CUSTOMER_NOT_FOUND: '❌ مشتری در ربات پیدا نشد.',
+      TARGET_IS_NOT_A_RESELLER: '❌ آیدی مقصد در فهرست ریسلرها نیست.',
+    };
+    return ctx.reply(messages[error.message] || '❌ ثبت ریسلر ناموفق بود.');
+  }
+});
+bot.command('unassignreseller', async (ctx) => {
+  if (!isAdmin(ctx)) return;
+  const parts = String(ctx.message?.text || '').trim().split(/\\s+/);
+  const customerId = parts[1];
+  if (parts.length !== 2 || !customerId) return ctx.reply('استفاده: /unassignreseller <customer_telegram_id>');
+  try {
+    const result = await resellerAssignment.unassignCustomerReseller(storage, customerId);
+    return ctx.reply(`✅ ریسلر مشتری ${customerId} حذف شد. سفارش‌های بعدی بدون ریسلر ثبت می‌شوند.`);
+  } catch (error) {
+    const messages = { INVALID_CUSTOMER_ID: '❌ آیدی مشتری نامعتبر است.', CUSTOMER_NOT_FOUND: '❌ مشتری در ربات پیدا نشد.' };
+    return ctx.reply(messages[error.message] || '❌ حذف ریسلر ناموفق بود.');
+  }
+});
 bot.command('testreport',async(ctx)=>{if(!isAdmin(ctx))return;try{const now=new Date();const dayKey=userReport.gregorianTehranDateKey(now);const [todayIds,allIds]=await Promise.all([storage.smembers(`new_users:${dayKey}`),storage.smembers('bot_users')]);const message=['🧪 | گزارش آزمایشی (این کاربر واقعی نیست)','','👥 مشخصات کاربر','🆔 آیدی: 123456789','👤 اسم: Test User','⚡️ نام کاربری: @test_user','🌐 زبان تلگرام: en','','📈 آمار عضویت',`🆕 امروز: ${todayIds.length.toLocaleString('fa-IR')}`,`👥 مجموع کاربران: ${allIds.length.toLocaleString('fa-IR')}`,'',`🗓 ${userReport.formatJalaliDateTime(now)}`].join('\n');await bot.telegram.sendMessage(ADMIN_ID,message);return ctx.reply('✅ پیام آزمایشی به ADMIN_ID ارسال شد.');}catch(error){log('NEW_USER_REPORT_TEST_FAILED',{admin_id:ADMIN_ID,error:error?.message||String(error)});return ctx.reply(`❌ ارسال پیام آزمایشی ناموفق بود: ${error?.description||error?.message||'unknown error'}`);}});
 bot.command('pingdb',async(ctx)=>{if(!isAdmin(ctx))return;try{await ctx.reply(await storage.ping()?'✅ Redis: OK':'⚠️ Redis در حالت حافظه محلی است.');}catch{await ctx.reply('❌ Redis: ERROR');}});
 bot.command('status',async(ctx)=>{if(!isAdmin(ctx))return;const orders=await storage.listOrders(100);const pending=orders.filter(o=>!['FULFILLED','PAYMENT_LATER_REJECTED','WALLET_TOPUP_REJECTED'].includes(o.fulfillmentStatus)).length;const failed=orders.filter(o=>o.fulfillmentStatus==='FAILED_RETRYABLE').length;let pg='CMS panels only';try{const panels=await require('../lib/panel-registry').list();pg=panels.length?`${panels.filter(p=>p.status==='active').length}/${panels.length} active`:'no panels registered';}catch{pg='registry error';}await ctx.reply(`📊 <b>وضعیت سیستم</b>\n\nTelegram Bot: OK\nRedis: ${storage.configured()?'OK':'MEMORY'}\nPasarGuard panels: ${pg}\nPending orders: ${pending}\nFailed fulfillments: ${failed}`,{parse_mode:'HTML'});});

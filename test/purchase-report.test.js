@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createPurchaseReportEvent, formatPurchaseReport } = require('../lib/purchase-report');
+const { isResellerCustomer, createPurchaseReportEvent, formatPurchaseReport } = require('../lib/purchase-report');
 
 const eligibleOrder = {
   orderId: 'order-42',
@@ -21,6 +21,12 @@ const eligibleOrder = {
   createdAt: '2026-10-31T08:00:00.000Z',
 };
 
+test('recognizes reseller customers by their account flag or CMS reseller list', () => {
+  assert.equal(isResellerCustomer({ telegramUserId: 123456, isReseller: true }, {}, 123456), true);
+  assert.equal(isResellerCustomer({ telegramUserId: 123456 }, { resellerTelegramIds: ['123456'] }, 123456), true);
+  assert.equal(isResellerCustomer({ telegramUserId: 123456 }, { resellerTelegramIds: [] }, 123456), false);
+});
+
 test('creates a stable report event with admin and optional reseller recipients', () => {
   const event = createPurchaseReportEvent(eligibleOrder, {
     adminTelegramId: '1000',
@@ -38,6 +44,14 @@ test('uses reseller attribution already snapshotted on the order by the CMS flow
   const event = createPurchaseReportEvent({ ...eligibleOrder, resellerTelegramId: '2000' }, { adminTelegramId: '1000' });
   assert.equal(event.resellerTelegramId, '2000');
   assert.equal(event.recipients.reseller.chatId, '2000');
+});
+
+test('does not route a reseller report to an unrelated stored reseller ID', () => {
+  const event = createPurchaseReportEvent({ ...eligibleOrder, resellerTelegramId: '9999' }, {
+    adminTelegramId: '1000',
+    resellerTelegramId: null,
+  });
+  assert.equal(event.recipients.reseller, undefined);
 });
 
 test('does not create an event for undelivered orders', () => {

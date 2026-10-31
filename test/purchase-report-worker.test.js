@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const storage = require('../lib/storage');
-const { enqueuePurchaseReport, processPendingPurchaseReports } = require('../lib/purchase-report');
+const { enqueuePurchaseReport, processPendingPurchaseReports, requeueFailedPurchaseReports } = require('../lib/purchase-report');
 
 function order(id) {
   return {
@@ -49,4 +49,17 @@ test('admin delivery failure does not block reseller delivery and is scheduled f
 
 test('worker rejects missing Telegram client', async () => {
   await assert.rejects(processPendingPurchaseReports(null), /TELEGRAM_CLIENT_REQUIRED/);
+});
+
+test('admin recovery requeues exhausted recipient deliveries', async () => {
+  const id = `worker-requeue-${Date.now()}`;
+  await enqueuePurchaseReport(order(id), { adminTelegramId: '5005' });
+  await storage.updatePurchaseReportEvent(`purchase:${id}:v1`, {
+    recipients: { admin: { chatId: '5005', status: 'FAILED_FINAL', attempts: 8, lastError: 'blocked' } },
+  });
+  const requeued = await requeueFailedPurchaseReports(100);
+  const event = await storage.getPurchaseReportEvent(`purchase:${id}:v1`);
+  assert.ok(requeued >= 1);
+  assert.equal(event.recipients.admin.status, 'PENDING');
+  assert.equal(event.recipients.admin.attempts, 0);
 });

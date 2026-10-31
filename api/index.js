@@ -65,7 +65,7 @@ async function createOrderForPlan(ctx, plan) {
   const assignedResellerId = String(customerRecord?.assignedResellerTelegramId || '');
   const order = {
     orderId: id, telegramUserId: ctx.from.id, telegramUsername: ctx.from.username || null,
-    resellerTelegramId: /^\\d+$/.test(assignedResellerId) ? assignedResellerId : null,
+    resellerTelegramId: /^\d+$/.test(assignedResellerId) ? assignedResellerId : null,
     firstName: ctx.from.first_name || null, lastName: ctx.from.last_name || null,
     planId: plan.id, planName: plan.name, service: serviceId, serviceName: plan.panelName || null,
     panelId: panel?.type === 'master' ? null : (plan.panelId || null),
@@ -316,7 +316,7 @@ bot.on('message',async(ctx,next)=>{
 bot.command('wallet',async(ctx)=>{await persistUser(ctx);return showWalletPage(ctx);});
 bot.command('assignreseller', async (ctx) => {
   if (!isAdmin(ctx)) return;
-  const parts = String(ctx.message?.text || '').trim().split(/\\s+/);
+  const parts = String(ctx.message?.text || '').trim().split(/\s+/);
   const customerId = parts[1];
   const resellerId = parts[2];
   if (parts.length !== 3 || !customerId || !resellerId) return ctx.reply('استفاده: /assignreseller <customer_telegram_id> <reseller_telegram_id>');
@@ -335,7 +335,7 @@ bot.command('assignreseller', async (ctx) => {
 });
 bot.command('unassignreseller', async (ctx) => {
   if (!isAdmin(ctx)) return;
-  const parts = String(ctx.message?.text || '').trim().split(/\\s+/);
+  const parts = String(ctx.message?.text || '').trim().split(/\s+/);
   const customerId = parts[1];
   if (parts.length !== 2 || !customerId) return ctx.reply('استفاده: /unassignreseller <customer_telegram_id>');
   try {
@@ -365,7 +365,7 @@ module.exports=async(req,res)=>{
     update_id:update.update_id,
     update_type:update.callback_query?'callback_query':update.message?'message':update.pre_checkout_query?'pre_checkout_query':Object.keys(update).find((key)=>key!=='update_id')||'unknown',
     callback_action:callbackData?callbackData.split('_').slice(0,3).join('_'):undefined,
-    message_command:messageText.startsWith('/')?messageText.split(/\\s+/)[0].slice(0,40):undefined,
+    message_command:messageText.startsWith('/')?messageText.split(/\s+/)[0].slice(0,40):undefined,
   };
   log('WEBHOOK_DIAGNOSTIC_START',diagnosticFields);
   try{

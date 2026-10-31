@@ -62,7 +62,7 @@ async function createOrderForPlan(ctx, plan) {
   const id = orderId();
   const panel = plan.panelId ? ((await require('../lib/panel-registry').getById(plan.panelId)) || await require('../lib/master-panel-registry').getById(plan.panelId)) : null;
   const serviceId = plan.panelId ? (panel?.type === 'master' ? `master_${plan.panelId}` : `panel_${plan.panelId}`) : (plan.service || 'tunnel');
-  const customerRecord = await storage.getUserRaw(ctx.from.id);
+  const customerRecord = await storage.getUserRaw(ctx.from.id).catch(() => null);
   const assignedResellerId = String(customerRecord?.assignedResellerTelegramId || '');
   const order = {
     orderId: id, telegramUserId: ctx.from.id, telegramUsername: ctx.from.username || null,

@@ -350,8 +350,9 @@ bot.command('unassignreseller', async (ctx) => {
 bot.command('retryreports', async (ctx) => {
   if (!isAdmin(ctx)) return;
   try {
+    const requeued = await purchaseReport.requeueFailedPurchaseReports(100);
     const result = await purchaseReport.processPendingPurchaseReports(bot.telegram, { limit: 100 });
-    return ctx.reply(`📊 گزارش‌های خرید: ارسال‌شده ${result.sent}، ناموفق ${result.failed}، در انتظار زمان مجدد ${result.skipped}، قفل‌شده ${result.locked}.`);
+    return ctx.reply(`📊 گزارش‌های خرید: بازیابی‌شده ${requeued}، ارسال‌شده ${result.sent}، ناموفق ${result.failed}، در انتظار زمان مجدد ${result.skipped}، قفل‌شده ${result.locked}.`);
   } catch (error) {
     log('PURCHASE_REPORT_MANUAL_RETRY_FAILED', { error: error?.message || String(error) });
     return ctx.reply('❌ پردازش گزارش‌های خرید ناموفق بود.');

@@ -12,7 +12,6 @@ const accountService = require('../lib/account-service');
 const accountUI = require('../lib/account-ui');
 const { registerAdminMessaging } = require('../lib/admin-messaging');
 const userReport = require('../lib/user-report');
-const resellerAssignment = require('../lib/reseller-assignment');
 const purchaseReport = require('../lib/purchase-report');
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
@@ -315,38 +314,6 @@ bot.on('message',async(ctx,next)=>{
 });
 
 bot.command('wallet',async(ctx)=>{await persistUser(ctx);return showWalletPage(ctx);});
-bot.command('assignreseller', async (ctx) => {
-  if (!isAdmin(ctx)) return;
-  const parts = String(ctx.message?.text || '').trim().split(/\s+/);
-  const customerId = parts[1];
-  const resellerId = parts[2];
-  if (parts.length !== 3 || !customerId || !resellerId) return ctx.reply('استفاده: /assignreseller <customer_telegram_id> <reseller_telegram_id>');
-  try {
-    const config = await getConfig();
-    await resellerAssignment.assignCustomerToReseller(storage, customerId, resellerId, config);
-    return ctx.reply(`✅ ریسلر ${resellerId} برای مشتری ${customerId} ثبت شد. سفارش‌های جدید به این ریسلر نسبت داده می‌شوند.`);
-  } catch (error) {
-    const messages = {
-      INVALID_RESELLER_ASSIGNMENT: '❌ آیدی مشتری یا ریسلر نامعتبر است.',
-      CUSTOMER_NOT_FOUND: '❌ مشتری در ربات پیدا نشد.',
-      TARGET_IS_NOT_A_RESELLER: '❌ آیدی مقصد در فهرست ریسلرها نیست.',
-    };
-    return ctx.reply(messages[error.message] || '❌ ثبت ریسلر ناموفق بود.');
-  }
-});
-bot.command('unassignreseller', async (ctx) => {
-  if (!isAdmin(ctx)) return;
-  const parts = String(ctx.message?.text || '').trim().split(/\s+/);
-  const customerId = parts[1];
-  if (parts.length !== 2 || !customerId) return ctx.reply('استفاده: /unassignreseller <customer_telegram_id>');
-  try {
-    const result = await resellerAssignment.unassignCustomerReseller(storage, customerId);
-    return ctx.reply(`✅ ریسلر مشتری ${customerId} حذف شد. سفارش‌های بعدی بدون ریسلر ثبت می‌شوند.`);
-  } catch (error) {
-    const messages = { INVALID_CUSTOMER_ID: '❌ آیدی مشتری نامعتبر است.', CUSTOMER_NOT_FOUND: '❌ مشتری در ربات پیدا نشد.' };
-    return ctx.reply(messages[error.message] || '❌ حذف ریسلر ناموفق بود.');
-  }
-});
 bot.command('retryreports', async (ctx) => {
   if (!isAdmin(ctx)) return;
   try {

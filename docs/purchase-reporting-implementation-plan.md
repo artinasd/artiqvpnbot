@@ -35,6 +35,6 @@ A report is eligible only when the order is paid from the wallet, is not a test 
 - After a successful customer Telegram delivery, fulfillment schedules a best-effort enqueue and a bounded initial worker pass. Reporting errors are logged and do not change order, wallet, or provider state.
 - The worker runs within the existing bot serverless function; no additional API function or Vercel Cron schedule is added, to stay within the Hobby function-count limit.
 - Admin recovery command: `/retryreports`. It also requeues recipients that exhausted their automatic retry attempts.
-- Admin reseller assignment commands: `/assignreseller <customer_telegram_id> <reseller_telegram_id>` and `/unassignreseller <customer_telegram_id>`. The reseller must be listed in `resellerTelegramIds` or have a reseller flag. Each new order snapshots its assigned reseller so later reassignment does not change old order attribution.
+- Reseller assignment remains owned by the existing CMS. The bot only reads the customer's existing `assignedResellerTelegramId` value when creating an order and snapshots it on that order; it does not add a second assignment workflow.
 - Retry queue uses a Redis sorted set keyed by next-attempt time; event payload and queue-index updates use atomic Redis scripts.
 - Delivery is at-least-once. If Telegram accepts a report but Redis acknowledgement fails, a retry may send a duplicate.

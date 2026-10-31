@@ -34,6 +34,12 @@ test('creates a stable report event with admin and optional reseller recipients'
   assert.equal(event.payment.amount, 250000);
 });
 
+test('uses reseller attribution already snapshotted on the order by the CMS flow', () => {
+  const event = createPurchaseReportEvent({ ...eligibleOrder, resellerTelegramId: '2000' }, { adminTelegramId: '1000' });
+  assert.equal(event.resellerTelegramId, '2000');
+  assert.equal(event.recipients.reseller.chatId, '2000');
+});
+
 test('does not create an event for undelivered orders', () => {
   assert.equal(createPurchaseReportEvent({ ...eligibleOrder, deliveryStatus: 'FAILED' }, { adminTelegramId: '1000' }), null);
 });

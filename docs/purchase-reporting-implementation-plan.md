@@ -8,19 +8,19 @@ A report is eligible only when the order is paid from the wallet, is not a test 
 ## Outbox architecture
 - Persist a stable event keyed by order ID/version in Redis.
 - Create the event and add its ID to the pending set atomically using Redis EVAL.
-- Snapshot reseller attribution at event creation time.
+- Snapshot reseller attribution at order creation time.
 - Track admin and reseller recipients independently.
 - Process reports outside the purchase critical path; only mark a recipient sent after Telegram confirms acceptance.
 - Retry transient failures with bounded backoff; never call wallet or provider APIs from reporting.
-- A crash after Telegram accepts a message but before Redis records success can cause a duplicate; delivery is at-least-once, not exactly-once.
+- A crash after Telegram accepts a message but before Redis acknowledgement can cause a duplicate; delivery is at-least-once, not exactly-once.
 
 ## Release gates
 1. Test eligibility and atomic outbox creation.
 2. Implement worker with per-recipient isolation, locking, retry limits, and observability.
-3. Integrate only after customer Telegram delivery succeeds, using a non-awaited best-effort enqueue.
+3. Integrate only after successful customer delivery, using a non-awaited best-effort enqueue.
 4. Run full `npm test` and failure-injection tests.
-5. Verify preview/test deployment before enabling any scheduled processing.
-6. Do not modify `main` production behavior or trigger deployment without explicit release approval.
+5. Verify deployment and controlled test purchases before enabling reporting.
+6. Keep production reporting disabled until explicit operational verification.
 
 ## Invariants
 - Reporting cannot debit/refund wallets or provision/modify provider accounts.
@@ -32,9 +32,9 @@ A report is eligible only when the order is paid from the wallet, is not a test 
 ## Current implementation notes
 
 - Reporting is feature-flagged by `PURCHASE_REPORTING_ENABLED=true`; it is off by default.
-- After a successful customer Telegram delivery, fulfillment schedules a best-effort enqueue and an initial worker pass. Reporting errors are logged and do not change order, wallet, or provider state.
-- `POST /api/purchase-reports` is a separate worker endpoint. It requires `Authorization: Bearer <PURCHASE_REPORT_CRON_SECRET>`. Configure an external scheduler or an eligible Vercel Cron schedule to call it; no cron schedule is enabled in `vercel.json` yet.
-- Admin recovery command: `/retryreports`.
-- Admin reseller assignment commands: `/assignreseller <customer_telegram_id> <reseller_telegram_id>` and `/unassignreseller <customer_telegram_id>`. The reseller must be listed in `resellerTelegramIds` or have a reseller flag. Each new order snapshots its assigned reseller so later reassignment does not change the old order's attribution.
+- After a successful customer Telegram delivery, fulfillment schedules a best-effort enqueue and a bounded initial worker pass. Reporting errors are logged and do not change order, wallet, or provider state.
+- The worker runs within the existing bot serverless function; no additional API function or Vercel Cron schedule is added, to stay within the Hobby function-count limit.
+- Admin recovery command: `/retryreports`. It also requeues recipients that exhausted their automatic retry attempts.
+- Admin reseller assignment commands: `/assignreseller <customer_telegram_id> <reseller_telegram_id>` and `/unassignreseller <customer_telegram_id>`. The reseller must be listed in `resellerTelegramIds` or have a reseller flag. Each new order snapshots its assigned reseller so later reassignment does not change old order attribution.
 - Retry queue uses a Redis sorted set keyed by next-attempt time; event payload and queue-index updates use atomic Redis scripts.
 - Delivery is at-least-once. If Telegram accepts a report but Redis acknowledgement fails, a retry may send a duplicate.

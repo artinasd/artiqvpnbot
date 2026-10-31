@@ -4,9 +4,6 @@
     "api/index.js": {
       "maxDuration": 30,
       "includeFiles": "bg.png"
-    },
-    "api/purchase-reports.js": {
-      "maxDuration": 30
     }
   },
   "rewrites": [

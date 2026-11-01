@@ -249,7 +249,7 @@
           }
           card.appendChild(numericSetting('حداقل حجم (گیگابایت)', 'minTrafficGb', 1, 1000, false));
           card.appendChild(numericSetting('حداکثر حجم (گیگابایت)', 'maxTrafficGb', 1000, 1000, false));
-          card.appendChild(numericSetting('حداکثر مدت (روز) — خالی = رفتار فعلی', 'maxDays', null, 3650, true));
+          card.appendChild(numericSetting('حداکثر مدت (روز) — خالی = رفتار فعلی', 'maxDays', null, 150, true));
           section.appendChild(card);
         });
       }

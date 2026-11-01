@@ -23,7 +23,7 @@ const DEFAULT_DOCUMENT = {
     service_test: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'glass', buttonControls: {}, buttons: [] },
     service_buy: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'glass', buttonControls: {}, buttons: [] },
     service_renew: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'success', buttonControls: {}, buttons: [] },
-    plans_buy: { columns: 1, messageTemplate: '', customPlanButton: true, customPlanLabel: '🛠 ساخت بسته دلخواه (حجم و زمان)', homeButton: true, buttonStyle: 'primary', buttonControls: {}, buttons: [] },
+    plans_buy: { columns: 1, messageTemplate: '', customPlanButton: true, customPlanLabel: '🛠 ساخت بسته دلخواه (حجم و زمان)', customPlanByService: {}, homeButton: true, buttonStyle: 'primary', buttonControls: {}, buttons: [] },
     plans_renew: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'success', buttonControls: {}, buttons: [] },
     account_list: { columns: 3, messageTemplate: '', homeButton: true, detailLabel: '{title}', renewLabel: '🔁', removeLabel: '❌', buttonControls: {}, buttons: [] },
     account_detail: { columns: 2, messageTemplate: '', openLabel: '🔗 باز کردن لینک', copyLabel: '📋 کپی لینک', renewLabel: '🔄 تمدید اشتراک', backLabel: '⬅️ بازگشت به اشتراک‌ها', homeButton: true, buttonControls: {}, buttons: [] },
@@ -120,6 +120,18 @@ function validateDocument(input, panelCatalog = null) {
     }
     for (const key of ['messageTemplate', 'customPlanLabel', 'detailLabel', 'renewLabel', 'removeLabel', 'openLabel', 'copyLabel', 'backLabel', 'confirmLabel', 'cancelLabel']) if (screen[key] !== undefined && (typeof screen[key] !== 'string' || screen[key].length > (key === 'messageTemplate' ? 3500 : 500))) errors.push('Invalid ' + key + ' for screen: ' + screenId);
     for (const key of ['homeButton', 'customPlanButton']) if (screen[key] !== undefined && typeof screen[key] !== 'boolean') errors.push(key + ' must be true or false for screen: ' + screenId);
+    if (screen.customPlanByService !== undefined) {
+      if (!screen.customPlanByService || typeof screen.customPlanByService !== 'object' || Array.isArray(screen.customPlanByService)) errors.push('Per-service custom package settings must be an object.');
+      else for (const [serviceId, setting] of Object.entries(screen.customPlanByService)) {
+        if (!/^[a-zA-Z0-9_-]{1,48}$/.test(serviceId)) errors.push('Invalid custom package service ID: ' + serviceId);
+        if (!setting || typeof setting !== 'object' || Array.isArray(setting)) { errors.push('Invalid custom package settings: ' + serviceId); continue; }
+        if (setting.enabled !== undefined && typeof setting.enabled !== 'boolean') errors.push('Custom package enabled must be true or false: ' + serviceId);
+        for (const key of ['minTrafficGb', 'maxTrafficGb', 'maxDays']) if (setting[key] !== undefined && setting[key] !== null && (!Number.isInteger(Number(setting[key])) || Number(setting[key]) < 1 || Number(setting[key]) > (key === 'maxDays' ? 3650 : 1000))) errors.push('Invalid ' + key + ' for custom package service: ' + serviceId);
+        const minTraffic = setting.minTrafficGb == null ? 1 : Number(setting.minTrafficGb);
+        const maxTraffic = setting.maxTrafficGb == null ? 1000 : Number(setting.maxTrafficGb);
+        if (minTraffic > maxTraffic) errors.push('Minimum traffic cannot exceed maximum traffic: ' + serviceId);
+      }
+    }
     if (screen.buttonStyle !== undefined && !['default', 'glass', 'primary', 'success', 'danger'].includes(screen.buttonStyle)) errors.push('Unsupported Telegram button style for screen: ' + screenId);
     if (screen.buttonControls !== undefined && (!screen.buttonControls || typeof screen.buttonControls !== 'object' || Array.isArray(screen.buttonControls))) errors.push('Button controls must be an object: ' + screenId);
     for (const [controlId, control] of Object.entries(screen.buttonControls || {})) {

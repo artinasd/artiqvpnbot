@@ -126,7 +126,7 @@ function validateDocument(input, panelCatalog = null) {
         if (!/^[a-zA-Z0-9_-]{1,48}$/.test(serviceId)) errors.push('Invalid custom package service ID: ' + serviceId);
         if (!setting || typeof setting !== 'object' || Array.isArray(setting)) { errors.push('Invalid custom package settings: ' + serviceId); continue; }
         if (setting.enabled !== undefined && typeof setting.enabled !== 'boolean') errors.push('Custom package enabled must be true or false: ' + serviceId);
-        for (const key of ['minTrafficGb', 'maxTrafficGb', 'maxDays']) if (setting[key] !== undefined && setting[key] !== null && (!Number.isInteger(Number(setting[key])) || Number(setting[key]) < 1 || Number(setting[key]) > (key === 'maxDays' ? 3650 : 1000))) errors.push('Invalid ' + key + ' for custom package service: ' + serviceId);
+        for (const key of ['minTrafficGb', 'maxTrafficGb', 'maxDays']) if (setting[key] !== undefined && setting[key] !== null && (!Number.isInteger(Number(setting[key])) || Number(setting[key]) < 1 || Number(setting[key]) > (key === 'maxDays' ? 150 : 1000))) errors.push('Invalid ' + key + ' for custom package service: ' + serviceId);
         const minTraffic = setting.minTrafficGb == null ? 1 : Number(setting.minTrafficGb);
         const maxTraffic = setting.maxTrafficGb == null ? 1000 : Number(setting.maxTrafficGb);
         if (minTraffic > maxTraffic) errors.push('Minimum traffic cannot exceed maximum traffic: ' + serviceId);

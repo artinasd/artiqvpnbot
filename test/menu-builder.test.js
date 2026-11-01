@@ -41,7 +41,7 @@ function createMenuApi(panelCatalog = []) {
 }
 
 test('menu builder API and browser editor have valid JavaScript syntax', () => {
-  for (const file of ['api/menu-builder.js', 'public/menu-builder.js', 'lib/bot-config.js']) {
+  for (const file of ['api/menu-builder.js', 'public/menu-builder.js', 'lib/bot-config.js', 'api/index.js']) {
     assert.doesNotThrow(() => new vm.Script(source(file), { filename: file }), file);
   }
 });
@@ -254,13 +254,13 @@ test('Menu Maker stores per-service custom-package settings and rejects invalid 
 test('Custom package limits are service-specific and enforced by the Telegram flow', () => {
   const runtime = source('api/index.js');
   const ui = source('public/menu-builder.js');
-  assert.match(runtime, /customPlanByService\\s*&&\\s*screen\\.customPlanByService\\[service\\.id\\]/);
-  assert.match(runtime, /customSetting\\.enabled !== false/);
-  assert.match(runtime, /state\\.minTrafficGb/);
-  assert.match(runtime, /state\\.maxTrafficGb/);
-  assert.match(runtime, /state\\.customMaxDays/);
+  assert.ok(runtime.includes('customPlanByService && screen.customPlanByService[service.id]'));
+  assert.ok(runtime.includes('customSetting.enabled !== false'));
+  assert.ok(runtime.includes('state.minTrafficGb'));
+  assert.ok(runtime.includes('state.maxTrafficGb'));
+  assert.ok(runtime.includes('state.customMaxDays'));
   assert.match(ui, /تنظیم ساخت بسته دلخواه برای هر سرویس/);
-  assert.match(ui, /حداقل حجم \\(گیگابایت\\)/);
-  assert.match(ui, /حداکثر حجم \\(گیگابایت\\)/);
-  assert.match(ui, /حداکثر مدت \\(روز\\)/);
+  assert.ok(ui.includes('حداقل حجم (گیگابایت)'));
+  assert.ok(ui.includes('حداکثر حجم (گیگابایت)'));
+  assert.ok(ui.includes('حداکثر مدت (روز)'));
 });

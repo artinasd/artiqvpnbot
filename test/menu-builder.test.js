@@ -226,3 +226,41 @@ test('Master Panels support test accounts by default and respect an explicit tes
   const disabled = await getConfiguredServicesWithPanels({ services: { master_master_abc: { testEnabled: false } } }, { listPanels, listMasterPanels });
   assert.equal(disabled.find((service) => service.id === 'master_master_abc').testEnabled, false);
 });
+
+
+test('Menu Maker stores per-service custom-package settings and rejects invalid ranges', async () => {
+  const { request } = createMenuApi([
+    { id: 'panel_alpha', name: 'Alpha', purchaseEnabled: true, testEnabled: true },
+    { id: 'master_beta', name: 'Beta', purchaseEnabled: true, testEnabled: true },
+  ]);
+  const initial = await request({ method: 'GET' });
+  const draft = structuredClone(initial.body.draft);
+  draft.screens.plans_buy.customPlanByService = {
+    panel_alpha: { enabled: false, minTrafficGb: 5, maxTrafficGb: 80, maxDays: 45 },
+    master_beta: { enabled: true, minTrafficGb: 2, maxTrafficGb: 200, maxDays: null },
+  };
+  const saved = await request({ action: 'save_draft', document: draft });
+  assert.equal(saved.status, 200);
+  assert.equal(saved.body.draft.screens.plans_buy.customPlanByService.panel_alpha.enabled, false);
+  assert.equal(saved.body.draft.screens.plans_buy.customPlanByService.master_beta.maxTrafficGb, 200);
+
+  draft.screens.plans_buy.customPlanByService.panel_alpha.minTrafficGb = 100;
+  draft.screens.plans_buy.customPlanByService.panel_alpha.maxTrafficGb = 10;
+  const invalid = await request({ action: 'save_draft', document: draft });
+  assert.equal(invalid.status, 400);
+  assert.ok(invalid.body.errors.some((error) => error.includes('Minimum traffic cannot exceed maximum traffic')));
+});
+
+test('Custom package limits are service-specific and enforced by the Telegram flow', () => {
+  const runtime = source('api/index.js');
+  const ui = source('public/menu-builder.js');
+  assert.match(runtime, /customPlanByService\\s*&&\\s*screen\\.customPlanByService\\[service\\.id\\]/);
+  assert.match(runtime, /customSetting\\.enabled !== false/);
+  assert.match(runtime, /state\\.minTrafficGb/);
+  assert.match(runtime, /state\\.maxTrafficGb/);
+  assert.match(runtime, /state\\.customMaxDays/);
+  assert.match(ui, /تنظیم ساخت بسته دلخواه برای هر سرویس/);
+  assert.match(ui, /حداقل حجم \\(گیگابایت\\)/);
+  assert.match(ui, /حداکثر حجم \\(گیگابایت\\)/);
+  assert.match(ui, /حداکثر مدت \\(روز\\)/);
+});

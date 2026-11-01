@@ -250,6 +250,13 @@ test('Menu Maker stores per-service custom-package settings and rejects invalid 
   const invalid = await request({ action: 'save_draft', document: draft });
   assert.equal(invalid.status, 400);
   assert.ok(invalid.body.errors.some((error) => error.includes('Minimum traffic cannot exceed maximum traffic')));
+
+  draft.screens.plans_buy.customPlanByService.panel_alpha.minTrafficGb = 5;
+  draft.screens.plans_buy.customPlanByService.panel_alpha.maxTrafficGb = 80;
+  draft.screens.plans_buy.customPlanByService.panel_alpha.maxDays = 151;
+  const invalidDuration = await request({ action: 'save_draft', document: draft });
+  assert.equal(invalidDuration.status, 400);
+  assert.ok(invalidDuration.body.errors.some((error) => error.includes('Invalid maxDays')));
 });
 
 test('Custom package limits are service-specific and enforced by the Telegram flow', () => {

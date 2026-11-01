@@ -42,7 +42,8 @@ function createMenuApi(panelCatalog = []) {
 
 test('menu builder API and browser editor have valid JavaScript syntax', () => {
   for (const file of ['api/menu-builder.js', 'public/menu-builder.js', 'lib/bot-config.js', 'api/index.js']) {
-    assert.doesNotThrow(() => new vm.Script(source(file), { filename: file }), file);
+    try { new vm.Script(source(file), { filename: file }); }
+    catch (error) { throw new Error(file + ': ' + error.stack); }
   }
 });
 

@@ -17,7 +17,7 @@
     service_test: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'glass', buttonControls: {} },
     service_buy: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'glass', buttonControls: {} },
     service_renew: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'glass', buttonControls: {} },
-    plans_buy: { columns: 1, messageTemplate: '', customPlanButton: true, customPlanLabel: '🛠 ساخت بسته دلخواه (حجم و زمان)', homeButton: true, buttonStyle: 'glass', buttonControls: {} },
+    plans_buy: { columns: 1, messageTemplate: '', customPlanButton: true, customPlanLabel: '🛠 ساخت بسته دلخواه (حجم و زمان)', customPlanByService: {}, homeButton: true, buttonStyle: 'glass', buttonControls: {} },
     plans_renew: { columns: 1, messageTemplate: '', homeButton: true, buttonStyle: 'glass', buttonControls: {} },
     account_list: { columns: 3, messageTemplate: '', homeButton: true, detailLabel: '{title}', renewLabel: '🔁', removeLabel: '❌', buttonControls: {} },
     account_detail: { columns: 2, messageTemplate: '', openLabel: '🔗 باز کردن لینک', copyLabel: '📋 کپی لینک', renewLabel: '🔄 تمدید اشتراک', backLabel: '⬅️ بازگشت به اشتراک‌ها', homeButton: true, buttonControls: {} },
@@ -225,6 +225,34 @@
       // The extra columns/style/template controls were redundant and confusing.
       section.appendChild(field('متن پیام', cfg.messageTemplate != null && String(cfg.messageTemplate) !== '' ? String(cfg.messageTemplate) : defaultScreenMessageTemplate(id), function (v) { cfg.messageTemplate = v; state.previewScreen = id; }));
       if (id === 'wallet') section.appendChild(el('small', 'متغیر موجودی فعلی: {balance} (نمونه در پیش‌نمایش: ۱۲۵,۰۰۰)', 'mb-help'));
+      if (id === 'plans_buy') {
+        if (!cfg.customPlanByService || typeof cfg.customPlanByService !== 'object') cfg.customPlanByService = {};
+        section.appendChild(el('strong', 'تنظیم ساخت بسته دلخواه برای هر سرویس', 'mb-screen-title'));
+        section.appendChild(el('small', 'مقدار خالیِ حداکثر مدت، رفتار فعلی خودکار (۶۰ یا ۱۵۰ روز) را حفظ می‌کند.', 'mb-help'));
+        state.panels.filter(function(panel){return panel.purchaseEnabled !== false;}).forEach(function(panel){
+          var serviceId = String(panel.id);
+          var setting = cfg.customPlanByService[serviceId] || (cfg.customPlanByService[serviceId] = {});
+          var card = el('div', null, 'mb-button-edit');
+          card.appendChild(el('strong', panel.name, 'mb-screen-title'));
+          var enabledLabel = el('label', null, 'mb-field');
+          var enabled = el('input'); enabled.type = 'checkbox'; enabled.checked = setting.enabled !== false;
+          enabled.addEventListener('change', function(){setting.enabled = enabled.checked; renderPreview();});
+          enabledLabel.appendChild(enabled); enabledLabel.appendChild(el('span', 'نمایش دکمه ساخت بسته دلخواه برای این سرویس'));
+          card.appendChild(enabledLabel);
+          function numericSetting(label, key, fallback, max, optional){
+            var wrap = el('label', null, 'mb-field'); wrap.appendChild(el('span', label));
+            var input = el('input'); input.type = 'number'; input.min = '1'; input.max = String(max); input.step = '1';
+            input.value = setting[key] == null ? (optional ? '' : String(fallback)) : String(setting[key]);
+            input.placeholder = optional ? 'خودکار' : String(fallback);
+            input.addEventListener('change', function(){ setting[key] = optional && input.value.trim() === '' ? null : Number(input.value); });
+            wrap.appendChild(input); return wrap;
+          }
+          card.appendChild(numericSetting('حداقل حجم (گیگابایت)', 'minTrafficGb', 1, 1000, false));
+          card.appendChild(numericSetting('حداکثر حجم (گیگابایت)', 'maxTrafficGb', 1000, 1000, false));
+          card.appendChild(numericSetting('حداکثر مدت (روز) — خالی = رفتار فعلی', 'maxDays', null, 3650, true));
+          section.appendChild(card);
+        });
+      }
       var managedRoleGroups = {
         service_test: state.panels.filter(function(panel){return panel.testEnabled !== false;}).map(function(panel){return {id:panel.id,label:panel.name,panelButton:true};}).concat([{id:'home',label:'منوی اصلی'}]),
         service_buy: state.panels.filter(function(panel){return panel.purchaseEnabled !== false;}).map(function(panel){return {id:panel.id,label:panel.name,panelButton:true};}).concat([{id:'home',label:'منوی اصلی'}]),

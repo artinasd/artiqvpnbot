@@ -78,3 +78,20 @@ test('reseller brand synchronization reports failures and retries against owned 
   assert.equal(retry.body.complete, true);
   assert.equal(retry.body.sync.synced, 1);
 });
+
+
+test('custom reseller rates are generated from active configured purchase services', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const apiSource = fs.readFileSync(path.join(__dirname, '../api/admin-resellers.js'), 'utf8');
+  const uiSource = fs.readFileSync(path.join(__dirname, '../public/reseller-cms.js'), 'utf8');
+  assert.ok(apiSource.includes("getConfiguredServicesWithPanels(config)"));
+  assert.ok(apiSource.includes("UNKNOWN_CUSTOM_RESELLER_RATE_SERVICE"));
+  assert.ok(apiSource.includes("services,brandSync"));
+  assert.ok(uiSource.includes("renderCustomRates(d.customResellerRates||{},d.services||[])"));
+  assert.ok(uiSource.includes("input.dataset.serviceId=service.id"));
+  assert.ok(uiSource.includes("rates[input.dataset.serviceId]=input.value.trim()"));
+  for (const legacyId of ['customRateTunnel', 'customRateGaming', 'customRateTunnel2', 'customRateDirect2']) {
+    assert.ok(!uiSource.includes(legacyId), 'legacy hardcoded field should be removed: ' + legacyId);
+  }
+});

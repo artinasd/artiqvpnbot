@@ -87,7 +87,7 @@ async function showWalletCheckout(ctx, order) {
   const price = Number(order.price || 0);
   if (balance >= price) {
     const lock = `wallet-purchase:${ctx.from.id}`;
-    if (!(await storage.acquireLock(lock, 30))) return ctx.reply('⏳ درخواست شما در حال پردازش است.');
+    const lockToken = await storage.acquireLock(lock, 30); if (!lockToken) return ctx.reply('⏳ درخواست شما در حال پردازش است.');
     try {
       const freshBalance = await wallet.getBalance(ctx.from.id);
       if (freshBalance < price) return showWalletCheckout(ctx, order);
@@ -96,7 +96,7 @@ async function showWalletCheckout(ctx, order) {
       await storage.deleteState('user', ctx.from.id);
       await ctx.reply(`✅ مبلغ ${price.toLocaleString('en-US')} تومان از کیف پول شما کسر شد.\n\n⏳ در حال ساخت اشتراک...`);
       await fulfillOrder(order.orderId, bot.telegram);
-    } finally { await storage.releaseLock(lock); }
+    } finally { await storage.releaseLock(lock, lockToken); }
     return;
   }
   await storage.updateOrder(order.orderId, { paymentStatus: 'WALLET_REQUIRED', fulfillmentStatus: 'AWAITING_WALLET' });
@@ -127,7 +127,7 @@ async function createWalletTopup(ctx, amount, linkedOrderId) {
 async function activateWalletOrder(order) {
   const price = Number(order.price || 0);
   const lock = `wallet-purchase:${order.telegramUserId}`;
-  if (!(await storage.acquireLock(lock, 30))) return { locked: true };
+  const lockToken = await storage.acquireLock(lock, 30); if (!lockToken) return { locked: true };
   try {
     const current = await storage.getOrder(order.orderId);
     if (!current || current.walletCharged || current.fulfillmentStatus === 'FULFILLED') return { already: true, order: current };
@@ -139,7 +139,7 @@ async function activateWalletOrder(order) {
     await bot.telegram.sendMessage(current.telegramUserId, `✅ شارژ کیف پول تأیید شد و ${price.toLocaleString('en-US')} تومان بابت سفارش ${current.planName} کسر شد.\n\n⏳ اشتراک شما در حال ساخت است...`).catch(() => {});
     await fulfillOrder(current.orderId, bot.telegram);
     return { fulfilled: true, order: paid };
-  } finally { await storage.releaseLock(lock); }
+  } finally { await storage.releaseLock(lock, lockToken); }
 }
 
 async function sendServiceMenu(ctx, mode = 'buy') {
@@ -178,11 +178,46 @@ async function sendPlanMenu(ctx, mode = 'buy', serviceId = 'tunnel') {
 }
 
 async function createTestForService(ctx, serviceId) {
-  const config = await getConfig(); const service = await getConfiguredServiceWithPanels(serviceId, config);
-  if (!service) return ctx.reply(await getMessage('invalidService')); if (service.testEnabled === false) return ctx.reply('❌ برای این سرویس اکانت تست فعال نیست.'); await persistUser(ctx);
-  const user = await storage.getUser(ctx.from.id, config.limits.testLimitPerDay); if (user?.testUsed) return ctx.reply(await getMessage('testLimitReached'));
-  const lockName = `test:${ctx.from.id}`; if (!(await storage.acquireLock(lockName, 120))) return ctx.reply(await getMessage('testProcessingLock'));
-  let orderIdValue = null; try { const refreshed = await storage.getUser(ctx.from.id, config.limits.testLimitPerDay); if (refreshed?.testUsed) return ctx.reply(await getMessage('testLimitReached')); const id = orderId(); orderIdValue = id; const trafficBytes = Number(config.limits.testTrafficBytes ?? TEST_TRAFFIC_BYTES); const durationDays = Number(config.limits.testDurationDays ?? TEST_DURATION_DAYS); const hwidLimit = Number(config.limits.testHwidLimit ?? TEST_HWID_LIMIT); const order = { orderId:id,telegramUserId:ctx.from.id,telegramUsername:ctx.from.username||null,firstName:ctx.from.firstName||ctx.from.first_name||null,lastName:ctx.from.lastName||ctx.from.last_name||null,planId:'test',planName:`اکانت تست — ${service.name}`,service:service.id,serviceName:service.name,panelId:service.panelId||null,trafficLimitBytes:trafficBytes,durationDays,hwidLimit,price:0,currency:config.payment?.currency||'تومان',requestedName:null,generatedPasarguardUsername:null,pasarguardUserId:null,subscriptionUrl:null,paymentStatus:'NOT_REQUIRED',fulfillmentStatus:'RECEIPT_SUBMITTED',deliveryStatus:null,receiptFileId:null,receiptType:null,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString() }; await storage.createOrder(order); await ctx.reply(await getMessage('testProcessing',{service_name:service.name})); await fulfillOrder(id,bot.telegram); await storage.saveUser({...userSnapshot(ctx),testUsed:true,testCreatedAt:new Date().toISOString()}); } catch(error){ await storage.saveUser({...userSnapshot(ctx),testUsed:false,testCreatedAt:null}); log('TEST_FULFILLMENT_FAILED',{order_id:orderIdValue,telegram_user_id:ctx.from.id,service:service.id,error:error?.message||String(error)}); await ctx.reply(await getMessage('testFailure')); } finally { await storage.releaseLock(lockName); }
+  const config = await getConfig();
+  const service = await getConfiguredServiceWithPanels(serviceId, config);
+  if (!service) return ctx.reply(await getMessage('invalidService'));
+  if (service.testEnabled === false) return ctx.reply('❌ برای این سرویس اکانت تست فعال نیست.');
+  await persistUser(ctx);
+  const user = await storage.getUser(ctx.from.id, config.limits.testLimitPerDay);
+  if (user?.testUsed) return ctx.reply(await getMessage('testLimitReached'));
+  const lockName = `test:${ctx.from.id}`;
+  const lockToken = await storage.acquireLock(lockName, 600);
+  if (!lockToken) return ctx.reply(await getMessage('testProcessingLock'));
+  let lockTransferredToFulfillment = false;
+  let orderIdValue = null;
+  try {
+    const refreshed = await storage.getUser(ctx.from.id, config.limits.testLimitPerDay);
+    if (refreshed?.testUsed) return ctx.reply(await getMessage('testLimitReached'));
+    const id = orderId();
+    orderIdValue = id;
+    const trafficBytes = Number(config.limits.testTrafficBytes ?? TEST_TRAFFIC_BYTES);
+    const durationDays = Number(config.limits.testDurationDays ?? TEST_DURATION_DAYS);
+    const hwidLimit = Number(config.limits.testHwidLimit ?? TEST_HWID_LIMIT);
+    const order = {
+      orderId: id, telegramUserId: ctx.from.id, telegramUsername: ctx.from.username || null,
+      firstName: ctx.from.firstName || ctx.from.first_name || null, lastName: ctx.from.lastName || ctx.from.last_name || null,
+      planId: 'test', planName: `اکانت تست — ${service.name}`, service: service.id, serviceName: service.name,
+      panelId: service.panelId || null, trafficLimitBytes: trafficBytes, durationDays, hwidLimit,
+      price: 0, currency: config.payment?.currency || 'تومان', requestedName: null,
+      generatedPasarguardUsername: null, pasarguardUserId: null, subscriptionUrl: null,
+      paymentStatus: 'NOT_REQUIRED', fulfillmentStatus: 'RECEIPT_SUBMITTED', deliveryStatus: null,
+      receiptFileId: null, receiptType: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    };
+    await storage.createOrder(order);
+    await ctx.reply(await getMessage('testProcessing', { service_name: service.name }));
+    await fulfillOrder(id, bot.telegram, { onSettled: () => storage.releaseLock(lockName, lockToken) });
+    lockTransferredToFulfillment = true;
+  } catch (error) {
+    log('TEST_FULFILLMENT_FAILED', { order_id: orderIdValue, telegram_user_id: ctx.from.id, service: service.id, error: error?.message || String(error) });
+    await ctx.reply(await getMessage('testFailure'));
+  } finally {
+    if (!lockTransferredToFulfillment) await storage.releaseLock(lockName, lockToken);
+  }
 }
 
 async function createRenewalOrderForSubscription(ctx, sourceOrder) { const id=orderId(); const order={orderId:id,telegramUserId:ctx.from.id,telegramUsername:ctx.from.username||null,firstName:ctx.from.first_name||null,lastName:ctx.from.last_name||null,planId:sourceOrder.planId||sourceOrder.orderId,planName:sourceOrder.planName||'اشتراک',service:sourceOrder.service||'tunnel',serviceName:sourceOrder.serviceName||null,trafficLimitBytes:Number(sourceOrder.trafficLimitBytes||sourceOrder.trafficBytes||0),durationDays:Number(sourceOrder.durationDays||1),hwidLimit:Number(sourceOrder.hwidLimit||0),price:Number(sourceOrder.price||0),currency:sourceOrder.currency||'تومان',requestedName:null,generatedPasarguardUsername:sourceOrder.generatedPasarguardUsername||null,pasarguardUserId:null,subscriptionUrl:null,paymentStatus:'WALLET_REQUIRED',fulfillmentStatus:'DRAFT',deliveryStatus:null,walletCharged:false,receiptFileId:null,receiptType:null,receiptTelegramMessageId:null,failureReason:null,renewal:true,renewalSourceOrderId:sourceOrder.orderId,panelId:sourceOrder.panelId||null,renewalPasarguardUserId:sourceOrder.pasarguardUserId||sourceOrder.renewalPasarguardUserId,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()}; if(!order.renewalPasarguardUserId)throw new Error('RENEWAL_TARGET_MISSING'); await storage.createOrder(order); return order; }
@@ -253,14 +288,14 @@ bot.on('callback_query',async(ctx)=>{
   const data=ctx.callbackQuery.data||'';await ctx.answerCbQuery().catch(()=>{});
   if(data.startsWith('menu_nav:')){const menuId=data.slice('menu_nav:'.length);const menu=await getPublishedMenu(menuId);if(!menu)return ctx.reply('❌ این منو پیدا نشد.');let message=await formatPublishedMenuText(menuId,ctx.from.id);if(message.includes('{debt}')){const user=await storage.getUser(ctx.from.id);const debt=Number(user?.debtAmount||0);message=message.replace(/\\{debt\\}/g,(Number.isFinite(debt)?debt:0).toLocaleString('en-US'));}const keyboard=await getMenuKeyboard(menuId);const options={...(keyboard||{}),parse_mode:'HTML'};try{return await ctx.editMessageText(message,options);}catch(error){if(/message is not modified/i.test(error?.message||''))return;return ctx.reply(message,options);}}
   if(data.startsWith('wallet_charge_')){const id=data.slice('wallet_charge_'.length);const order=await storage.getOrder(id);if(!order||String(order.telegramUserId)!==String(ctx.from.id))return ctx.reply('❌ سفارش پیدا نشد.');await storage.setState('user',ctx.from.id,{stage:'AWAITING_WALLET_AMOUNT',orderId:id,requiredAmount:Number(order.price||0),balance:await wallet.getBalance(ctx.from.id)});return ctx.reply('💳 مبلغ شارژ کیف پول را به تومان وارد کنید:');}
-  if(data.startsWith('wallet_approve_')){if(!isAdmin(ctx))return;const id=data.slice('wallet_approve_'.length);const topup=await storage.getOrder(id);if(!topup||topup.orderType!=='wallet_topup'||topup.paymentStatus!=='RECEIPT_SUBMITTED')return ctx.reply('❌ این درخواست قبلاً پردازش شده یا معتبر نیست.');await wallet.credit(topup.telegramUserId,Number(topup.topupAmount||0),{walletLastCredit:`topup:${id}`,walletLastCreditAt:new Date().toISOString()});await storage.updateOrder(id,{paymentStatus:'APPROVED',fulfillmentStatus:'WALLET_CREDITED',approvedAt:new Date().toISOString()});await ctx.reply(`✅ شارژ ${Number(topup.topupAmount||0).toLocaleString('en-US')} تومان تأیید شد.`);if(topup.linkedOrderId){const pending=await storage.getOrder(topup.linkedOrderId);if(pending)await activateWalletOrder(pending);}return;}
+  if(data.startsWith('wallet_approve_')){if(!isAdmin(ctx))return;const id=data.slice('wallet_approve_'.length);const lockName=`wallet-topup-approve:${id}`;const lockToken=await storage.acquireLock(lockName,60);if(!lockToken)return ctx.reply('⏳ این شارژ در حال پردازش است.');try{const topup=await storage.getOrder(id);if(!topup||topup.orderType!=='wallet_topup'||topup.paymentStatus!=='RECEIPT_SUBMITTED')return ctx.reply('❌ این درخواست قبلاً پردازش شده یا معتبر نیست.');const amount=Number(topup.topupAmount||0);if(!Number.isFinite(amount)||amount<=0)return ctx.reply('❌ مبلغ شارژ نامعتبر است.');await wallet.credit(topup.telegramUserId,amount,{walletLastCredit:`topup:${id}`,walletLastCreditAt:new Date().toISOString()});await storage.updateOrder(id,{paymentStatus:'APPROVED',fulfillmentStatus:'WALLET_CREDITED',approvedAt:new Date().toISOString()});await ctx.reply(`✅ شارژ ${amount.toLocaleString('en-US')} تومان تأیید شد.`);if(topup.linkedOrderId){const pending=await storage.getOrder(topup.linkedOrderId);if(pending)await activateWalletOrder(pending);}return;}finally{await storage.releaseLock(lockName,lockToken);}}
   if(data.startsWith('wallet_reject_')){if(!isAdmin(ctx))return;const id=data.slice('wallet_reject_'.length);const topup=await storage.getOrder(id);if(!topup||topup.orderType!=='wallet_topup'||topup.paymentStatus!=='RECEIPT_SUBMITTED')return ctx.reply('❌ این درخواست قبلاً پردازش شده یا معتبر نیست.');await storage.updateOrder(id,{paymentStatus:'REJECTED',fulfillmentStatus:'WALLET_TOPUP_REJECTED',rejectedAt:new Date().toISOString()});await bot.telegram.sendMessage(topup.telegramUserId,'❌ رسید شارژ کیف پول شما تأیید نشد. در صورت نیاز، دوباره تلاش کنید.').catch(()=>{});return ctx.reply('❌ درخواست شارژ رد شد.');}
   if(data.startsWith('account_page:')){const page=Number(data.slice('account_page:'.length));if(!Number.isInteger(page)||page<0)return;return sendAccountList(ctx,page,{edit:true});}
   if(data==='account_list')return sendAccountList(ctx,0);
   if(data.startsWith('account_remove_confirm:')) {
     const id = data.slice('account_remove_confirm:'.length);
     const lockName = `account-remove:${id}`;
-    if (!(await storage.acquireLock(lockName, 90))) return ctx.reply('⏳ حذف این اشتراک در حال پردازش است. کمی بعد دوباره بررسی کنید.');
+    const lockToken = await storage.acquireLock(lockName, 90); if (!lockToken) return ctx.reply('⏳ حذف این اشتراک در حال پردازش است. کمی بعد دوباره بررسی کنید.');
     try {
       const result = await accountService.removeSubscriptionFromAccount(ctx.from.id, id);
       await ctx.editMessageReplyMarkup({ inline_keyboard: [] }).catch(() => {});
@@ -273,7 +308,7 @@ bot.on('callback_query',async(ctx)=>{
       if (error.code === 'SUBSCRIPTION_NOT_FOUND') return ctx.reply('❌ این اشتراک پیدا نشد یا متعلق به حساب شما نیست.');
       return ctx.reply('❌ حذف از پنل کامل نشد. اشتراک در فهرست شما باقی مانده است تا بتوانید دوباره تلاش کنید.');
     } finally {
-      await storage.releaseLock(lockName).catch(() => {});
+      await storage.releaseLock(lockName, lockToken).catch(() => {});
     }
   }
   if(data.startsWith('account_remove:')) {

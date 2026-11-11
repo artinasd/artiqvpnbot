@@ -82,3 +82,16 @@ test('Node syntax checks all edited Group 4 JavaScript files', () => {
     execFileSync(process.execPath, ['-c', path.join(__dirname, '..', file)]);
   }
 });
+
+test('account_remove fallback uses real paragraph breaks, not double-escaped newlines', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const apiSource = fs.readFileSync(path.join(__dirname, '..', 'api', 'index.js'), 'utf8');
+  const handlerStart = apiSource.indexOf("if(data.startsWith('account_remove:'))");
+  assert.notEqual(handlerStart, -1, 'account_remove handler must exist');
+  const detailStart = apiSource.indexOf("if(data.startsWith('account_sub:')", handlerStart);
+  const handler = apiSource.slice(handlerStart, detailStart === -1 ? undefined : detailStart);
+  const fallbackMatch = handler.match(/const fallback = `([\\s\\S]*?)`;/);
+  assert.ok(fallbackMatch, 'account_remove fallback template must exist');
+  assert.doesNotMatch(fallbackMatch[1], /\\\\\\\\n/, 'fallback must not contain double-escaped newline sequences');
+});

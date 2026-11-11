@@ -262,6 +262,7 @@ test('listSubscriptions shows the original subscription but hides its renewal tr
 test('getSubscription requests reseller-specific plan pricing for the owning Telegram user', async () => {
   const originals = {
     getOrder: storage.getOrder,
+    updateOrder: storage.updateOrder,
     getById: panelRegistry.getById,
     getProvider: providers.getProvider,
     getPlan: planStore.get,
@@ -276,6 +277,7 @@ test('getSubscription requests reseller-specific plan pricing for the owning Tel
     fulfillmentStatus: 'FULFILLED',
   };
   storage.getOrder = async () => order;
+  storage.updateOrder = async (_id, patch) => ({ ...order, ...patch });
   panelRegistry.getById = async (id) => id === 'account-reseller-panel' ? ({ id, status: 'active' }) : null;
   providers.getProvider = (id) => {
     assert.equal(id, 'panel:account-reseller-panel');
@@ -291,6 +293,7 @@ test('getSubscription requests reseller-specific plan pricing for the owning Tel
     assert.equal(result.price, 27500);
   } finally {
     storage.getOrder = originals.getOrder;
+    storage.updateOrder = originals.updateOrder;
     panelRegistry.getById = originals.getById;
     providers.getProvider = originals.getProvider;
     planStore.get = originals.getPlan;

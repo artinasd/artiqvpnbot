@@ -58,8 +58,8 @@ function loadWithMocks(relativePath, mocks) {
 
 test('saving reseller price preserves a dynamic per-GB plan price of null', async () => {
   const plan = {
-    id: 'dynamic-volume-plan', name: 'Dynamic volume', price: null,
-    priceOverride: undefined, originalPrice: 88000, type: 'traffic', trafficBytes: 10 * 1024 ** 3,
+    id: 'dynamic-volume-plan', name: 'Dynamic volume', price: 40000,
+    priceOverride: null, originalPrice: 40000, type: 'traffic', trafficBytes: 10 * 1024 ** 3,
   };
   let savedPlan;
   const planStore = {

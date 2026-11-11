@@ -267,16 +267,23 @@ async function sendAccountList(ctx, requestedPage = 0, { edit = false } = {}) {
   if (totalPages > 1) message += `\n\nصفحه ${page + 1} از ${totalPages}`;
   // Build each subscription row directly. Do not delegate essential account navigation
   // to Menu Maker or presentation controls: every listed subscription must be clickable.
-  const rows = current.map((subscription) => [{
-    text: String(subscription.title || 'اشتراک').slice(0, 64),
-    callback_data: `account_sub:${subscription.id}`,
-  }, ...(screen.buttonControls?.subscription_renew?.enabled === false ? [] : [{
-    text: String(screen.renewLabel || '🔁').slice(0, 64),
-    callback_data: `account_renew:${subscription.id}`,
-  }]), ...(screen.buttonControls?.subscription_remove?.enabled === false ? [] : [{
-    text: String(screen.removeLabel || '❌').slice(0, 64),
-    callback_data: `account_remove:${subscription.id}`,
-  }])]);
+  const rows = current.flatMap((subscription) => {
+    const detailButton = {
+      text: String(subscription.title || 'اشتراک').slice(0, 64),
+      callback_data: `account_sub:${subscription.id}`,
+    };
+    const actionButtons = [
+      ...(screen.buttonControls?.subscription_renew?.enabled === false ? [] : [{
+        text: String(screen.renewLabel || '🔁').slice(0, 64),
+        callback_data: `account_renew:${subscription.id}`,
+      }]),
+      ...(screen.buttonControls?.subscription_remove?.enabled === false ? [] : [{
+        text: String(screen.removeLabel || '❌').slice(0, 64),
+        callback_data: `account_remove:${subscription.id}`,
+      }]),
+    ];
+    return [[detailButton], ...(actionButtons.length ? [actionButtons] : [])];
+  });
   if (totalPages > 1) {
     const navigation = [];
     if (page > 0) navigation.push({ text: '⬅️ قبلی', callback_data: `account_page:${page - 1}` });

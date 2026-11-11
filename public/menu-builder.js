@@ -298,7 +298,8 @@
           });
           if (id === 'account_list') {
             cfg.buttonRows = [
-              { id:'managed_row_subscription', roles:['subscription_detail','subscription_renew','subscription_remove'] },
+              { id:'managed_row_subscription', roles:['subscription_detail'] },
+              { id:'managed_row_subscription_actions', roles:['subscription_renew','subscription_remove'] },
               { id:'managed_row_home', roles:['home'] }
             ].map(function (row) { row.roles = row.roles.filter(function (roleId) { return roleDefs.some(function (role) { return role.id === roleId; }) && !(cfg.buttonControls[roleId] && cfg.buttonControls[roleId].enabled === false) && !(roleId === 'home' && cfg.homeButton === false); }); return row; }).filter(function (row) { return row.roles.length > 0; });
           }
@@ -553,7 +554,7 @@
         service_renew: { title: 'انتخاب سرویس برای تمدید', message: 'سرویس اشتراک خود را انتخاب کنید:', rows: [['🧩 سرویس اصلی'],['🎮 سرویس گیمینگ'],['🏠 منوی اصلی']] },
         plans_buy: { title: 'پلن‌های خرید', message: '{service}\n\n{prompt}', rows: [['📦 پلن ۱۰ گیگ — ۲۰۰٬۰۰۰ تومان'],['📦 پلن ۳۰ گیگ — ۵۰۰٬۰۰۰ تومان'],['🛠 ساخت بسته دلخواه'],['🏠 منوی اصلی']] },
         plans_renew: { title: 'پلن‌های تمدید', message: '{service}\n\n{prompt}', rows: [['🔄 پلن ۱۰ گیگ'],['🔄 پلن ۳۰ گیگ'],['🏠 منوی اصلی']] },
-        account_list: { title: 'حساب من', message: 'اشتراک موردنظر را انتخاب کنید:', rows: [['اشتراک من','🔁','❌'],['🏠 منوی اصلی']] },
+        account_list: { title: 'حساب من', message: 'اشتراک موردنظر را انتخاب کنید:', rows: [['اشتراک من'],['🔁','❌'],['🏠 منوی اصلی']] },
         account_detail: { title: 'جزئیات اشتراک', message: '📦 اشتراک ۱۰ گیگ\nوضعیت: فعال', rows: [['🔗 باز کردن لینک','📋 کپی لینک'],['🔄 تمدید اشتراک'],['⬅️ بازگشت به اشتراک‌ها'],['🏠 منوی اصلی']] },
         account_remove: { title: 'تأیید حذف اشتراک', message: 'آیا از حذف این اشتراک مطمئن هستید؟', rows: [['🗑️ بله، حذف اشتراک'],['↩️ انصراف']] },
         wallet: { title: 'کیف پول', message: 'موجودی فعلی: ۰ تومان\nمبلغ شارژ را وارد کنید.', rows: [['🏠 منوی اصلی']] },
@@ -587,7 +588,8 @@
       }
       if (state.previewScreen === 'account_list') {
         rows[0][0].label = String(cfg.detailLabel || '{title}').replace(/\{title\}/g, 'اشتراک من');
-        rows[0][1].label = cfg.renewLabel || '🔁'; rows[0][2].label = cfg.removeLabel || '❌';
+        rows[1][0].label = cfg.renewLabel || '🔁';
+        rows[1][1].label = cfg.removeLabel || '❌';
       }
       if (state.previewScreen === 'account_detail') {
         rows[0][0].label = cfg.openLabel || '🔗 باز کردن لینک'; rows[0][1].label = cfg.copyLabel || '📋 کپی لینک';

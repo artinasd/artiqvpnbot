@@ -78,7 +78,7 @@ test('account detail escapes HTML metacharacters in every dynamic field and pres
 test('Node syntax checks all edited Group 4 JavaScript files', () => {
   const { execFileSync } = require('node:child_process');
   const path = require('node:path');
-  for (const file of ['api/index.js', 'lib/account-ui.js', 'lib/bot-config.js', 'test/group4-ui.test.js']) {
+  for (const file of ['api/index.js', 'lib/account-ui.js', 'lib/bot-config.js', 'public/menu-builder.js', 'test/group4-ui.test.js']) {
     execFileSync(process.execPath, ['-c', path.join(__dirname, '..', file)]);
   }
 });

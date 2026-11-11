@@ -29,7 +29,8 @@ test('CMS memoization is request-scoped, deduplicates reads, and invalidates imm
   await storage.set('cms:plans', [{ id: 'before' }]);
   const bot = new Telegraf('123456:TEST_TOKEN');
   const observed = [];
-  bot.use(async (ctx) => {
+  bot.use(async (ctx, next) => {
+    if (ctx.from?.id !== 5001) return next();
     const first = await storage.get('cms:plans');
     const second = await storage.get('cms:plans');
     observed.push(first === second);

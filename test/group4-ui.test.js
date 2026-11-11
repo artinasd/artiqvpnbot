@@ -1,0 +1,76 @@
+process.env.UPSTASH_REDIS_REST_URL = '';
+process.env.UPSTASH_REDIS_REST_TOKEN = '';
+
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const { Markup } = require('telegraf');
+const storage = require('../lib/storage');
+const botConfig = require('../lib/bot-config');
+const accountUI = require('../lib/account-ui');
+
+async function publishMenus(menus) {
+  await storage.set('cms:menu-builder', { published: { menus } });
+}
+
+test('Menu Builder panel selectors resolve serviceId and legacy panelId for buy and test', async () => {
+  const buttons = [
+    { label: 'Buy serviceId', action: 'select_panel_buy', params: { serviceId: 'panel_abc' } },
+    { label: 'Test serviceId', action: 'select_panel_test', params: { serviceId: 'panel_abc' } },
+    { label: 'Buy legacy', action: 'select_panel_buy', params: { panelId: 'abc' } },
+    { label: 'Test legacy', action: 'select_panel_test', params: { panelId: 'abc' } },
+  ];
+  try {
+    await publishMenus([{ id: 'main', rows: [{ buttons }] }]);
+    const keyboard = await botConfig.getMenuKeyboard('main');
+    assert.deepEqual(keyboard.reply_markup.inline_keyboard.map((row) => row[0].callback_data), [
+      'service_buy_panel_abc',
+      'service_test_panel_abc',
+      'service_buy_panel_abc',
+      'service_test_panel_abc',
+    ]);
+    assert.ok(keyboard.reply_markup.inline_keyboard.every((row) => !row[0].__artiqGlass));
+  } finally {
+    await storage.del('cms:menu-builder');
+  }
+});
+
+test('inline keyboards are not globally modified; Menu Builder homeButton false/true is respected', async () => {
+  const admin = Markup.inlineKeyboard([[Markup.button.callback('Approve', 'wallet_approve_order')]]);
+  assert.deepEqual(admin.reply_markup.inline_keyboard, [[{ text: 'Approve', callback_data: 'wallet_approve_order' }]]);
+
+  try {
+    await publishMenus([
+      { id: 'main', rows: [{ buttons: [{ label: 'Custom', action: 'support' }] }] },
+      { id: 'no-home', homeButton: false, rows: [{ buttons: [{ label: 'Support', action: 'support' }] }] },
+      { id: 'with-home', rows: [{ buttons: [{ label: 'Support', action: 'support' }] }] },
+    ]);
+    const main = await botConfig.getMenuKeyboard('main');
+    const noHome = await botConfig.getMenuKeyboard('no-home');
+    const withHome = await botConfig.getMenuKeyboard('with-home');
+    assert.equal(main.reply_markup.inline_keyboard.flat().some((button) => button.callback_data === 'main_home'), false);
+    assert.equal(noHome.reply_markup.inline_keyboard.flat().some((button) => button.callback_data === 'main_home'), false);
+    assert.equal(withHome.reply_markup.inline_keyboard.flat().some((button) => button.callback_data === 'main_home'), true);
+  } finally {
+    await storage.del('cms:menu-builder');
+  }
+});
+
+test('account detail escapes HTML metacharacters in every dynamic field and preserves newlines', () => {
+  const message = accountUI.formatDetail({
+    planName: '<plan & name>',
+    service: 'svc <&>',
+    status: 'active <&>',
+    traffic: '10 <&> GB',
+    duration: '30 <&>',
+    expiresAt: '2030<&>',
+    canRenew: false,
+  });
+  assert.match(message, /&lt;plan &amp; name&gt;/);
+  assert.match(message, /svc &lt;&amp;&gt;/);
+  assert.match(message, /active &lt;&amp;&gt;/);
+  assert.match(message, /10 &lt;&amp;&gt; GB/);
+  assert.match(message, /30 &lt;&amp;&gt; روز/);
+  assert.match(message, /2030&lt;&amp;&gt;/);
+  assert.ok(message.includes('\n'));
+  assert.doesNotMatch(message, /<(?:plan|&)/);
+});

@@ -48,12 +48,14 @@ try {
 }
 
 function makeMessageUpdate(updateId, userId, text) {
+  const commandMatch = typeof text === 'string' && text.match(/^\/[a-zA-Z0-9_]+/);
   return {
     update_id: updateId,
     message: {
       message_id: updateId,
       date: 1,
       text,
+      ...(commandMatch ? { entities: [{ type: 'bot_command', offset: 0, length: commandMatch[0].length }] } : {}),
       chat: { id: userId, type: 'private' },
       from: { id: userId, is_bot: false, first_name: 'Tester' },
     },

@@ -330,7 +330,7 @@ bot.on('callback_query',async(ctx)=>{
     if (!order || String(order.telegramUserId) !== String(ctx.from.id) || order.accountRemovedAt || order.accountRemoved === true) return ctx.reply('❌ این اشتراک پیدا نشد یا قبلاً حذف شده است.');
     const username = order.generatedPasarguardUsername || order.username || order.pasarguardUsername || order.subscriptionUsername || 'این اشتراک';
     const screen = await getPublishedScreen('account_remove') || {};
-    const fallback = `⚠️ حذف اشتراک ${escapeHtml(username)}\n\nاین کار کاربر را از پنل PasarGuard حذف می‌کند و اشتراک را از فهرست حساب شما پنهان می‌کند. سابقه سفارش و پرداخت برای سوابق مالی حفظ می‌شود.\\n\\nآیا مطمئن هستید؟`;
+    const fallback = `⚠️ حذف اشتراک ${escapeHtml(username)}\n\nاین کار کاربر را از پنل PasarGuard حذف می‌کند و اشتراک را از فهرست حساب شما پنهان می‌کند. سابقه سفارش و پرداخت برای سوابق مالی حفظ می‌شود.\n\nآیا مطمئن هستید؟`;
     const message = await formatScreenMessage('account_remove', fallback, { title: escapeHtml(username), service: escapeHtml(order.service || '') });
     return ctx.reply(message, { parse_mode: 'HTML', reply_markup: { inline_keyboard: await arrangeScreenRows('account_remove', accountUI.removeConfirmationKeyboard(id, { ...screen, homeButton: false })) } });
   }

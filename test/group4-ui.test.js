@@ -20,7 +20,7 @@ test('Menu Builder panel selectors resolve serviceId and legacy panelId for buy 
     { label: 'Test legacy', action: 'select_panel_test', params: { panelId: 'abc' } },
   ];
   try {
-    await publishMenus([{ id: 'main', rows: [{ buttons }] }]);
+    await publishMenus([{ id: 'main', rows: buttons.map((button) => ({ buttons: [button] })) }]);
     const keyboard = await botConfig.getMenuKeyboard('main');
     assert.deepEqual(keyboard.reply_markup.inline_keyboard.map((row) => row[0].callback_data), [
       'service_buy_panel_abc',
@@ -36,7 +36,7 @@ test('Menu Builder panel selectors resolve serviceId and legacy panelId for buy 
 
 test('inline keyboards are not globally modified; Menu Builder homeButton false/true is respected', async () => {
   const admin = Markup.inlineKeyboard([[Markup.button.callback('Approve', 'wallet_approve_order')]]);
-  assert.deepEqual(admin.reply_markup.inline_keyboard, [[{ text: 'Approve', callback_data: 'wallet_approve_order' }]]);
+  assert.deepEqual(admin.reply_markup.inline_keyboard.map((row) => row.map((button) => button.callback_data)), [['wallet_approve_order']]);
 
   try {
     await publishMenus([

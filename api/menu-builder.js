@@ -1,8 +1,8 @@
+const { isAuthorizedAdmin, sendJson } = require('../lib/cms-auth');
 const storage = require('../lib/storage');
 const { getConfig } = require('../lib/bot-config');
 const { getConfiguredServicesWithPanels } = require('../lib/services');
 
-const PASSWORD = process.env.ADMIN_CMS_PASSWORD || '';
 const KEY = 'cms:menu-builder';
 const ACTIONS = Object.freeze({
   test_services: { label: 'نمایش سرویس‌های اکانت تست', params: [] },
@@ -46,13 +46,6 @@ const DEFAULT_DOCUMENT = {
     ],
   }],
 };
-function json(res, status, body) {
-  res.status(status).setHeader('Content-Type', 'application/json; charset=utf-8');
-  return res.end(JSON.stringify(body));
-}
-function authorized(req) {
-  return Boolean(PASSWORD) && req.headers['x-admin-password'] === PASSWORD;
-}
 function containsPanelSelection(document) {
   const actionIsPanelSelection = (item) => item && (item.action === 'select_panel_buy' || item.action === 'select_panel_test');
   if ((document.menus || []).some((menu) => (menu.rows || []).some((row) => (row.buttons || []).some(actionIsPanelSelection)))) return true;
@@ -211,45 +204,45 @@ function validateDocument(input, panelCatalog = null) {
   return { errors };
 }
 module.exports = async function menuBuilderApi(req, res) {
-  if (!authorized(req)) return json(res, 401, { error: 'UNAUTHORIZED' });
+  if (!isAuthorizedAdmin(req, process.env.ADMIN_CMS_PASSWORD)) return sendJson(res, 401, { error: 'UNAUTHORIZED' });
   try {
     const state = await storage.get(KEY) || { draft: clone(DEFAULT_DOCUMENT), published: null, history: [] };
     if (req.method === 'GET') {
       const botConfig = await getConfig();
       const panels = await getConfiguredServicesWithPanels(botConfig);
-      return json(res, 200, { actions: ACTIONS, draft: state.draft || clone(DEFAULT_DOCUMENT), published: state.published || null, history: (state.history || []).slice(0, 10), botTexts: botConfig.messages || {}, botButtons: botConfig.buttons || {}, panels: panels.map((panel) => ({ id: panel.id, panelId: String(panel.panelId), name: panel.name, testEnabled: panel.testEnabled !== false, purchaseEnabled: panel.purchaseEnabled !== false })) });
+      return sendJson(res, 200, { actions: ACTIONS, draft: state.draft || clone(DEFAULT_DOCUMENT), published: state.published || null, history: (state.history || []).slice(0, 10), botTexts: botConfig.messages || {}, botButtons: botConfig.buttons || {}, panels: panels.map((panel) => ({ id: panel.id, panelId: String(panel.panelId), name: panel.name, testEnabled: panel.testEnabled !== false, purchaseEnabled: panel.purchaseEnabled !== false })) });
     }
-    if (req.method !== 'POST') return json(res, 405, { error: 'METHOD_NOT_ALLOWED' });
+    if (req.method !== 'POST') return sendJson(res, 405, { error: 'METHOD_NOT_ALLOWED' });
     const body = req.body || {};
     if (body.action === 'save_draft') {
       const checked = await validateDocumentWithPanels(body.document);
-      if (checked.errors.length) return json(res, 400, { error: 'VALIDATION_FAILED', errors: checked.errors });
+      if (checked.errors.length) return sendJson(res, 400, { error: 'VALIDATION_FAILED', errors: checked.errors });
       state.draft = clone(body.document);
       state.draft.version = Number(state.draft.version || 1);
       await storage.set(KEY, state);
-      return json(res, 200, { ok: true, draft: state.draft });
+      return sendJson(res, 200, { ok: true, draft: state.draft });
     }
     if (body.action === 'publish') {
       const checked = await validateDocumentWithPanels(state.draft);
-      if (checked.errors.length) return json(res, 400, { error: 'VALIDATION_FAILED', errors: checked.errors });
+      if (checked.errors.length) return sendJson(res, 400, { error: 'VALIDATION_FAILED', errors: checked.errors });
       if (state.published) state.history = [{ ...clone(state.published), archivedAt: new Date().toISOString() }, ...(state.history || [])].slice(0, 10);
       const highestVersion = Math.max(Number(state.published?.version || 0), ...(state.history || []).map((item) => Number(item.version || 0)));
       state.published = { ...clone(state.draft), version: highestVersion + 1, publishedAt: new Date().toISOString() };
       await storage.set(KEY, state);
-      return json(res, 200, { ok: true, published: state.published });
+      return sendJson(res, 200, { ok: true, published: state.published });
     }
     if (body.action === 'rollback') {
       const targetVersion = Number(body.version);
       const previous = (state.history || []).find(item => Number(item.version) === targetVersion);
-      if (!previous) return json(res, 404, { error: 'VERSION_NOT_FOUND' });
+      if (!previous) return sendJson(res, 404, { error: 'VERSION_NOT_FOUND' });
       if (state.published) state.history = [{ ...clone(state.published), archivedAt: new Date().toISOString() }, ...(state.history || [])].slice(0, 10);
       state.published = { ...clone(previous), publishedAt: new Date().toISOString(), rolledBackFrom: targetVersion };
       delete state.published.archivedAt;
       await storage.set(KEY, state);
-      return json(res, 200, { ok: true, published: state.published });
+      return sendJson(res, 200, { ok: true, published: state.published });
     }
-    return json(res, 400, { error: 'UNKNOWN_ACTION' });
+    return sendJson(res, 400, { error: 'UNKNOWN_ACTION' });
   } catch (error) {
-    return json(res, 500, { error: error.message || 'INTERNAL_ERROR' });
+    return sendJson(res, 500, { error: error.message || 'INTERNAL_ERROR' });
   }
 };

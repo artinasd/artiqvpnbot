@@ -1,28 +1,18 @@
+const { isAuthorizedAdmin, sendJson } = require('../lib/cms-auth');
 const storage = require('../lib/storage');
 const panelRegistry = require('../lib/panel-registry');
-
-const PASSWORD = process.env.ADMIN_CMS_PASSWORD || '';
-
-function json(res, status, body) {
-  res.status(status).setHeader('Content-Type', 'application/json; charset=utf-8');
-  res.setHeader('Cache-Control', 'no-store, private');
-  return res.end(JSON.stringify(body));
-}
-
-function authorized(req) {
-  return Boolean(PASSWORD) && req.headers['x-admin-password'] === PASSWORD;
-}
 
 function clean(value) {
   return String(value == null ? '' : value).trim();
 }
 
 module.exports = async function handler(req, res) {
+  if (!isAuthorizedAdmin(req)) return sendJson(res, 401, { error: 'UNAUTHORIZED' });
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET');
-    return json(res, 405, { error: 'METHOD_NOT_ALLOWED' });
+    return sendJson(res, 405, { error: 'METHOD_NOT_ALLOWED' });
   }
-  if (!authorized(req)) return json(res, 401, { error: 'UNAUTHORIZED' });
+
 
   try {
     const [orders, plans, panels] = await Promise.all([
@@ -81,7 +71,7 @@ module.exports = async function handler(req, res) {
       active: plan.active !== false,
     }));
 
-    return json(res, 200, {
+    return sendJson(res, 200, {
       generatedAt: new Date().toISOString(),
       totals: {
         ordersScanned: orders.length,
@@ -94,6 +84,6 @@ module.exports = async function handler(req, res) {
     });
   } catch (error) {
     console.error(JSON.stringify({ event: 'LEGACY_PLAN_REPORT_FAILED', error: error?.message || String(error) }));
-    return json(res, 500, { error: 'REPORT_FAILED' });
+    return sendJson(res, 500, { error: 'REPORT_FAILED' });
   }
 };

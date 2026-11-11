@@ -1,5 +1,7 @@
 const { Telegraf, Markup } = require('telegraf');
-const { calculateCustomPrice, resolveCustomTrafficRate, resolveCustomOrderPrice, parseDurationDays, buildCustomPlan } = require('../lib/plans');
+const { secretsEqual } = require('../lib/cms-auth');
+const { escapeHtml } = require('../lib/html');
+const { calculateCustomPrice, resolveCustomTrafficRate, resolveCustomOrderPrice, parseDurationDays, buildCustomPlan, normalizeDigits } = require('../lib/plans');
 const planStore = require('../lib/plan-store');
 const { getConfiguredServiceWithPanels, serviceName, serviceLabel, serviceButtonsWithPanels } = require('../lib/services');
 const { normalizeSubscriptionName } = require('../lib/username');
@@ -33,29 +35,34 @@ const bot = new Telegraf(BOT_TOKEN || 'INVALID_TOKEN');
 // Apply Telegram HTML parsing consistently to every outgoing bot message that contains
 // actual Telegram-supported HTML tags, including CMS screens and custom submenu text.
 // Explicit parse_mode settings always win; plain text is left untouched.
-const nativeCallApi = bot.telegram.callApi.bind(bot.telegram);
 const telegramHtmlTag = /<\/?(?:b|strong|i|em|u|ins|s|strike|del|span|tg-spoiler|a|code|pre|blockquote|tg-emoji)(?:\s|>)/i;
-bot.telegram.callApi = function(method, payload = {}, ...args) {
-  const nextPayload = { ...payload };
-  if (!nextPayload.parse_mode) {
-    const text = ['sendMessage', 'editMessageText'].includes(method) ? nextPayload.text
-      : ['sendPhoto', 'sendDocument', 'sendVideo', 'sendAnimation', 'sendAudio', 'sendVoice', 'editMessageCaption'].includes(method) ? nextPayload.caption
-      : null;
-    if (typeof text === 'string' && telegramHtmlTag.test(text)) nextPayload.parse_mode = 'HTML';
-  }
-  return nativeCallApi(method, nextPayload, ...args);
-};
+function wrapTelegramHtmlCallApi(telegram) {
+  if (!telegram || telegram.__artiqHtmlWrapped) return telegram;
+  const nativeCallApi = telegram.callApi.bind(telegram);
+  telegram.callApi = function(method, payload = {}, ...args) {
+    const nextPayload = { ...payload };
+    if (!nextPayload.parse_mode) {
+      const text = ['sendMessage', 'editMessageText'].includes(method) ? nextPayload.text
+        : ['sendPhoto', 'sendDocument', 'sendVideo', 'sendAnimation', 'sendAudio', 'sendVoice', 'editMessageCaption'].includes(method) ? nextPayload.caption
+        : null;
+      if (typeof text === 'string' && telegramHtmlTag.test(text)) nextPayload.parse_mode = 'HTML';
+    }
+    return nativeCallApi(method, nextPayload, ...args);
+  };
+  telegram.__artiqHtmlWrapped = true;
+  return telegram;
+}
+wrapTelegramHtmlCallApi(bot.telegram);
 bot.use(requestContext.middleware);
+bot.use((ctx, next) => {
+  wrapTelegramHtmlCallApi(ctx.telegram);
+  return next();
+});
 bot.use(forceJoin.gateMiddleware);
 registerAdminMessaging(bot, { storage, isAdmin, log });
 
 function toPersianDigits(value) { return String(value).replace(/[0-9]/g, (digit) => '۰۱۲۳۴۵۶۷۸۹'[Number(digit)]); }
 
-function escapeHtml(value) {
-  return String(value ?? '')
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;').replace(/\"/g, '&quot;');
-}
 function isAdmin(ctx) { return String(ctx.from?.id) === ADMIN_ID; }
 function log(event, fields = {}) { console.log(JSON.stringify({ event, ...fields })); }
 function userSnapshot(ctx) { return { telegramUserId: ctx.from.id, username: ctx.from.username || null, firstName: ctx.from.first_name || null, lastName: ctx.from.last_name || null, updatedAt: new Date().toISOString() }; }
@@ -344,7 +351,25 @@ bot.hears(/.*/, async (ctx, next) => {
   return next();
 });
 
+async function startCustomPlanFlow(ctx, serviceId) {
+  const selectedServiceId = serviceId || 'tunnel';
+  if (serviceId !== undefined) {
+    const config = await getConfig();
+    const service = await getConfiguredServiceWithPanels(selectedServiceId, config);
+    if (!service) return ctx.reply(await getMessage('invalidService'));
+  }
+  const screen = await getPublishedScreen('plans_buy') || {};
+  const customSetting = screen.customPlanByService && screen.customPlanByService[selectedServiceId] || {};
+  if (screen.customPlanButton === false || customSetting.enabled === false) return ctx.reply('❌ ساخت بسته دلخواه برای این سرویس فعال نیست.');
+  const minTrafficGb = Number(customSetting.minTrafficGb ?? 1);
+  const maxTrafficGb = Number(customSetting.maxTrafficGb ?? 1000);
+  const maxDays = customSetting.maxDays == null ? null : Number(customSetting.maxDays);
+  await storage.setState('user', ctx.from.id, { stage: 'AWAITING_CUSTOM_TRAFFIC', service: selectedServiceId, minTrafficGb, maxTrafficGb, customMaxDays: maxDays });
+  return ctx.reply(`🛠 حجم مورد نیاز را به گیگابایت وارد کنید.\nحداقل: ${minTrafficGb} | حداکثر: ${maxTrafficGb} گیگابایت`);
+}
+
 bot.on('callback_query', async (ctx) => {
+  if (!ctx.from?.id || !ctx.callbackQuery) return;
   let data = ctx.callbackQuery.data || '';
   await ctx.answerCbQuery().catch(() => {});
   if (data === 'main_home') return sendMainMenu(ctx);
@@ -422,8 +447,8 @@ bot.on('callback_query', async (ctx) => {
   if(data.startsWith('service_buy_'))return sendPlanMenu(ctx,'buy',data.slice('service_buy_'.length));
   if(data.startsWith('service_renew_')){const user=await storage.getUser(ctx.from.id);if(!user?.currentPasarguardUserId)return ctx.reply('❌ اشتراک فعالی برای تمدید پیدا نشد.');return sendPlanMenu(ctx,'renew',data.slice('service_renew_'.length));}
   if(data.startsWith('select_plan_')){const plan=await planStore.get(data.slice('select_plan_'.length), ctx.from.id);if(!plan)return ctx.reply('❌ این پلن دیگر فعال نیست. لطفاً فهرست پلن‌ها را دوباره باز کنید.');const config=await getConfig();const panelRecord = plan.panelId ? ((await require('../lib/panel-registry').getById(plan.panelId)) || await require('../lib/master-panel-registry').getById(plan.panelId)) : null;const service=await getConfiguredServiceWithPanels(plan.panelId ? `${panelRecord?.type === 'master' ? 'master' : 'panel'}_${plan.panelId}` : plan.service,config);if(!service)return ctx.reply(await getMessage('invalidService'));const order=await createOrderForPlan(ctx,plan);await askSubscriptionName(ctx,order);return;}
-  if(data.startsWith('select_custom_')){const serviceId=data.slice('select_custom_'.length);const config=await getConfig();const service=await getConfiguredServiceWithPanels(serviceId,config);if(!service)return ctx.reply(await getMessage('invalidService'));const screen=await getPublishedScreen('plans_buy')||{};const customSetting=screen.customPlanByService&&screen.customPlanByService[serviceId]||{};if(screen.customPlanButton===false||customSetting.enabled===false)return ctx.reply('❌ ساخت بسته دلخواه برای این سرویس فعال نیست.');const minTrafficGb=Number(customSetting.minTrafficGb??1);const maxTrafficGb=Number(customSetting.maxTrafficGb??1000);const maxDays=customSetting.maxDays==null?null:Number(customSetting.maxDays);await storage.setState('user',ctx.from.id,{stage:'AWAITING_CUSTOM_TRAFFIC',service:serviceId,minTrafficGb,maxTrafficGb,customMaxDays:maxDays});return ctx.reply(`🛠 حجم مورد نیاز را به گیگابایت وارد کنید.\nحداقل: ${minTrafficGb} | حداکثر: ${maxTrafficGb} گیگابایت`);}
-  if(data==='select_custom'){const screen=await getPublishedScreen('plans_buy')||{};const customSetting=screen.customPlanByService&&screen.customPlanByService.tunnel||{};if(screen.customPlanButton===false||customSetting.enabled===false)return ctx.reply('❌ ساخت بسته دلخواه برای این سرویس فعال نیست.');const minTrafficGb=Number(customSetting.minTrafficGb??1);const maxTrafficGb=Number(customSetting.maxTrafficGb??1000);const maxDays=customSetting.maxDays==null?null:Number(customSetting.maxDays);await storage.setState('user',ctx.from.id,{stage:'AWAITING_CUSTOM_TRAFFIC',service:'tunnel',minTrafficGb,maxTrafficGb,customMaxDays:maxDays});return ctx.reply(`🛠 حجم مورد نیاز را به گیگابایت وارد کنید.\nحداقل: ${minTrafficGb} | حداکثر: ${maxTrafficGb} گیگابایت`);}
+  if(data.startsWith('select_custom_')) return startCustomPlanFlow(ctx, data.slice('select_custom_'.length));
+  if(data==='select_custom') return startCustomPlanFlow(ctx);
   if(data.startsWith('auto_name_')){const id=data.slice('auto_name_'.length);const state=await storage.getState('user',ctx.from.id);if(!state||state.orderId!==id||state.stage!=='AWAITING_SUBSCRIPTION_NAME')return;const order=await storage.getOrder(id);if(!order||order.telegramUserId!==ctx.from.id)return;await storage.updateOrder(id,{requestedName:null});return showWalletCheckout(ctx,{...order,requestedName:null});}
   if(data==='renew_choose'){const user=await storage.getUser(ctx.from.id);if(!user?.currentPasarguardUserId)return ctx.reply('❌ اشتراک فعالی برای تمدید پیدا نشد.');return sendServiceMenu(ctx,'renew');}
   if(data.startsWith('renew_plan_')){const plan=await planStore.get(data.slice('renew_plan_'.length), ctx.from.id);const user=await storage.getUser(ctx.from.id);if(!plan)return ctx.reply('❌ این پلن فعال نیست یا اشتراک شما پیدا نشد.');const config=await getConfig();const panelRecord = plan.panelId ? ((await require('../lib/panel-registry').getById(plan.panelId)) || await require('../lib/master-panel-registry').getById(plan.panelId)) : null;const service=await getConfiguredServiceWithPanels(plan.panelId ? `${panelRecord?.type === 'master' ? 'master' : 'panel'}_${plan.panelId}` : plan.service,config);if(!service)return ctx.reply(await getMessage('invalidService'));let renewalTarget=null;const targetPanel=plan.panelId?((await require('../lib/panel-registry').getById(plan.panelId))||await require('../lib/master-panel-registry').getById(plan.panelId)):null;if(plan.panelId){const orders=await storage.listUserOrders(ctx.from.id, 500);renewalTarget=orders.filter((item)=>Number(item.telegramUserId)===Number(ctx.from.id)&&(targetPanel?.type==='master'?String(item.masterPanelId||'')===String(plan.panelId):String(item.panelId||'')===String(plan.panelId))&&item.pasarguardUserId&&item.fulfillmentStatus==='FULFILLED'&&!item.renewal).sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||'')))[0]||null;if(!renewalTarget)return ctx.reply('❌ اشتراک فعالی در این پنل برای تمدید پیدا نشد. ابتدا از همین پنل خرید کنید یا از بخش حساب من اشتراک مربوطه را انتخاب کنید.');}else if(!user?.currentPasarguardUserId)return ctx.reply('❌ اشتراک فعالی برای تمدید پیدا نشد.');const order=await createOrderForPlan(ctx,plan);await storage.updateOrder(order.orderId,{renewal:true,renewalPasarguardUserId:targetPanel?.type==='master'?`master-user:${renewalTarget.orderId}`:(renewalTarget?renewalTarget.pasarguardUserId:user.currentPasarguardUserId),renewalSourceOrderId:renewalTarget?.orderId||null,masterPanelId:targetPanel?.type==='master'?targetPanel.id:undefined});return showWalletCheckout(ctx,order);}
@@ -431,10 +456,11 @@ bot.on('callback_query', async (ctx) => {
 });
 
 bot.on('message',async(ctx,next)=>{
+  if (!ctx.from?.id || !ctx.message) return next();
   await persistUser(ctx);const state=await storage.getState('user',ctx.from.id);if(!state)return next();
-  if(state.stage==='AWAITING_WALLET_AMOUNT'){const amount=Number(String(ctx.message.text||'').trim().replace(/[۰-۹]/g,d=>'۰۱۲۳۴۵۶۷۸۹'.indexOf(d)));const required=Number(state.requiredAmount||0);const minimum=state.orderId?Math.max(0,required-Number(state.balance||0)):1;if(!Number.isInteger(amount)||amount<1)return ctx.reply('❌ مبلغ نامعتبر است. یک عدد مثبت به تومان وارد کنید.');if(amount<minimum)return ctx.reply(`❌ این مبلغ کافی نیست. حداقل ${minimum.toLocaleString('en-US')} تومان لازم است.`);await createWalletTopup(ctx,amount,state.orderId||null);return;}
+  if(state.stage==='AWAITING_WALLET_AMOUNT'){const amount=Number(normalizeDigits(String(ctx.message.text||'').trim()));const required=Number(state.requiredAmount||0);const minimum=state.orderId?Math.max(0,required-Number(state.balance||0)):1;if(!Number.isInteger(amount)||amount<1)return ctx.reply('❌ مبلغ نامعتبر است. یک عدد مثبت به تومان وارد کنید.');if(amount<minimum)return ctx.reply(`❌ این مبلغ کافی نیست. حداقل ${minimum.toLocaleString('en-US')} تومان لازم است.`);await createWalletTopup(ctx,amount,state.orderId||null);return;}
   if(state.stage==='AWAITING_WALLET_RECEIPT'){if(!ctx.message.photo&&!ctx.message.document)return ctx.reply('❌ لطفاً تصویر رسید یا فایل رسید را ارسال کنید.');const topup=await storage.getOrder(state.topupOrderId);if(!topup||topup.telegramUserId!==ctx.from.id||topup.orderType!=='wallet_topup')return ctx.reply('❌ درخواست شارژ پیدا نشد.');if(topup.paymentStatus!=='AWAITING_PAYMENT')return;const receiptFileId=ctx.message.photo?ctx.message.photo[ctx.message.photo.length-1].file_id:ctx.message.document.file_id;const receiptType=ctx.message.photo?'photo':'document';const updated=await storage.updateOrder(topup.orderId,{receiptFileId,receiptType,receiptTelegramMessageId:ctx.message.message_id,paymentStatus:'RECEIPT_SUBMITTED',fulfillmentStatus:'WALLET_TOPUP_PENDING'});await storage.deleteState('user',ctx.from.id);const caption=`💳 <b>درخواست شارژ کیف پول</b>\n\nشناسه: <code>${escapeHtml(updated.orderId)}</code>\nکاربر: ${escapeHtml(updated.firstName||'')}\nشناسه تلگرام: <code>${updated.telegramUserId}</code>\nمبلغ: <b>${Number(updated.topupAmount).toLocaleString('en-US')} تومان</b>${updated.linkedOrderId?`\nسفارش مرتبط: <code>${escapeHtml(updated.linkedOrderId)}</code>`:''}`;const buttons=Markup.inlineKeyboard([[Markup.button.callback('✅ تأیید شارژ',`wallet_approve_${updated.orderId}`),Markup.button.callback('❌ رد شارژ',`wallet_reject_${updated.orderId}`)]]);try{if(receiptType==='photo')await bot.telegram.sendPhoto(ADMIN_ID,receiptFileId,{caption,parse_mode:'HTML',...buttons});else await bot.telegram.sendDocument(ADMIN_ID,receiptFileId,{caption,parse_mode:'HTML',...buttons});}catch(error){log('ADMIN_WALLET_NOTIFICATION_FAILED',{order_id:updated.orderId,error:error?.message||String(error)});}return ctx.reply('✅ رسید شارژ دریافت شد. پس از تأیید مدیر، کیف پول شارژ می‌شود و خرید شما خودکار ادامه پیدا می‌کند.');}
-  if(state.stage==='AWAITING_CUSTOM_TRAFFIC'){const traffic=Number(String(ctx.message.text||'').trim().replace(/[۰-۹]/g,d=>'۰۱۲۳۴۵۶۷۸۹'.indexOf(d)));const minTrafficGb=Number(state.minTrafficGb??1);const maxTrafficGb=Number(state.maxTrafficGb??1000);if(!Number.isInteger(traffic)||traffic<minTrafficGb||traffic>maxTrafficGb)return ctx.reply(`❌ حجم نامعتبر است. عددی بین ${minTrafficGb} تا ${maxTrafficGb} گیگابایت وارد کنید.`);const service=state.service||'tunnel';const user=await storage.getUser(ctx.from.id);const rates=await storage.get('cms:custom-reseller-rates')||{};const configPricing=(await getConfig());const panelId=String(service).startsWith('panel_')?String(service).slice('panel_'.length):null;const pricing=panelId?(configPricing.pricingByPanel?.[panelId]||configPricing.pricing||{normalPerGb:4000,resellerPerGb:null}):(configPricing.pricing||{});const serviceRate=rates[service]!==null&&rates[service]!==undefined&&Number.isFinite(Number(rates[service]))?Number(rates[service]):null;const panelResellerRate=pricing.resellerPerGb===null||pricing.resellerPerGb===undefined||pricing.resellerPerGb===''?null:Number(pricing.resellerPerGb);const globalResellerRate=panelId?panelResellerRate:(pricing.resellerPerGb===null||pricing.resellerPerGb===undefined||pricing.resellerPerGb===''?null:Number(pricing.resellerPerGb));const isReseller=user?.isReseller===true||user?.reseller===true;const customRate=isReseller?(serviceRate!==null?serviceRate:(globalResellerRate!==null&&Number.isFinite(globalResellerRate)?globalResellerRate:null)):null;const normalRate=Number(pricing.normalPerGb??4000);const discountPercent=traffic>=100?37.5:traffic>=75?20:traffic>=60?15:traffic>=50?10:0;const minimumRate=normalRate*0.625;const discountedRate=Math.max(minimumRate,Math.round(normalRate*(1-discountPercent/100)));const effectiveRate=resolveCustomTrafficRate({isReseller,customRate,normalRate,discountedRate});const price=traffic*effectiveRate;const maxDays=state.customMaxDays==null?(traffic>=50?60:150):Number(state.customMaxDays);await storage.setState('user',ctx.from.id,{stage:'AWAITING_CUSTOM_DURATION',traffic,price,customRate,service,customMaxDays:maxDays});const hasSpecialResellerRate=customRate!==null&&customRate!==undefined&&effectiveRate===Number(customRate)&&effectiveRate<=discountedRate;return ctx.reply(`✅ حجم ${traffic} گیگابایت ثبت شد.\n💳 قیمت: ${price.toLocaleString('en-US')} تومان${hasSpecialResellerRate?' (نرخ ویژه ریسلر)':''}\n\nمدت را به صورت «۳۰ روزه» یا «۱ ماهه» وارد کنید. حداکثر ${maxDays} روز.`);}
+  if(state.stage==='AWAITING_CUSTOM_TRAFFIC'){const traffic=Number(normalizeDigits(String(ctx.message.text||'').trim()));const minTrafficGb=Number(state.minTrafficGb??1);const maxTrafficGb=Number(state.maxTrafficGb??1000);if(!Number.isInteger(traffic)||traffic<minTrafficGb||traffic>maxTrafficGb)return ctx.reply(`❌ حجم نامعتبر است. عددی بین ${minTrafficGb} تا ${maxTrafficGb} گیگابایت وارد کنید.`);const service=state.service||'tunnel';const user=await storage.getUser(ctx.from.id);const rates=await storage.get('cms:custom-reseller-rates')||{};const configPricing=(await getConfig());const panelId=String(service).startsWith('panel_')?String(service).slice('panel_'.length):null;const pricing=panelId?(configPricing.pricingByPanel?.[panelId]||configPricing.pricing||{normalPerGb:4000,resellerPerGb:null}):(configPricing.pricing||{});const serviceRate=rates[service]!==null&&rates[service]!==undefined&&Number.isFinite(Number(rates[service]))?Number(rates[service]):null;const panelResellerRate=pricing.resellerPerGb===null||pricing.resellerPerGb===undefined||pricing.resellerPerGb===''?null:Number(pricing.resellerPerGb);const globalResellerRate=panelId?panelResellerRate:(pricing.resellerPerGb===null||pricing.resellerPerGb===undefined||pricing.resellerPerGb===''?null:Number(pricing.resellerPerGb));const isReseller=user?.isReseller===true||user?.reseller===true;const customRate=isReseller?(serviceRate!==null?serviceRate:(globalResellerRate!==null&&Number.isFinite(globalResellerRate)?globalResellerRate:null)):null;const normalRate=Number(pricing.normalPerGb??4000);const discountPercent=traffic>=100?37.5:traffic>=75?20:traffic>=60?15:traffic>=50?10:0;const minimumRate=normalRate*0.625;const discountedRate=Math.max(minimumRate,Math.round(normalRate*(1-discountPercent/100)));const effectiveRate=resolveCustomTrafficRate({isReseller,customRate,normalRate,discountedRate});const price=traffic*effectiveRate;const maxDays=state.customMaxDays==null?(traffic>=50?60:150):Number(state.customMaxDays);await storage.setState('user',ctx.from.id,{stage:'AWAITING_CUSTOM_DURATION',traffic,price,customRate,service,customMaxDays:maxDays});const hasSpecialResellerRate=customRate!==null&&customRate!==undefined&&effectiveRate===Number(customRate)&&effectiveRate<=discountedRate;return ctx.reply(`✅ حجم ${traffic} گیگابایت ثبت شد.\n💳 قیمت: ${price.toLocaleString('en-US')} تومان${hasSpecialResellerRate?' (نرخ ویژه ریسلر)':''}\n\nمدت را به صورت «۳۰ روزه» یا «۱ ماهه» وارد کنید. حداکثر ${maxDays} روز.`);}
   if(state.stage==='AWAITING_CUSTOM_DURATION'){const days=parseDurationDays(ctx.message.text);const maxDays=state.customMaxDays==null?(Number(state.traffic)>=50?60:150):Number(state.customMaxDays);if(!days||days<1||days>maxDays)return ctx.reply(`❌ مدت نامعتبر است. برای حجم ${Number(state.traffic)>=50?'۵۰ گیگابایت یا بیشتر':'کمتر از ۵۰ گیگابایت'}، مدت باید بین ۱ تا ${maxDays} روز باشد.`);const customService=await getConfiguredServiceWithPanels(state.service||'tunnel',await getConfig());if(!customService)return ctx.reply(await getMessage('invalidService'));const plan={...buildCustomPlan(state.traffic,days),service:customService.panelId?'tunnel':customService.id,panelId:customService.panelId||null,price:resolveCustomOrderPrice(state)};const order=await createOrderForPlan(ctx,plan);await askSubscriptionName(ctx,order);return;}
   if(state.stage==='AWAITING_SUBSCRIPTION_NAME'){if(!ctx.message.text)return ctx.reply('❌ لطفاً نام اشتراک را به صورت متن انگلیسی ارسال کنید یا «نام خودکار» را انتخاب کنید.');let name;try{name=normalizeSubscriptionName(ctx.message.text);}catch(error){const messages={USERNAME_ENGLISH_ONLY:'❌ نام اشتراک فقط باید با حروف انگلیسی باشد. حروف فارسی/عربی و ایموجی مجاز نیست.',USERNAME_NO_SPACES:'❌ نام اشتراک نباید فاصله داشته باشد.',USERNAME_INVALID_CHARACTERS:'❌ فقط حروف انگلیسی، اعداد، @ و _ مجاز هستند.',USERNAME_TOO_GENERIC:'❌ این نام برای اشتراک مناسب نیست. یک نام معنادار انگلیسی انتخاب کنید.'};return ctx.reply(messages[error.message]||'❌ نام اشتراک نامعتبر است.');}const order=await storage.getOrder(state.orderId);if(!order||order.telegramUserId!==ctx.from.id)return ctx.reply('❌ سفارش پیدا نشد. لطفاً دوباره از خرید شروع کنید.');const updated=await storage.updateOrder(order.orderId,{requestedName:name});return showWalletCheckout(ctx,updated);}
   if(state.stage==='AWAITING_RECEIPT'){return ctx.reply('❌ پرداخت مستقیم برای خرید اشتراک دیگر استفاده نمی‌شود. لطفاً کیف پول خود را شارژ کنید.');}
@@ -461,7 +487,8 @@ bot.command('users',async(ctx)=>{if(!isAdmin(ctx))return;const users=await stora
 
 module.exports=async(req,res)=>{
   if(req.method!=='POST')return res.status(200).send('ArtiQ VPN Bot is running.');
-  if(WEBHOOK_SECRET&&req.headers['x-telegram-bot-api-secret-token']!==WEBHOOK_SECRET)return res.status(403).send('Unauthorized');
+  if(WEBHOOK_SECRET&&!secretsEqual(WEBHOOK_SECRET,req.headers['x-telegram-bot-api-secret-token']))return res.status(403).send('Unauthorized');
+  if(!req.body||typeof req.body!=='object'||Array.isArray(req.body))return res.status(400).send('Invalid update payload');
   const startedAt=Date.now();
   const update=req.body||{};
   const callbackData=String(update.callback_query?.data||'');

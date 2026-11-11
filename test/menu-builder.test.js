@@ -17,6 +17,7 @@ function createMenuApi(panelCatalog = []) {
   const mod = { exports: {} };
   const runModule = new Function('require', 'module', 'process', source('api/menu-builder.js'));
   runModule((id) => {
+    if (id === '../lib/cms-auth') return require('../lib/cms-auth');
     if (id === '../lib/storage') return storage;
     if (id === '../lib/bot-config') return { getConfig: async () => ({}) };
     if (id === '../lib/services') return { getConfiguredServicesWithPanels: async () => panelCatalog };

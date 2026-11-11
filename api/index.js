@@ -1,5 +1,5 @@
 const { Telegraf, Markup } = require('telegraf');
-const { calculateCustomPrice, resolveCustomTrafficRate, parseDurationDays, buildCustomPlan } = require('../lib/plans');
+const { calculateCustomPrice, resolveCustomTrafficRate, resolveCustomOrderPrice, parseDurationDays, buildCustomPlan } = require('../lib/plans');
 const planStore = require('../lib/plan-store');
 const { getConfiguredServiceWithPanels, serviceName, serviceLabel, serviceButtonsWithPanels } = require('../lib/services');
 const { normalizeSubscriptionName } = require('../lib/username');

@@ -4,8 +4,21 @@ process.env.UPSTASH_REDIS_REST_TOKEN = '';
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { execFileSync } = require('node:child_process');
+const fs = require('node:fs');
+const path = require('node:path');
 const Module = require('node:module');
 const plans = require('../lib/plans');
+
+
+test('api/index.js imports resolveCustomOrderPrice and passes Node syntax validation', () => {
+  const apiPath = path.join(__dirname, '..', 'api', 'index.js');
+  const source = fs.readFileSync(apiPath, 'utf8');
+  const importLine = source.split('\\n').slice(0, 5).find((line) => (
+    line.includes('resolveCustomOrderPrice') && line.includes("require('../lib/plans')")
+  ));
+  assert.ok(importLine, 'api/index.js must import resolveCustomOrderPrice from ../lib/plans');
+  execFileSync(process.execPath, ['-c', apiPath], { stdio: 'pipe' });
+});
 
 test('configured resellers remain identified when daily test limits are disabled', () => {
   const script = `

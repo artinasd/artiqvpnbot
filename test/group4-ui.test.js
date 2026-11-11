@@ -74,3 +74,11 @@ test('account detail escapes HTML metacharacters in every dynamic field and pres
   assert.ok(message.includes('\n'));
   assert.doesNotMatch(message, /<(?:plan|&)/);
 });
+
+test('Node syntax checks all edited Group 4 JavaScript files', () => {
+  const { execFileSync } = require('node:child_process');
+  const path = require('node:path');
+  for (const file of ['api/index.js', 'lib/account-ui.js', 'lib/bot-config.js', 'test/group4-ui.test.js']) {
+    execFileSync(process.execPath, ['-c', path.join(__dirname, '..', file)]);
+  }
+});

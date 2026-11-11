@@ -245,7 +245,7 @@ async function showWalletPage(ctx) {
 }
 
 
-const ACCOUNT_SUBSCRIPTIONS_PER_PAGE = 20;
+const ACCOUNT_SUBSCRIPTIONS_PER_PAGE = 8;
 async function sendAccountList(ctx, requestedPage = 0, { edit = false } = {}) {
   const subscriptions = await accountUI.listForUser(ctx.from.id);
   const screen = await getPublishedScreen('account_list') || {};
@@ -267,7 +267,7 @@ async function sendAccountList(ctx, requestedPage = 0, { edit = false } = {}) {
   if (totalPages > 1) message += `\n\nصفحه ${page + 1} از ${totalPages}`;
   // Build each subscription row directly. Do not delegate essential account navigation
   // to Menu Maker or presentation controls: every listed subscription must be clickable.
-  const rows = current.flatMap((subscription) => {
+  const rows = current.flatMap((subscription, index) => {
     const detailButton = {
       text: String(subscription.title || 'اشتراک').slice(0, 64),
       callback_data: `account_sub:${subscription.id}`,
@@ -282,7 +282,11 @@ async function sendAccountList(ctx, requestedPage = 0, { edit = false } = {}) {
         callback_data: `account_remove:${subscription.id}`,
       }]),
     ];
-    return [[detailButton], ...(actionButtons.length ? [actionButtons] : [])];
+    return [
+      ...(index > 0 ? [[{ text: '┄┄┄┄┄┄┄┄┄┄', callback_data: 'account_divider' }]] : []),
+      [detailButton],
+      ...(actionButtons.length ? [actionButtons] : []),
+    ];
   });
   if (totalPages > 1) {
     const navigation = [];
@@ -306,6 +310,7 @@ bot.hears('🎁 دریافت اکانت تست',async(ctx)=>{await sendServiceMe
 
 bot.on('callback_query',async(ctx)=>{
   const data=ctx.callbackQuery.data||'';await ctx.answerCbQuery().catch(()=>{});
+  if(data==='account_divider')return;
   if(data.startsWith('menu_nav:')){const menuId=data.slice('menu_nav:'.length);const menu=await getPublishedMenu(menuId);if(!menu)return ctx.reply('❌ این منو پیدا نشد.');let message=await formatPublishedMenuText(menuId,ctx.from.id);if(message.includes('{debt}')){const user=await storage.getUser(ctx.from.id);const debt=Number(user?.debtAmount||0);message=message.replace(/\\{debt\\}/g,(Number.isFinite(debt)?debt:0).toLocaleString('en-US'));}const keyboard=await getMenuKeyboard(menuId);const options={...(keyboard||{}),parse_mode:'HTML'};try{return await ctx.editMessageText(message,options);}catch(error){if(/message is not modified/i.test(error?.message||''))return;return ctx.reply(message,options);}}
   if(data.startsWith('wallet_charge_')){const id=data.slice('wallet_charge_'.length);const order=await storage.getOrder(id);if(!order||String(order.telegramUserId)!==String(ctx.from.id))return ctx.reply('❌ سفارش پیدا نشد.');await storage.setState('user',ctx.from.id,{stage:'AWAITING_WALLET_AMOUNT',orderId:id,requiredAmount:Number(order.price||0),balance:await wallet.getBalance(ctx.from.id)});return ctx.reply('💳 مبلغ شارژ کیف پول را به تومان وارد کنید:');}
   if(data.startsWith('wallet_approve_')){if(!isAdmin(ctx))return;const id=data.slice('wallet_approve_'.length);const lockName=`wallet-topup-approve:${id}`;const lockToken=await storage.acquireLock(lockName,60);if(!lockToken)return ctx.reply('⏳ این شارژ در حال پردازش است.');try{const topup=await storage.getOrder(id);if(!topup||topup.orderType!=='wallet_topup'||topup.paymentStatus!=='RECEIPT_SUBMITTED')return ctx.reply('❌ این درخواست قبلاً پردازش شده یا معتبر نیست.');const amount=Number(topup.topupAmount||0);if(!Number.isFinite(amount)||amount<=0)return ctx.reply('❌ مبلغ شارژ نامعتبر است.');await wallet.credit(topup.telegramUserId,amount,{walletLastCredit:`topup:${id}`,walletLastCreditAt:new Date().toISOString()});await storage.updateOrder(id,{paymentStatus:'APPROVED',fulfillmentStatus:'WALLET_CREDITED',approvedAt:new Date().toISOString()});await ctx.reply(`✅ شارژ ${amount.toLocaleString('en-US')} تومان تأیید شد.`);if(topup.linkedOrderId){const pending=await storage.getOrder(topup.linkedOrderId);if(pending)await activateWalletOrder(pending);}return;}finally{await storage.releaseLock(lockName,lockToken);}}

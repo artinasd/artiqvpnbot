@@ -137,7 +137,7 @@ test('legacy subscription is lazily mapped when exactly one CMS panel has its se
     return { ...order, ...patch };
   };
   planStore.listAll = async () => [{ id: 'new-plan-id', panelId: 'current-tunnel-panel', service: 'tunnel2', name: 'New 10 GB' }];
-  panelRegistry.getById = async (id) => ({ id, status: 'active' });
+  panelRegistry.getById = async (id) => id === 'current-tunnel-panel' ? ({ id, status: 'active' }) : null;
   providers.getProvider = (id) => { requestedProvider = id; return client; };
   try {
     const result = await accountService.removeSubscriptionFromAccount(12345, 'legacy-map');
@@ -174,7 +174,7 @@ test('legacy subscription maps by exact globally unique plan ID even if service 
   storage.getOrder = async () => order;
   storage.updateOrder = async (id, value) => { assert.equal(id, order.orderId); patch = value; return { ...order, ...value }; };
   planStore.listAll = async () => [{ id: 'stable-plan-id', panelId: 'current-panel', service: 'tunnel' }];
-  panelRegistry.getById = async (id) => ({ id, status: 'active' });
+  panelRegistry.getById = async (id) => id === 'current-panel' ? ({ id, status: 'active' }) : null;
   try {
     const mapped = await accountService.resolveOrderPanel(order);
     assert.equal(mapped.panelId, 'current-panel');
@@ -206,7 +206,7 @@ test('legacy subscription is not mapped when multiple CMS panels match its servi
     { id: 'plan-a', panelId: 'panel-a', service: 'tunnel2' },
     { id: 'plan-b', panelId: 'panel-b', service: 'tunnel2' },
   ];
-  panelRegistry.getById = async () => { throw new Error('ambiguous mapping must not query a panel'); };
+  panelRegistry.getById = async () => null;
   providers.getProvider = () => { throw new Error('ambiguous mapping must not contact a panel'); };
   try {
     await assert.rejects(
@@ -256,5 +256,74 @@ test('listSubscriptions shows the original subscription but hides its renewal tr
     assert.deepEqual(result.map((order) => order.orderId), ['original-purchase']);
   } finally {
     storage.listUserOrders = originalListUserOrders;
+  }
+});
+
+test('getSubscription requests reseller-specific plan pricing for the owning Telegram user', async () => {
+  const originals = {
+    getOrder: storage.getOrder,
+    getById: panelRegistry.getById,
+    getProvider: providers.getProvider,
+    getPlan: planStore.get,
+  };
+  const order = {
+    orderId: 'reseller-price-detail',
+    telegramUserId: 12345,
+    planId: 'stable-plan-id',
+    panelId: 'account-reseller-panel',
+    fulfillmentProvider: 'panel:account-reseller-panel',
+    pasarguardUserId: 'pg-reseller-user',
+    fulfillmentStatus: 'FULFILLED',
+  };
+  storage.getOrder = async () => order;
+  panelRegistry.getById = async (id) => id === 'account-reseller-panel' ? ({ id, status: 'active' }) : null;
+  providers.getProvider = (id) => {
+    assert.equal(id, 'panel:account-reseller-panel');
+    return { getUserById: async (userId) => ({ id: userId }) };
+  };
+  planStore.get = async (id, telegramUserId) => {
+    assert.equal(id, 'stable-plan-id');
+    assert.equal(telegramUserId, 12345);
+    return { price: 27500 };
+  };
+  try {
+    const result = await accountService.getSubscription(12345, order.orderId);
+    assert.equal(result.price, 27500);
+  } finally {
+    storage.getOrder = originals.getOrder;
+    panelRegistry.getById = originals.getById;
+    providers.getProvider = originals.getProvider;
+    planStore.get = originals.getPlan;
+  }
+});
+
+test('legacy provider IDs still map to their real registered historical panel', async () => {
+  const originals = {
+    listAll: planStore.listAll,
+    getById: panelRegistry.getById,
+    updateOrder: storage.updateOrder,
+  };
+  const legacyPanelId = '6d890f87-db21-4b02-ad34-728629587097';
+  let persistedPatch;
+  planStore.listAll = async () => [];
+  panelRegistry.getById = async (id) => id === legacyPanelId ? ({ id, status: 'active' }) : null;
+  storage.updateOrder = async (_id, patch) => { persistedPatch = patch; return patch; };
+  const order = {
+    orderId: 'legacy-provider-panel-map',
+    telegramUserId: 12345,
+    provider: 'pasarguard-tunnel2',
+    planId: 'custom_99g_30d',
+    service: 'tunnel2',
+    pasarguardUserId: 'historical-user',
+  };
+  try {
+    const resolved = await accountService.resolveOrderPanel(order);
+    assert.equal(resolved.panelId, legacyPanelId);
+    assert.equal(persistedPatch.panelId, legacyPanelId);
+    assert.equal(persistedPatch.fulfillmentProvider, `panel:${legacyPanelId}`);
+  } finally {
+    planStore.listAll = originals.listAll;
+    panelRegistry.getById = originals.getById;
+    storage.updateOrder = originals.updateOrder;
   }
 });

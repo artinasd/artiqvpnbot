@@ -44,6 +44,22 @@ test('reseller custom traffic rate never exceeds ordinary volume-discounted rate
   }), 2500);
 });
 
+
+test('custom reseller order preserves the discounted price quoted before duration selection', () => {
+  const customRate = 3200;
+  const normalRate = 4000;
+  const discountedRate = 2500;
+  const effectiveRate = plans.resolveCustomTrafficRate({
+    isReseller: true, customRate, normalRate, discountedRate,
+  });
+  const state = { traffic: 100, customRate, price: 100 * effectiveRate };
+  const finalPlanPrice = plans.resolveCustomOrderPrice(state);
+
+  assert.equal(state.price, 250000);
+  assert.equal(finalPlanPrice, 250000);
+  assert.notEqual(finalPlanPrice, 100 * customRate);
+});
+
 function loadWithMocks(relativePath, mocks) {
   const filename = require.resolve(relativePath);
   delete require.cache[filename];

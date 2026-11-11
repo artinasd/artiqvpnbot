@@ -16,3 +16,9 @@ jobs:
           node-version: 20
       - run: npm install
       - run: npm test
+        env:
+          UPSTASH_REDIS_REST_URL: ''
+          UPSTASH_REDIS_REST_TOKEN: ''
+          BOT_TOKEN: '123456:CI_TEST_TOKEN'
+          ADMIN_ID: '999999999'
+          WEBHOOK_SECRET: 'ci-test-secret'

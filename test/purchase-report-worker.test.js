@@ -1,3 +1,5 @@
+process.env.UPSTASH_REDIS_REST_URL = '';
+process.env.UPSTASH_REDIS_REST_TOKEN = '';
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const storage = require('../lib/storage');
@@ -30,20 +32,21 @@ test('admin delivery failure does not block reseller delivery and is scheduled f
   const id = `worker-isolation-${Date.now()}`;
   await enqueuePurchaseReport(order(id), { adminTelegramId: '3003', resellerTelegramId: '4004' });
   const sent = [];
+  const workerNow = Date.now() + 1000;
   const result = await processPendingPurchaseReports({
     async sendMessage(chatId) {
       sent.push(String(chatId));
       if (String(chatId) === '3003') throw new Error('admin unavailable');
       return { message_id: 1 };
     },
-  }, { limit: 100, now: '2026-10-31T10:00:00.000Z' });
+  }, { limit: 100, now: new Date(workerNow).toISOString() });
   const event = await storage.getPurchaseReportEvent(`purchase:${id}:v1`);
   assert.equal(result.failed, 1);
   assert.equal(result.sent, 1);
   assert.deepEqual(sent.sort(), ['3003', '4004']);
   assert.equal(event.recipients.admin.status, 'PENDING');
   assert.equal(event.recipients.admin.attempts, 1);
-  assert.ok(event.recipients.admin.nextAttemptAt);
+  assert.equal(event.recipients.admin.nextAttemptAt, new Date(workerNow + 60000).toISOString());
   assert.equal(event.recipients.reseller.status, 'SENT');
 });
 

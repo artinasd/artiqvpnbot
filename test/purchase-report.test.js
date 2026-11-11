@@ -1,3 +1,5 @@
+process.env.UPSTASH_REDIS_REST_URL = '';
+process.env.UPSTASH_REDIS_REST_TOKEN = '';
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { isResellerCustomer, computeResellerStats, createPurchaseReportEvent, formatPurchaseReport } = require('../lib/purchase-report');

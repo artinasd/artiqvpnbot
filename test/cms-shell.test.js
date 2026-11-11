@@ -1,3 +1,5 @@
+process.env.UPSTASH_REDIS_REST_URL = '';
+process.env.UPSTASH_REDIS_REST_TOKEN = '';
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -17,7 +19,7 @@ test('CMS presentation scripts have valid JavaScript syntax', () => {
 
 test('professional shell loads after existing CMS feature modules', () => {
   const loader = source('public/admin-cms.js');
-  assert.match(loader, /load\('\/panels-cms\.js',function\(\)\{load\('\/admin-shell\.js'\);\}\)/);
+  assert.match(loader, /load\('\/panels-cms\.js',function\(\)\{load\('\/menu-builder\.js',function\(\)\{var style=document\.createElement\('link'\);style\.rel='stylesheet';style\.href='\/menu-builder\.css';document\.head\.appendChild\(style\);load\('\/admin-shell\.js'\);\}\);\}\)/);
   assert.ok(fs.existsSync(path.join(root, 'public/admin-shell.css')));
   assert.match(source('api/admin.js'), /id=\\?"cms-shell-styles\\?"/);
 });

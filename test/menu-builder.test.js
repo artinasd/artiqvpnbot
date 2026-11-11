@@ -1,3 +1,5 @@
+process.env.UPSTASH_REDIS_REST_URL = '';
+process.env.UPSTASH_REDIS_REST_TOKEN = '';
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -128,12 +130,12 @@ test('published runtime routes registered actions and rejects missing submenu ta
   }
   assert.match(runtime, /getPublishedMenu/);
   assert.match(runtime, /menu_nav:/);
-  assert.match(runtime, /if \(data\.startsWith\('menu_nav:'\)\)/);
-  assert.match(runtime, /if \(!targetMenu \|\| !targetKeyboard\)/);
+  assert.match(index, /if \(data\.startsWith\('menu_nav:'\)\)/);
+  assert.match(index, /if \(!targetMenu \|\| !targetKeyboard\)/);
   assert.match(runtime, /rendered\.style = style/);
   assert.match(api, /Unsupported Telegram button style for button/);
-  assert.match(source('public/menu-builder.js'), /رنگ بومی دکمه در تلگرام/);
-  assert.match(source('public/menu-builder.js'), /style: button\.style \|\| 'default'/);
+  assert.match(source('public/menu-builder.js'), /رنگ دکمه در تلگرام/);
+  assert.match(source('public/menu-builder.js'), /style: button\.style \|\| 'glass'/);
   assert.match(index, /getMenuKeyboard\('main'\)/);
   assert.match(runtime, /arrangeScreenRows/);
   assert.match(runtime, /getScreenExtraRows/);
@@ -145,9 +147,11 @@ test('published runtime routes registered actions and rejects missing submenu ta
   assert.match(runtime, /formatScreenMessage/);
   assert.match(index, /plans_buy/);
   assert.match(index, /account_detail/);
-  assert.match(runtime, /accountUI\.subscriptionKeyboard\(current, \{/);
-  assert.match(runtime, /arrangeScreenRows\('account_list', generatedRows\)/);
+  assert.match(index, /accountUI\.subscriptionKeyboard\(current, \{/);
+  assert.match(index, /arrangeScreenRows\('account_list',/);
+  assert.match(index, /const rows = \[\.\.\.generatedRows, \.\.\.extraRows\];/);
   assert.doesNotMatch(runtime, /const rows = current\.map\(\(subscription\) => \[\{/);
+  assert.doesNotMatch(index, /const rows = current\.map\(\(subscription\) => \[\{/);
 
   assert.match(source('lib/account-ui.js'), /options\.confirmLabel/);
   assert.match(source('public/menu-builder.js'), /تنظیمات منوهای پویا/);

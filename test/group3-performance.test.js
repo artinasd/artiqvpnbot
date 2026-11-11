@@ -28,6 +28,7 @@ test('storage.mget preserves key order and in-memory expiration behavior', async
 test('CMS memoization is request-scoped, deduplicates reads, and invalidates immediately on set/del', async () => {
   await storage.set('cms:plans', [{ id: 'before' }]);
   const bot = new Telegraf('123456:TEST_TOKEN');
+  bot.botInfo = { id: 123456, is_bot: true, first_name: 'Test', username: 'test_bot' };
   const observed = [];
   bot.use(async (ctx, next) => {
     if (ctx.from?.id !== 5001) return next();

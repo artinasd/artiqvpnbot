@@ -101,9 +101,33 @@ test('account list keyboard paginates without exceeding Telegram button limits',
   assert.equal(rows[0].length, 1);
   assert.equal(rows[1].length, 2);
   assert.deepEqual(rows[2].map((button) => button.callback_data), ['account_divider']);
-  assert.equal(rows[rows.length - 3][0].callback_data, 'account_remove:order-7');
+  assert.deepEqual(rows[rows.length - 3].map((button) => button.callback_data), ['account_renew:order-7', 'account_remove:order-7']);
   assert.deepEqual(rows[rows.length - 2].map((button) => button.callback_data), ['account_page:1']);
   assert.equal(rows.at(-1)[0].callback_data, 'main_home');
   const lastPage = accountUI.subscriptionKeyboard([{ id: 'last', title: 'last_user' }], { pagination: { page: 2, totalPages: 3 } });
   assert.deepEqual(lastPage[lastPage.length - 2].map((button) => button.callback_data), ['account_page:1']);
+});
+
+test('account list keyboard applies CMS button styles and label templates to every configured role', () => {
+  const rows = accountUI.subscriptionKeyboard(
+    [{ id: 'order-1', title: 'customer_name' }],
+    {
+      buttonControls: {
+        subscription_detail: { style: 'primary', label: 'Details: {label}' },
+        subscription_renew: { style: 'success', label: 'Renew {label}' },
+        subscription_remove: { style: 'danger', label: 'Remove {label}' },
+        home: { style: 'glass', label: 'Home {label}' },
+      },
+    }
+  );
+
+  assert.deepEqual(rows[0][0], {
+    text: 'Details: customer_name',
+    callback_data: 'account_sub:order-1',
+    style: 'primary',
+  });
+  assert.deepEqual(rows[1].map((button) => button.text), ['Renew 🔁', 'Remove ❌']);
+  assert.deepEqual(rows[1].map((button) => button.style), ['success', 'danger']);
+  assert.equal(rows[2][0].text, 'Home 🏠 منوی اصلی');
+  assert.equal(Object.hasOwn(rows[2][0], 'style'), false);
 });

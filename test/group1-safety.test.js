@@ -154,15 +154,17 @@ test('admin active-user status updates preserve wallet and test usage fields', a
     process.env.ADMIN_CMS_PASSWORD = 'group1-test-password';
     process.env.BOT_TOKEN = 'mock-token';
     const handler = loadWithMocks('../api/admin-active-users.js', {
-      telegraf: class MockTelegraf {
-        constructor() {
-          this.telegram = { getChat: async () => {
-            await wallet.credit(id, 11, { walletLastTransaction: `active-chat:${id}` });
-            const error = new Error('chat not found');
-            error.response = { error_code: 400, description: 'chat not found' };
-            throw error;
-          } };
-        }
+      telegraf: {
+        Telegraf: class MockTelegraf {
+          constructor() {
+            this.telegram = { getChat: async () => {
+              await wallet.credit(id, 11, { walletLastTransaction: `active-chat:${id}` });
+              const error = new Error('chat not found');
+              error.response = { error_code: 400, description: 'chat not found' };
+              throw error;
+            } };
+          }
+        },
       },
     });
     const res = mockResponse();
@@ -176,6 +178,7 @@ test('admin active-user status updates preserve wallet and test usage fields', a
   } finally {
     storage.listBotUsers = original.list;
     storage.saveUser = original.save;
+    delete require.cache[require.resolve('../api/admin-active-users.js')];
     delete process.env.ADMIN_CMS_PASSWORD;
     delete process.env.BOT_TOKEN;
   }
@@ -220,6 +223,7 @@ test('admin reseller and brand patch updates preserve concurrent wallet changes'
     assert.equal((await storage.getUserRaw(brandId)).brandName, 'New Brand');
   } finally {
     storage.saveUser = originalSave;
+    delete require.cache[require.resolve('../api/admin-resellers.js')];
     delete process.env.ADMIN_CMS_PASSWORD;
   }
 });

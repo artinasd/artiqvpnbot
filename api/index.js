@@ -6,11 +6,13 @@ const { normalizeSubscriptionName } = require('../lib/username');
 const storage = require('../lib/storage');
 const wallet = require('../lib/wallet');
 const { orderId, fulfillOrder, renewOrder, formatBytes } = require('../lib/fulfillment');
-const { getConfig, getMessage, getMenuKeyboard, getPublishedMenu, formatPublishedMenuText, getPublishedScreen, getScreenExtraRows, arrangeScreenRows, formatScreenMessage } = require('../lib/bot-config');
+const { getConfig, getMessage, getMenuKeyboard, getPublishedMenu, formatPublishedMenuText, getPublishedScreen, getScreenExtraRows, arrangeScreenRows, formatScreenMessage, buildDefaultMainMenuKeyboard } = require('../lib/bot-config');
 const { getProvider } = require('../lib/providers');
 const accountService = require('../lib/account-service');
 const accountUI = require('../lib/account-ui');
 const { registerAdminMessaging } = require('../lib/admin-messaging');
+const forceJoin = require('../lib/force-join');
+const requestContext = require('../lib/request-context');
 const userReport = require('../lib/user-report');
 const purchaseReport = require('../lib/purchase-report');
 
@@ -43,6 +45,8 @@ bot.telegram.callApi = function(method, payload = {}, ...args) {
   }
   return nativeCallApi(method, nextPayload, ...args);
 };
+bot.use(requestContext.middleware);
+bot.use(forceJoin.gateMiddleware);
 registerAdminMessaging(bot, { storage, isAdmin, log });
 
 function toPersianDigits(value) { return String(value).replace(/[0-9]/g, (digit) => '۰۱۲۳۴۵۶۷۸۹'[Number(digit)]); }
@@ -155,6 +159,29 @@ async function activateWalletOrder(order) {
   } finally { await storage.releaseLock(lock, lockToken); }
 }
 
+async function defaultScreenHomeRows(screenId) {
+  const screen = await getPublishedScreen(screenId) || {};
+  const hasConfiguredHome = (screen.buttons || []).some((button) => button.action === 'back_home');
+  return screen.homeButton !== false && !hasConfiguredHome ? [[Markup.button.callback('🏠 منوی اصلی', 'main_home')]] : [];
+}
+async function sendMainMenu(ctx) {
+  const config = await getConfig();
+  const mainMenu = await getPublishedMenu('main');
+  const message = mainMenu?.text ? await formatPublishedMenuText('main', ctx.from.id) : await getMessage('start');
+  const configuredKeyboard = await getMenuKeyboard('main');
+  return ctx.reply(message, { ...(configuredKeyboard || buildDefaultMainMenuKeyboard(config.buttons)), parse_mode: 'HTML' });
+}
+async function sendSupportPage(ctx) {
+  const config = await getConfig();
+  const username = config.payment.supportUsername || SUPPORT_USERNAME;
+  const fallback = await getMessage('support', { support_username: username });
+  const message = await formatScreenMessage('support', fallback, { title: 'پشتیبانی', mode: 'support' });
+  return ctx.reply(message, {
+    parse_mode: 'HTML',
+    reply_markup: { inline_keyboard: await arrangeScreenRows('support', await defaultScreenHomeRows('support')) },
+  });
+}
+
 async function sendServiceMenu(ctx, mode = 'buy') {
   const config = await getConfig();
   const titleKey = mode === 'test' ? 'serviceSelectionTest' : mode === 'renew' ? 'serviceSelectionRenew' : 'serviceSelectionBuy';
@@ -163,7 +190,7 @@ async function sendServiceMenu(ctx, mode = 'buy') {
   const title = await formatScreenMessage(screenId, fallbackTitle, { title: fallbackTitle, mode });
   const prefix = mode === 'test' ? 'service_test_' : mode === 'renew' ? 'service_renew_' : 'service_buy_';
   const buttons = await serviceButtonsWithPanels(prefix, config, mode === 'test' ? 'test' : 'purchase');
-  if (!buttons.length) return ctx.reply(await formatScreenMessage(screenId, await getMessage('serviceUnavailable'), { title: fallbackTitle, mode }), { parse_mode: 'HTML' });
+  if (!buttons.length) return ctx.reply(await formatScreenMessage(screenId, await getMessage('serviceUnavailable', { service_name: '' }), { title: fallbackTitle, mode }), { parse_mode: 'HTML' });
   const rows = await arrangeScreenRows(screenId, buttons);
   await ctx.reply(title, { ...Markup.inlineKeyboard(rows), parse_mode: 'HTML' });
 }
@@ -240,7 +267,7 @@ async function showWalletPage(ctx) {
   await storage.setState('user', ctx.from.id, { stage: 'AWAITING_WALLET_AMOUNT', orderId: null, requiredAmount: 0, balance });
   const fallback = `💰 <b>کیف پول من</b>\n\nموجودی فعلی: <b>${balance.toLocaleString('en-US')} تومان</b>\n\nمبلغی که می‌خواهید کیف پول را شارژ کنید به تومان وارد کنید.\n\nپس از ارسال رسید و تأیید مدیر، مبلغ به موجودی شما اضافه می‌شود.`;
   const message = await formatScreenMessage('wallet', fallback, { title: 'کیف پول من', mode: 'wallet', balance: balance.toLocaleString('en-US') });
-  const rows = await arrangeScreenRows('wallet', []);
+  const rows = await arrangeScreenRows('wallet', await defaultScreenHomeRows('wallet'));
   return ctx.reply(message, { parse_mode: 'HTML', reply_markup: { inline_keyboard: rows } });
 }
 
@@ -278,15 +305,82 @@ async function sendAccountList(ctx, requestedPage = 0, { edit = false } = {}) {
 
 bot.catch((error,ctx)=>{log('BOT_ERROR',{update_type:ctx?.updateType,error:error?.message||String(error)});});
 bot.use(async(ctx,next)=>{if(isAdmin(ctx))return next();const config=await getConfig();if(config.bot?.maintenanceMode)return ctx.reply(await getMessage('maintenance'));return next();});
-bot.start(async(ctx)=>{let newUserReport=null;try{newUserReport=await userReport.recordFirstStart(storage,ctx.from);}catch(error){log('NEW_USER_REPORT_FAILED',{telegram_user_id:ctx.from?.id,error:error?.message||String(error)});}await persistUser(ctx);if(newUserReport)await bot.telegram.sendMessage(ADMIN_ID,newUserReport,{parse_mode:'HTML'}).catch(error=>log('NEW_USER_REPORT_SEND_FAILED',{telegram_user_id:ctx.from?.id,error:error?.message||String(error)}));await storage.deleteState('user',ctx.from.id);const config=await getConfig();const b=config.buttons||{};const testText=b.test||'🎁 دریافت اکانت تست';const buyText=b.buy||'🛒 خرید اشتراک';const accountText=b.account||'👤 حساب من';const walletText=b.wallet||'💰 کیف پول من';const supportText=b.support||'🎯 پشتیبانی';const mainMenu=await getPublishedMenu('main');const message=mainMenu?.text?(await formatPublishedMenuText('main',ctx.from.id)):await getMessage('start');const configuredKeyboard=await getMenuKeyboard('main');await ctx.reply(message,{...(configuredKeyboard||Markup.keyboard([[testText],[buyText],[walletText],[accountText],[supportText]]).resize()),parse_mode:'HTML'});});
-bot.hears(/.*/,async(ctx,next)=>{const config=await getConfig();const b=config.buttons||{};const text=ctx.message?.text;if(text===(b.support||'🎯 پشتیبانی')){await persistUser(ctx);const username=config.payment.supportUsername||SUPPORT_USERNAME;const fallback=await getMessage('support',{support_username:username});const message=await formatScreenMessage('support',fallback,{title:'پشتیبانی',mode:'support'});return ctx.reply(message,{parse_mode:'HTML',reply_markup:{inline_keyboard:await arrangeScreenRows('support',[])}});}if(text===(b.buy||'🛒 خرید اشتراک')){await persistUser(ctx);return sendServiceMenu(ctx,'buy');}if(text===(b.test||'🎁 دریافت اکانت تست')){return sendServiceMenu(ctx,'test');}if(text===(b.wallet||'💰 کیف پول من')){await persistUser(ctx);return showWalletPage(ctx);}if(text===(b.account||'👤 حساب من')){await persistUser(ctx);return sendAccountList(ctx,0);}return next();});
-bot.hears('🛒 خرید اشتراک',async(ctx)=>{await persistUser(ctx);await sendServiceMenu(ctx,'buy');});
-bot.hears('🎁 دریافت اکانت تست',async(ctx)=>{await sendServiceMenu(ctx,'test');});
+bot.start(async(ctx)=>{
+  let newUserReport = null;
+  try {
+    newUserReport = await userReport.recordFirstStart(storage, ctx.from);
+  } catch (error) {
+    log('NEW_USER_REPORT_FAILED', { telegram_user_id: ctx.from?.id, error: error?.message || String(error) });
+  }
+  await persistUser(ctx);
+  if (newUserReport) {
+    await bot.telegram.sendMessage(ADMIN_ID, newUserReport, { parse_mode: 'HTML' })
+      .catch((error) => log('NEW_USER_REPORT_SEND_FAILED', { telegram_user_id: ctx.from?.id, error: error?.message || String(error) }));
+  }
+  await storage.deleteState('user', ctx.from.id);
+  return sendMainMenu(ctx);
+});
+bot.hears(/.*/, async (ctx, next) => {
+  const config = await getConfig();
+  const buttons = config.buttons || {};
+  const text = ctx.message?.text;
+  if (text === (buttons.support || '🎯 پشتیبانی')) {
+    await persistUser(ctx);
+    return sendSupportPage(ctx);
+  }
+  if (text === (buttons.buy || '🛒 خرید اشتراک')) {
+    await persistUser(ctx);
+    return sendServiceMenu(ctx, 'buy');
+  }
+  if (text === (buttons.test || '🎁 دریافت اکانت تست')) return sendServiceMenu(ctx, 'test');
+  if (text === (buttons.wallet || '💰 کیف پول من')) {
+    await persistUser(ctx);
+    return showWalletPage(ctx);
+  }
+  if (text === (buttons.account || '👤 حساب من')) {
+    await persistUser(ctx);
+    return sendAccountList(ctx, 0);
+  }
+  return next();
+});
 
-bot.on('callback_query',async(ctx)=>{
-  const data=ctx.callbackQuery.data||'';await ctx.answerCbQuery().catch(()=>{});
-  if(data==='account_divider')return;
-  if(data.startsWith('menu_nav:')){const menuId=data.slice('menu_nav:'.length);const menu=await getPublishedMenu(menuId);if(!menu)return ctx.reply('❌ این منو پیدا نشد.');let message=await formatPublishedMenuText(menuId,ctx.from.id);if(message.includes('{debt}')){const user=await storage.getUser(ctx.from.id);const debt=Number(user?.debtAmount||0);message=message.replace(/\\{debt\\}/g,(Number.isFinite(debt)?debt:0).toLocaleString('en-US'));}const keyboard=await getMenuKeyboard(menuId);const options={...(keyboard||{}),parse_mode:'HTML'};try{return await ctx.editMessageText(message,options);}catch(error){if(/message is not modified/i.test(error?.message||''))return;return ctx.reply(message,options);}}
+bot.on('callback_query', async (ctx) => {
+  let data = ctx.callbackQuery.data || '';
+  await ctx.answerCbQuery().catch(() => {});
+  if (data === 'main_home') return sendMainMenu(ctx);
+  if (data.startsWith('menu_nav:')) {
+    const targetId = data.slice('menu_nav:'.length);
+    if (targetId.startsWith('screen_')) {
+      const screenActions = {
+        service_test: 'main_test',
+        service_buy: 'main_buy',
+        service_renew: 'renew_choose',
+        plans_buy: 'main_buy',
+        plans_renew: 'renew_choose',
+        account_list: 'main_account',
+        account_detail: 'main_account',
+        account_remove: 'main_account',
+        wallet: 'main_wallet',
+        support: 'main_support',
+      };
+      const mapped = screenActions[targetId.slice('screen_'.length)];
+      if (!mapped) return ctx.reply('This bot screen is not available.');
+      data = mapped;
+      if (ctx.callbackQuery) ctx.callbackQuery.data = data;
+    } else {
+      const targetMenu = await getPublishedMenu(targetId);
+      const targetKeyboard = targetMenu ? await getMenuKeyboard(targetId) : null;
+      if (!targetMenu || !targetKeyboard) return ctx.reply('This menu is no longer available.');
+      const targetText = targetMenu.text ? await formatPublishedMenuText(targetId, ctx.from.id) : 'Choose an option:';
+      return ctx.reply(targetText, { ...targetKeyboard, parse_mode: 'HTML' });
+    }
+  }
+  if (data === 'main_test') return sendServiceMenu(ctx, 'test');
+  if (data === 'main_buy') return sendServiceMenu(ctx, 'buy');
+  if (data === 'main_wallet') return showWalletPage(ctx);
+  if (data === 'main_account') return sendAccountList(ctx, 0);
+  if (data === 'main_support') return sendSupportPage(ctx);
+  if (data === 'account_divider') return;
   if(data.startsWith('wallet_charge_')){const id=data.slice('wallet_charge_'.length);const order=await storage.getOrder(id);if(!order||String(order.telegramUserId)!==String(ctx.from.id))return ctx.reply('❌ سفارش پیدا نشد.');await storage.setState('user',ctx.from.id,{stage:'AWAITING_WALLET_AMOUNT',orderId:id,requiredAmount:Number(order.price||0),balance:await wallet.getBalance(ctx.from.id)});return ctx.reply('💳 مبلغ شارژ کیف پول را به تومان وارد کنید:');}
   if(data.startsWith('wallet_approve_')){if(!isAdmin(ctx))return;const id=data.slice('wallet_approve_'.length);const lockName=`wallet-topup-approve:${id}`;const lockToken=await storage.acquireLock(lockName,60);if(!lockToken)return ctx.reply('⏳ این شارژ در حال پردازش است.');try{const topup=await storage.getOrder(id);if(!topup||topup.orderType!=='wallet_topup'||topup.paymentStatus!=='RECEIPT_SUBMITTED')return ctx.reply('❌ این درخواست قبلاً پردازش شده یا معتبر نیست.');const amount=Number(topup.topupAmount||0);if(!Number.isFinite(amount)||amount<=0)return ctx.reply('❌ مبلغ شارژ نامعتبر است.');await wallet.credit(topup.telegramUserId,amount,{walletLastCredit:`topup:${id}`,walletLastCreditAt:new Date().toISOString()});await storage.updateOrder(id,{paymentStatus:'APPROVED',fulfillmentStatus:'WALLET_CREDITED',approvedAt:new Date().toISOString()});await ctx.reply(`✅ شارژ ${amount.toLocaleString('en-US')} تومان تأیید شد.`);if(topup.linkedOrderId){const pending=await storage.getOrder(topup.linkedOrderId);if(pending)await activateWalletOrder(pending);}return;}finally{await storage.releaseLock(lockName,lockToken);}}
   if(data.startsWith('wallet_reject_')){if(!isAdmin(ctx))return;const id=data.slice('wallet_reject_'.length);const lockName=`wallet-topup-approve:${id}`;const lockToken=await storage.acquireLock(lockName,60);if(!lockToken)return ctx.reply('⏳ این شارژ در حال پردازش است.');try{const topup=await storage.getOrder(id);if(!topup||topup.orderType!=='wallet_topup'||topup.paymentStatus!=='RECEIPT_SUBMITTED')return ctx.reply('❌ این درخواست قبلاً پردازش شده یا معتبر نیست.');await storage.updateOrder(id,{paymentStatus:'REJECTED',fulfillmentStatus:'WALLET_TOPUP_REJECTED',rejectedAt:new Date().toISOString()});await bot.telegram.sendMessage(topup.telegramUserId,'❌ رسید شارژ کیف پول شما تأیید نشد. در صورت نیاز، دوباره تلاش کنید.').catch(()=>{});return ctx.reply('❌ درخواست شارژ رد شد.');}finally{await storage.releaseLock(lockName,lockToken);}}
@@ -364,7 +458,6 @@ bot.command('status',async(ctx)=>{if(!isAdmin(ctx))return;const orders=await sto
 bot.command('orders',async(ctx)=>{if(!isAdmin(ctx))return;const orders=await storage.listOrders(20);if(!orders.length)return ctx.reply('سفارشی ثبت نشده است.');const text=orders.map(o=>`${o.orderId} | ${o.planName} | ${o.fulfillmentStatus} | ${o.generatedPasarguardUsername||'-'}`).join('\n');await ctx.reply(`<pre>${escapeHtml(text)}</pre>`,{parse_mode:'HTML'});});
 bot.command('failed',async(ctx)=>{if(!isAdmin(ctx))return;const orders=(await storage.listOrders(100)).filter(o=>o.fulfillmentStatus==='FAILED_RETRYABLE');if(!orders.length)return ctx.reply('❌ مورد ناموفقی وجود ندارد.');for(const order of orders.slice(0,10))await ctx.reply(`⚠️ ${order.orderId}\n${order.failureReason||'unknown'}\n${order.generatedPasarguardUsername||'-'}`);});
 bot.command('users',async(ctx)=>{if(!isAdmin(ctx))return;const users=await storage.smembers('bot_users');await ctx.reply(`📊 تعداد کاربران ثبت‌شده: ${users.length}`);});
-bot.command('broadcast',async(ctx)=>{if(!isAdmin(ctx))return;const messageText=ctx.message.text.replace(/^\/broadcast\s*/,'').trim();if(!messageText)return ctx.reply('❌ استفاده: /broadcast متن پیام');const users=await storage.smembers('bot_users');let success=0;let failed=0;for(const id of users){try{await bot.telegram.sendMessage(id,messageText);success++;}catch(error){failed++;if(String(error.description||'').includes('blocked'))await storage.srem('bot_users',id);}await new Promise(resolve=>setTimeout(resolve,50));}await ctx.reply(`✅ ارسال پایان یافت. موفق: ${success} | ناموفق: ${failed}`);});
 
 module.exports=async(req,res)=>{
   if(req.method!=='POST')return res.status(200).send('ArtiQ VPN Bot is running.');
@@ -381,7 +474,7 @@ module.exports=async(req,res)=>{
   };
   log('WEBHOOK_DIAGNOSTIC_START',diagnosticFields);
   try{
-    await bot.handleUpdate(req.body);
+    await requestContext.runWithUpdate(req.body, () => bot.handleUpdate(req.body));
     log('WEBHOOK_DIAGNOSTIC_COMPLETE',{...diagnosticFields,duration_ms:Date.now()-startedAt});
     return res.status(200).send('OK');
   }catch(error){

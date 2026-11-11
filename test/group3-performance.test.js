@@ -50,13 +50,13 @@ test('CMS memoization is request-scoped, deduplicates reads, and invalidates imm
       from: { id: 5000 + id, is_bot: false, first_name: 'Tester' },
     },
   });
-  await bot.handleUpdate(update(1));
+  await requestContext.runWithUpdate(update(1), () => bot.handleUpdate(update(1)));
   assert.deepEqual(observed, [true, 'changed-within-update', 'after-set', null]);
 
   await storage.set('cms:plans', [{ id: 'next-request' }]);
   let nextValue;
   bot.use(async () => { nextValue = await storage.get('cms:plans'); });
-  await bot.handleUpdate(update(2));
+  await requestContext.runWithUpdate(update(2), () => bot.handleUpdate(update(2)));
   assert.equal(nextValue[0].id, 'next-request');
   await storage.del('cms:plans');
 });

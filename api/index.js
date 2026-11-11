@@ -186,7 +186,7 @@ async function createTestForService(ctx, serviceId) {
   const user = await storage.getUser(ctx.from.id, config.limits.testLimitPerDay);
   if (user?.testUsed) return ctx.reply(await getMessage('testLimitReached'));
   const lockName = `test:${ctx.from.id}`;
-  const lockToken = await storage.acquireLock(lockName, 600);
+  const lockToken = await storage.acquireLock(lockName, 150);
   if (!lockToken) return ctx.reply(await getMessage('testProcessingLock'));
   let lockTransferredToFulfillment = false;
   let orderIdValue = null;

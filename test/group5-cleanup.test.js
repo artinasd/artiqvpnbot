@@ -18,8 +18,16 @@ const accountUI = require('../lib/account-ui');
 const botConfig = require('../lib/bot-config');
 
 class TestTelegraf extends Telegraf {
-  constructor(token) {
-    super(token);
+  constructor(token, options = {}) {
+    let owner;
+    class TestContext extends nativeTelegraf.Context {
+      constructor(update, tg, botInfo) {
+        tg.callApi = (method, payload = {}, ...args) => owner.telegram.callApi(method, payload, ...args);
+        super(update, tg, botInfo);
+      }
+    }
+    super(token, { ...options, contextType: TestContext });
+    owner = this;
     this.apiCalls = [];
     TestTelegraf.instances.push(this);
     this.botInfo = { id: 1, is_bot: true, first_name: 'TestBot', username: 'test_bot' };

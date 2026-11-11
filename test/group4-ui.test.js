@@ -91,7 +91,7 @@ test('account_remove fallback uses real paragraph breaks, not double-escaped new
   assert.notEqual(handlerStart, -1, 'account_remove handler must exist');
   const detailStart = apiSource.indexOf("if(data.startsWith('account_sub:')", handlerStart);
   const handler = apiSource.slice(handlerStart, detailStart === -1 ? undefined : detailStart);
-  const fallbackMatch = handler.match(/const fallback = `([\\s\\S]*?)`;/);
+  const fallbackMatch = handler.match(/const fallback = `([\s\S]*?)`;/);
   assert.ok(fallbackMatch, 'account_remove fallback template must exist');
   assert.doesNotMatch(fallbackMatch[1], /\\\\n/, 'fallback must not contain double-escaped newline sequences');
 });

@@ -109,24 +109,35 @@ async function askSubscriptionName(ctx, order) {
 async function showWalletCheckout(ctx, order) {
   const balance = await wallet.getBalance(ctx.from.id);
   const price = Number(order.price || 0);
+  let currentBalance = balance;
   if (balance >= price) {
     const lock = `wallet-purchase:${ctx.from.id}`;
     const lockToken = await storage.acquireLock(lock, 30); if (!lockToken) return ctx.reply('⏳ درخواست شما در حال پردازش است.');
+    let insufficientAfterLock = false;
     try {
+      const freshOrder = await storage.getOrder(order.orderId);
+      if (!freshOrder || freshOrder.walletCharged === true || ['FULFILLED', 'RECEIPT_SUBMITTED', 'PROVISIONING'].includes(freshOrder.fulfillmentStatus)) {
+        return ctx.reply('⏳ این سفارش قبلاً ثبت یا در حال پردازش است.');
+      }
       const freshBalance = await wallet.getBalance(ctx.from.id);
-      if (freshBalance < price) return showWalletCheckout(ctx, order);
-      await wallet.debit(ctx.from.id, price, { walletLastTransaction: `purchase:${order.orderId}` });
-      await storage.updateOrder(order.orderId, { paymentStatus: 'WALLET_PAID', fulfillmentStatus: 'RECEIPT_SUBMITTED', walletCharged: true, walletChargedAmount: price, walletChargedAt: new Date().toISOString() });
-      await storage.deleteState('user', ctx.from.id);
-      await ctx.reply(`✅ مبلغ ${price.toLocaleString('en-US')} تومان از کیف پول شما کسر شد.\n\n⏳ در حال ساخت اشتراک...`);
-      await fulfillOrder(order.orderId, bot.telegram);
+      if (freshBalance < price) {
+        currentBalance = freshBalance;
+        insufficientAfterLock = true;
+      } else {
+        await wallet.debit(ctx.from.id, price, { walletLastTransaction: `purchase:${order.orderId}` });
+        await storage.updateOrder(order.orderId, { paymentStatus: 'WALLET_PAID', fulfillmentStatus: 'RECEIPT_SUBMITTED', walletCharged: true, walletChargedAmount: price, walletChargedAt: new Date().toISOString() });
+        await storage.deleteState('user', ctx.from.id);
+        await ctx.reply(`✅ مبلغ ${price.toLocaleString('en-US')} تومان از کیف پول شما کسر شد.\n\n⏳ در حال ساخت اشتراک...`);
+        await fulfillOrder(order.orderId, bot.telegram);
+        return;
+      }
     } finally { await storage.releaseLock(lock, lockToken); }
-    return;
+    if (!insufficientAfterLock) return;
   }
   await storage.updateOrder(order.orderId, { paymentStatus: 'WALLET_REQUIRED', fulfillmentStatus: 'AWAITING_WALLET' });
-  await storage.setState('user', ctx.from.id, { stage: 'AWAITING_WALLET_AMOUNT', orderId: order.orderId, requiredAmount: price, balance });
-  const missing = Math.max(0, price - balance);
-  await ctx.reply(`💰 <b>موجودی کیف پول</b>\n\nموجودی فعلی: <b>${balance.toLocaleString('en-US')} تومان</b>\nقیمت این اشتراک: <b>${price.toLocaleString('en-US')} تومان</b>\nکسری: <b>${missing.toLocaleString('en-US')} تومان</b>\n\nبرای ادامه، کیف پول خود را حداقل به اندازه مبلغ اشتراک شارژ کنید.\n\nمبلغ شارژ را به تومان وارد کنید:`, { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[Markup.button.callback(`💳 شارژ حداقل ${missing.toLocaleString('en-US')} تومان`, `wallet_charge_${order.orderId}`)]] } });
+  await storage.setState('user', ctx.from.id, { stage: 'AWAITING_WALLET_AMOUNT', orderId: order.orderId, requiredAmount: price, balance: currentBalance });
+  const missing = Math.max(0, price - currentBalance);
+  await ctx.reply(`💰 <b>موجودی کیف پول</b>\n\nموجودی فعلی: <b>${currentBalance.toLocaleString('en-US')} تومان</b>\nقیمت این اشتراک: <b>${price.toLocaleString('en-US')} تومان</b>\nکسری: <b>${missing.toLocaleString('en-US')} تومان</b>\n\nبرای ادامه، کیف پول خود را حداقل به اندازه مبلغ اشتراک شارژ کنید.\n\nمبلغ شارژ را به تومان وارد کنید:`, { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[Markup.button.callback(`💳 شارژ حداقل ${missing.toLocaleString('en-US')} تومان`, `wallet_charge_${order.orderId}`)], [Markup.button.callback('🏠 منوی اصلی', 'main_home')]] } });
 }
 
 async function showWalletTopupPayment(ctx, topup) {
@@ -445,12 +456,12 @@ bot.on('callback_query', async (ctx) => {
   if(data.startsWith('account_renew:')){const id=data.slice('account_renew:'.length);const raw=await accountService.getSubscription(ctx.from.id,id);if(!raw||!accountService.canRenew(raw))return ctx.reply('❌ این اشتراک قابل تمدید نیست.');try{const order=await createRenewalOrderForSubscription(ctx,raw);return showWalletCheckout(ctx,order);}catch(error){log('ACCOUNT_RENEWAL_CREATE_FAILED',{telegram_user_id:ctx.from.id,source_order_id:id,error:error?.message||String(error)});return ctx.reply('❌ تمدید این اشتراک در حال حاضر ممکن نیست.');}}
   if(data.startsWith('service_test_'))return createTestForService(ctx,data.slice('service_test_'.length));
   if(data.startsWith('service_buy_'))return sendPlanMenu(ctx,'buy',data.slice('service_buy_'.length));
-  if(data.startsWith('service_renew_')){const user=await storage.getUser(ctx.from.id);if(!user?.currentPasarguardUserId)return ctx.reply('❌ اشتراک فعالی برای تمدید پیدا نشد.');return sendPlanMenu(ctx,'renew',data.slice('service_renew_'.length));}
+  if(data.startsWith('service_renew_')){const serviceKey=data.slice('service_renew_'.length);const user=await storage.getUser(ctx.from.id);const hasPanelOrder=serviceKey.startsWith('panel_')&&((await accountService.listSubscriptions(ctx.from.id)).some((o)=>String(o.service||'')===serviceKey||String(o.panelId||'')===serviceKey.slice('panel_'.length)));if(!user?.currentPasarguardUserId&&!hasPanelOrder)return ctx.reply('❌ اشتراک فعالی برای تمدید پیدا نشد.');return sendPlanMenu(ctx,'renew',serviceKey);}
   if(data.startsWith('select_plan_')){const plan=await planStore.get(data.slice('select_plan_'.length), ctx.from.id);if(!plan)return ctx.reply('❌ این پلن دیگر فعال نیست. لطفاً فهرست پلن‌ها را دوباره باز کنید.');const config=await getConfig();const panelRecord = plan.panelId ? ((await require('../lib/panel-registry').getById(plan.panelId)) || await require('../lib/master-panel-registry').getById(plan.panelId)) : null;const service=await getConfiguredServiceWithPanels(plan.panelId ? `${panelRecord?.type === 'master' ? 'master' : 'panel'}_${plan.panelId}` : plan.service,config);if(!service)return ctx.reply(await getMessage('invalidService'));const order=await createOrderForPlan(ctx,plan);await askSubscriptionName(ctx,order);return;}
   if(data.startsWith('select_custom_')) return startCustomPlanFlow(ctx, data.slice('select_custom_'.length));
   if(data==='select_custom') return startCustomPlanFlow(ctx);
   if(data.startsWith('auto_name_')){const id=data.slice('auto_name_'.length);const state=await storage.getState('user',ctx.from.id);if(!state||state.orderId!==id||state.stage!=='AWAITING_SUBSCRIPTION_NAME')return;const order=await storage.getOrder(id);if(!order||order.telegramUserId!==ctx.from.id)return;await storage.updateOrder(id,{requestedName:null});return showWalletCheckout(ctx,{...order,requestedName:null});}
-  if(data==='renew_choose'){const user=await storage.getUser(ctx.from.id);if(!user?.currentPasarguardUserId)return ctx.reply('❌ اشتراک فعالی برای تمدید پیدا نشد.');return sendServiceMenu(ctx,'renew');}
+  if(data==='renew_choose'){const user=await storage.getUser(ctx.from.id);const subs=user?.currentPasarguardUserId?[]:await accountService.listSubscriptions(ctx.from.id);if(!user?.currentPasarguardUserId&&!subs.some((s)=>accountService.canRenew(s)))return ctx.reply('❌ اشتراک فعالی برای تمدید پیدا نشد.');return sendServiceMenu(ctx,'renew');}
   if(data.startsWith('renew_plan_')){const plan=await planStore.get(data.slice('renew_plan_'.length), ctx.from.id);const user=await storage.getUser(ctx.from.id);if(!plan)return ctx.reply('❌ این پلن فعال نیست یا اشتراک شما پیدا نشد.');const config=await getConfig();const panelRecord = plan.panelId ? ((await require('../lib/panel-registry').getById(plan.panelId)) || await require('../lib/master-panel-registry').getById(plan.panelId)) : null;const service=await getConfiguredServiceWithPanels(plan.panelId ? `${panelRecord?.type === 'master' ? 'master' : 'panel'}_${plan.panelId}` : plan.service,config);if(!service)return ctx.reply(await getMessage('invalidService'));let renewalTarget=null;const targetPanel=plan.panelId?((await require('../lib/panel-registry').getById(plan.panelId))||await require('../lib/master-panel-registry').getById(plan.panelId)):null;if(plan.panelId){const orders=await storage.listUserOrders(ctx.from.id, 500);renewalTarget=orders.filter((item)=>Number(item.telegramUserId)===Number(ctx.from.id)&&(targetPanel?.type==='master'?String(item.masterPanelId||'')===String(plan.panelId):String(item.panelId||'')===String(plan.panelId))&&item.pasarguardUserId&&item.fulfillmentStatus==='FULFILLED'&&!item.renewal).sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||'')))[0]||null;if(!renewalTarget)return ctx.reply('❌ اشتراک فعالی در این پنل برای تمدید پیدا نشد. ابتدا از همین پنل خرید کنید یا از بخش حساب من اشتراک مربوطه را انتخاب کنید.');}else if(!user?.currentPasarguardUserId)return ctx.reply('❌ اشتراک فعالی برای تمدید پیدا نشد.');const order=await createOrderForPlan(ctx,plan);await storage.updateOrder(order.orderId,{renewal:true,renewalPasarguardUserId:targetPanel?.type==='master'?`master-user:${renewalTarget.orderId}`:(renewalTarget?renewalTarget.pasarguardUserId:user.currentPasarguardUserId),renewalSourceOrderId:renewalTarget?.orderId||null,masterPanelId:targetPanel?.type==='master'?targetPanel.id:undefined});return showWalletCheckout(ctx,order);}
   if(data.startsWith('invalidate_')){if(!isAdmin(ctx))return;const id=data.slice('invalidate_'.length);const order=await storage.getOrder(id);if(!order||!order.pasarguardUserId)return ctx.reply('❌ سفارش یا کاربر PasarGuard پیدا نشد.');try{const providerId=order.fulfillmentProvider||order.provider||order.backend||(order.panelId?`panel:${order.panelId}`:null);if(!providerId)return ctx.reply('❌ مسیر پنل این سفارش مشخص نیست؛ برای جلوگیری از تغییر اشتباه، اشتراک دست‌نخورده باقی ماند.');await getProvider(providerId).disableUser(order.pasarguardUserId);await storage.updateOrder(id,{paymentStatus:'PAYMENT_LATER_REJECTED',fulfillmentStatus:'PAYMENT_LATER_REJECTED'});await ctx.reply(`❌ اشتراک ${escapeHtml(order.generatedPasarguardUsername)} غیرفعال شد.`,{parse_mode:'HTML'});await bot.telegram.sendMessage(order.telegramUserId,'❌ پرداخت این سفارش بعداً نامعتبر تشخیص داده شد و اشتراک غیرفعال شد.');}catch(error){await ctx.reply('❌ غیرفعال‌سازی اشتراک انجام نشد؛ لاگ فنی ثبت شد.');}}
 });

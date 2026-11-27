@@ -302,14 +302,14 @@ test('getSubscription requests reseller-specific plan pricing for the owning Tel
   }
 });
 
-test('legacy provider IDs still map to their real registered historical panel', async () => {
+test('legacy provider IDs do not map to hardcoded personal historical panels', async () => {
   const originals = {
     listAll: planStore.listAll,
     getById: panelRegistry.getById,
     updateOrder: storage.updateOrder,
   };
   const legacyPanelId = '6d890f87-db21-4b02-ad34-728629587097';
-  let persistedPatch;
+  let persistedPatch = null;
   planStore.listAll = async () => [];
   panelRegistry.getById = async (id) => id === legacyPanelId ? ({ id, status: 'active' }) : null;
   storage.updateOrder = async (_id, patch) => { persistedPatch = patch; return patch; };
@@ -323,9 +323,8 @@ test('legacy provider IDs still map to their real registered historical panel', 
   };
   try {
     const resolved = await accountService.resolveOrderPanel(order);
-    assert.equal(resolved.panelId, legacyPanelId);
-    assert.equal(persistedPatch.panelId, legacyPanelId);
-    assert.equal(persistedPatch.fulfillmentProvider, `panel:${legacyPanelId}`);
+    assert.equal(resolved.panelId, undefined);
+    assert.equal(persistedPatch, null);
   } finally {
     planStore.listAll = originals.listAll;
     panelRegistry.getById = originals.getById;

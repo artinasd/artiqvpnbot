@@ -16,7 +16,12 @@
     "type": "git",
     "url": "git+https://github.com/artinasd/artiqvpnbot.git"
   },
-  "keywords": ["telegram", "vpn", "pasarguard", "vercel"],
+  "keywords": [
+    "telegram",
+    "vpn",
+    "pasarguard",
+    "vercel"
+  ],
   "author": "",
   "license": "ISC",
   "bugs": {

@@ -1,34 +1,30 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { normalizeSubscriptionName, buildUsername, isBotUsername } = require('../lib/username');
+const { normalizeSubscriptionName, buildUsername } = require('../lib/username');
 
-function assertAllowed(value) {
-  assert.match(value, /^(?:TG_|TG@)[A-Za-z0-9_@]+_[A-Za-z0-9]{4}$/);
-  assert.doesNotMatch(value, /[\s\u0600-\u06FF\u{1F300}-\u{1FAFF}]/u);
-}
-
-test('telegram username', () => {
-  const value = buildUsername({ telegramUsername: '@Ali123' });
-  assert.match(value, /^TG_Ali123_[A-Za-z0-9]{4}$/);
-  assertAllowed(value);
+test('telegram username is used directly without prefix or suffix', () => {
+  const value = buildUsername({ telegramUsername: '@Ali123', telegramUserId: 987654321 });
+  assert.equal(value, 'Ali123');
 });
 
-test('custom username', () => {
-  const value = buildUsername({ customName: 'MyShop' });
-  assert.match(value, /^TG_MyShop_[A-Za-z0-9]{4}$/);
-  assertAllowed(value);
+test('custom username is used directly without prefix or suffix', () => {
+  const value = buildUsername({ customName: 'MyShop', telegramUserId: 987654321 });
+  assert.equal(value, 'MyShop');
 });
 
-test('fallback attribution avoids underscore before @', () => {
-  const value = buildUsername({});
-  assert.match(value, /^TG@AtiqVPN_[A-Za-z0-9]{4}$/);
-  assertAllowed(value);
-  assert.equal(isBotUsername(value), true);
+test('missing telegram username falls back to numeric telegramUserId', () => {
+  const value = buildUsername({ telegramUserId: 987654321 });
+  assert.equal(value, '987654321');
 });
 
-test('reserved TG prefix is not duplicated', () => {
+test('collisionRetry adds random suffix only when needed', () => {
+  const value = buildUsername({ telegramUsername: '@Ali123', collisionRetry: true });
+  assert.match(value, /^Ali123_[A-Za-z0-9]{4}$/);
+});
+
+test('TG_ prefix in custom input is preserved without formatting', () => {
   const value = buildUsername({ customName: 'TG_Test' });
-  assert.match(value, /^TG_Test_[A-Za-z0-9]{4}$/);
+  assert.equal(value, 'TG_Test');
 });
 
 test('invalid Persian input is rejected', () => {
@@ -42,6 +38,6 @@ test('spaces and unsafe symbols are rejected', () => {
 
 test('empty and meaningless names are rejected', () => {
   assert.equal(normalizeSubscriptionName(''), null);
-  assert.throws(() => normalizeSubscriptionName('TG_'), /USERNAME_TOO_GENERIC/);
+  assert.throws(() => normalizeSubscriptionName('@@@'), /USERNAME_TOO_GENERIC/);
   assert.throws(() => normalizeSubscriptionName('___'), /USERNAME_TOO_GENERIC/);
 });

@@ -244,7 +244,7 @@
             var input = el('input'); input.type = 'number'; input.min = '1'; input.max = String(max); input.step = '1';
             input.value = setting[key] == null ? (optional ? '' : String(fallback)) : String(setting[key]);
             input.placeholder = optional ? 'خودکار' : String(fallback);
-            input.addEventListener('change', function(){ setting[key] = optional && input.value.trim() === '' ? null : Number(input.value); });
+            input.addEventListener('input', function(){ setting[key] = optional && input.value.trim() === '' ? null : Number(input.value); });
             wrap.appendChild(input); return wrap;
           }
           card.appendChild(numericSetting('حداقل حجم (گیگابایت)', 'minTrafficGb', 1, 1000, false));
@@ -692,11 +692,14 @@
     editor = el('div', null, 'mb-editor'); preview = el('div', null, 'mb-preview');
     layout.appendChild(editor); layout.appendChild(preview); card.appendChild(layout);
     var actions = el('div', null, 'mb-publish-actions');
-    actions.appendChild(btn('ذخیره پیش‌نویس', 'mb-secondary', async function () { try { var result = await api('save_draft', { document: state.draft }); state.draft = result.draft; showStatus('پیش‌نویس ذخیره شد؛ تا زمان انتشار در ربات فعال نمی‌شود.', true); } catch (e) { showStatus(e.message, false); } }));
-    actions.appendChild(btn('انتشار در ربات', 'mb-button', async function () { if (!window.confirm('این تنظیمات منو در ربات فعال منتشر شود؟')) return; try { await api('save_draft', { document: state.draft }); var result = await api('publish'); state.published = result.published; showStatus('نسخه منتشرشده ' + result.published.version + '؛ ربات از این تنظیمات برای پیام‌های منو استفاده می‌کند.', true); } catch (e) { showStatus(e.message, false); } }));
+    var saveBtn = btn('ذخیره پیش‌نویس', 'mb-secondary', async function () { saveBtn.disabled = true; try { var result = await api('save_draft', { document: state.draft }); state.draft = result.draft; showStatus('پیش‌نویس ذخیره شد؛ تا زمان انتشار در ربات فعال نمی‌شود.', true); } catch (e) { showStatus(e.message, false); } finally { saveBtn.disabled = false; } });
+    actions.appendChild(saveBtn);
+    var publishBtn = btn('انتشار در ربات', 'mb-button', async function () { if (!window.confirm('این تنظیمات منو در ربات فعال منتشر شود؟')) return; publishBtn.disabled = true; try { await api('save_draft', { document: state.draft }); var result = await api('publish'); state.published = result.published; showStatus('نسخه منتشرشده ' + result.published.version + '؛ ربات از این تنظیمات برای پیام‌های منو استفاده می‌کند.', true); } catch (e) { showStatus(e.message, false); } finally { publishBtn.disabled = false; } });
+    actions.appendChild(publishBtn);
     var historySelect = el('select'); historySelect.setAttribute('aria-label', 'نسخه قبلی منتشرشده');
     actions.appendChild(historySelect);
-    actions.appendChild(btn('بازگردانی نسخه', 'mb-danger', async function () { var version = Number(historySelect.value); if (!version || !window.confirm('به نسخه ' + version + ' بازگردانی شود؟')) return; try { var result = await api('rollback', { version: version }); state.published = result.published; showStatus('به نسخه ' + version + '.', true); } catch (e) { showStatus(e.message, false); } }));
+    var rollbackBtn = btn('بازگردانی نسخه', 'mb-danger', async function () { var version = Number(historySelect.value); if (!version || !window.confirm('به نسخه ' + version + ' بازگردانی شود؟')) return; rollbackBtn.disabled = true; try { var result = await api('rollback', { version: version }); state.published = result.published; showStatus('به نسخه ' + version + '.', true); } catch (e) { showStatus(e.message, false); } finally { rollbackBtn.disabled = false; } });
+    actions.appendChild(rollbackBtn);
     card.appendChild(actions); status = el('div'); card.appendChild(status);
     app.insertBefore(card, app.firstChild);
     api().then(function (data) {

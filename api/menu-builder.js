@@ -218,7 +218,8 @@ module.exports = async function menuBuilderApi(req, res) {
       const checked = await validateDocumentWithPanels(body.document);
       if (checked.errors.length) return sendJson(res, 400, { error: 'VALIDATION_FAILED', errors: checked.errors });
       state.draft = clone(body.document);
-      state.draft.version = Number(state.draft.version || 1);
+      const draftVersion = Number(state.draft.version);
+      state.draft.version = Number.isFinite(draftVersion) && draftVersion > 0 ? draftVersion : 1;
       await storage.set(KEY, state);
       return sendJson(res, 200, { ok: true, draft: state.draft });
     }
@@ -243,6 +244,7 @@ module.exports = async function menuBuilderApi(req, res) {
     }
     return sendJson(res, 400, { error: 'UNKNOWN_ACTION' });
   } catch (error) {
-    return sendJson(res, 500, { error: error.message || 'INTERNAL_ERROR' });
+    console.error('MENU_BUILDER_API_ERROR', error?.message || String(error));
+    return sendJson(res, 500, { error: 'INTERNAL_ERROR' });
   }
 };

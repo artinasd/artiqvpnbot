@@ -58,7 +58,16 @@ bot.use((ctx, next) => {
   wrapTelegramHtmlCallApi(ctx.telegram);
   return next();
 });
-bot.use(forceJoin.gateMiddleware);
+bot.use(async (ctx, next) => {
+  if (isAdmin(ctx)) return next();
+  const config = await getConfig();
+  if (config.bot?.maintenanceMode) {
+    if (ctx.callbackQuery) await ctx.answerCbQuery().catch(() => {});
+    return ctx.reply(await getMessage('maintenance'));
+  }
+  return next();
+});
+bot.use(forceJoin.createGateMiddleware({ sendMainMenu: (ctx) => sendMainMenu(ctx) }));
 registerAdminMessaging(bot, { storage, isAdmin, log });
 
 function toPersianDigits(value) { return String(value).replace(/[0-9]/g, (digit) => '۰۱۲۳۴۵۶۷۸۹'[Number(digit)]); }
@@ -322,7 +331,6 @@ async function sendAccountList(ctx, requestedPage = 0, { edit = false } = {}) {
 }
 
 bot.catch((error,ctx)=>{log('BOT_ERROR',{update_type:ctx?.updateType,error:error?.message||String(error)});});
-bot.use(async(ctx,next)=>{if(isAdmin(ctx))return next();const config=await getConfig();if(config.bot?.maintenanceMode)return ctx.reply(await getMessage('maintenance'));return next();});
 bot.start(async(ctx)=>{
   let newUserReport = null;
   try {
@@ -489,12 +497,12 @@ bot.command('retryreports', async (ctx) => {
     return ctx.reply('❌ پردازش گزارش‌های خرید ناموفق بود.');
   }
 });
-bot.command('testreport',async(ctx)=>{if(!isAdmin(ctx))return;try{const now=new Date();const dayKey=userReport.gregorianTehranDateKey(now);const [todayIds,allIds]=await Promise.all([storage.smembers(`new_users:${dayKey}`),storage.smembers('bot_users')]);const message=['🧪 | گزارش آزمایشی (این کاربر واقعی نیست)','','👥 مشخصات کاربر','🆔 آیدی: 123456789','👤 اسم: Test User','⚡️ نام کاربری: @test_user','🌐 زبان تلگرام: en','','📈 آمار عضویت',`🆕 امروز: ${todayIds.length.toLocaleString('fa-IR')}`,`👥 مجموع کاربران: ${allIds.length.toLocaleString('fa-IR')}`,'',`🗓 ${userReport.formatJalaliDateTime(now)}`].join('\n');await bot.telegram.sendMessage(ADMIN_ID,message);return ctx.reply('✅ پیام آزمایشی به ADMIN_ID ارسال شد.');}catch(error){log('NEW_USER_REPORT_TEST_FAILED',{admin_id:ADMIN_ID,error:error?.message||String(error)});return ctx.reply(`❌ ارسال پیام آزمایشی ناموفق بود: ${error?.description||error?.message||'unknown error'}`);}});
+bot.command('testreport',async(ctx)=>{if(!isAdmin(ctx))return;try{const now=new Date();const dayKey=userReport.gregorianTehranDateKey(now);const [todayCount,allCount]=await Promise.all([storage.scard(`new_users:${dayKey}`),storage.scard('bot_users')]);const message=['🧪 | گزارش آزمایشی (این کاربر واقعی نیست)','','👥 مشخصات کاربر','🆔 آیدی: 123456789','👤 اسم: Test User','⚡️ نام کاربری: @test_user','🌐 زبان تلگرام: en','','📈 آمار عضویت',`🆕 امروز: ${todayCount.toLocaleString('fa-IR')}`,`👥 مجموع کاربران: ${allCount.toLocaleString('fa-IR')}`,'',`🗓 ${userReport.formatJalaliDateTime(now)}`].join('\n');await bot.telegram.sendMessage(ADMIN_ID,message);return ctx.reply('✅ پیام آزمایشی به ADMIN_ID ارسال شد.');}catch(error){log('NEW_USER_REPORT_TEST_FAILED',{admin_id:ADMIN_ID,error:error?.message||String(error)});return ctx.reply(`❌ ارسال پیام آزمایشی ناموفق بود: ${error?.description||error?.message||'unknown error'}`);}});
 bot.command('pingdb',async(ctx)=>{if(!isAdmin(ctx))return;try{await ctx.reply(await storage.ping()?'✅ Redis: OK':'⚠️ Redis در حالت حافظه محلی است.');}catch{await ctx.reply('❌ Redis: ERROR');}});
 bot.command('status',async(ctx)=>{if(!isAdmin(ctx))return;const orders=await storage.listOrders(100);const pending=orders.filter(o=>!['FULFILLED','PAYMENT_LATER_REJECTED','WALLET_TOPUP_REJECTED'].includes(o.fulfillmentStatus)).length;const failed=orders.filter(o=>o.fulfillmentStatus==='FAILED_RETRYABLE').length;let pg='CMS panels only';try{const panels=await require('../lib/panel-registry').list();pg=panels.length?`${panels.filter(p=>p.status==='active').length}/${panels.length} active`:'no panels registered';}catch{pg='registry error';}await ctx.reply(`📊 <b>وضعیت سیستم</b>\n\nTelegram Bot: OK\nRedis: ${storage.configured()?'OK':'MEMORY'}\nPasarGuard panels: ${pg}\nPending orders: ${pending}\nFailed fulfillments: ${failed}`,{parse_mode:'HTML'});});
 bot.command('orders',async(ctx)=>{if(!isAdmin(ctx))return;const orders=await storage.listOrders(20);if(!orders.length)return ctx.reply('سفارشی ثبت نشده است.');const text=orders.map(o=>`${o.orderId} | ${o.planName} | ${o.fulfillmentStatus} | ${o.generatedPasarguardUsername||'-'}`).join('\n');await ctx.reply(`<pre>${escapeHtml(text)}</pre>`,{parse_mode:'HTML'});});
 bot.command('failed',async(ctx)=>{if(!isAdmin(ctx))return;const orders=(await storage.listOrders(100)).filter(o=>o.fulfillmentStatus==='FAILED_RETRYABLE');if(!orders.length)return ctx.reply('❌ مورد ناموفقی وجود ندارد.');for(const order of orders.slice(0,10))await ctx.reply(`⚠️ ${order.orderId}\n${order.failureReason||'unknown'}\n${order.generatedPasarguardUsername||'-'}`);});
-bot.command('users',async(ctx)=>{if(!isAdmin(ctx))return;const users=await storage.smembers('bot_users');await ctx.reply(`📊 تعداد کاربران ثبت‌شده: ${users.length}`);});
+bot.command('users',async(ctx)=>{if(!isAdmin(ctx))return;const count=await storage.scard('bot_users');await ctx.reply(`📊 تعداد کاربران ثبت‌شده: ${count}`);});
 
 module.exports=async(req,res)=>{
   if(req.method!=='POST')return res.status(200).send('ArtiQ VPN Bot is running.');

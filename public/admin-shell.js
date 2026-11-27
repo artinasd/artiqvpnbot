@@ -88,6 +88,10 @@
       var usersRefresh = document.getElementById('refreshActiveUsers');
       if (usersRefresh) usersRefresh.click();
       else updateStats();
+    } else if (currentPage === 'settings' || currentPage === 'messages' || currentPage === 'access') {
+      var settingsRefresh = document.getElementById('refreshBtn');
+      if (settingsRefresh) settingsRefresh.click();
+      else updateStats();
     } else {
       updateStats();
     }
@@ -127,10 +131,11 @@
   var quick = element('div', 'cms-quick-grid');
   var quickItems = [
     { id: 'panels', icon: '▦', title: 'مدیریت پنل‌ها', copy: 'اتصال، پلن‌ها و قیمت‌ها' },
+    { id: 'menus', icon: '⌘', title: 'سازنده منو', copy: 'طراحی منوها و دکمه‌ها' },
     { id: 'settings', icon: '⚙', title: 'تنظیمات ربات', copy: 'پیکربندی و رفتار سیستم' },
     { id: 'messages', icon: '☷', title: 'متن‌های ربات', copy: 'پیام‌ها و متن‌های قابل ویرایش' },
+    { id: 'access', icon: '✓', title: 'عضویت اجباری', copy: 'کانال‌ها و پیام عضویت' },
     { id: 'users', icon: '♙', title: 'کاربران فعال', copy: 'فهرست و وضعیت فعالیت' },
-    { id: 'resellers', icon: '♧', title: 'نمایندگان فروش', copy: 'حساب‌ها و نرخ‌های فروش' },
     { id: 'wallet', icon: '◈', title: 'کیف پول', copy: 'موجودی کاربران' }
   ];
   quickItems.forEach(function (item) {
@@ -248,15 +253,22 @@
     navigate((window.location.hash || '').slice(1) || 'overview', false);
   });
   var observer = new MutationObserver(function (mutations) {
-    var shouldPlace = mutations.some(function (mutation) {
-      return Array.prototype.some.call(mutation.addedNodes, function (node) {
-        return node.nodeType === 1 && node !== layout && (node.classList.contains('card') || node.querySelector('.card'));
+    var shouldPlace = false;
+    mutations.forEach(function (mutation) {
+      Array.prototype.forEach.call(mutation.addedNodes, function (node) {
+        if (node.nodeType !== 1 || node === layout) return;
+        if (node.classList && node.classList.contains('card') && !node.dataset.cmsManagedPage && !node.classList.contains('cms-hidden-legacy')) {
+          moveCard(node);
+          shouldPlace = true;
+        } else if (node.querySelector && node.querySelector('.card')) {
+          shouldPlace = true;
+        }
       });
     });
     if (shouldPlace) placeDirectCards();
     updateStats();
   });
-  observer.observe(app, { childList: true, subtree: false });
+  observer.observe(app, { childList: true, subtree: true });
   var overviewObserver = new MutationObserver(updateStats);
   var watchedStatsTargets = [];
   function watchStatsTargets() {

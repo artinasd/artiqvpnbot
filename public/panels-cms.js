@@ -236,6 +236,8 @@
         byId('panel-password').value = '';
         byId('panel-username').value = '';
         byId('panel-id').value = '';
+        byId('panel-name').value = '';
+        byId('panel-url').value = '';
         byId('panel-username').placeholder = 'username';
         byId('panel-password').placeholder = 'برای پنل جدید یا جایگزینی رمز';
         // Saving a panel is followed by a fresh connection test. Until that succeeds,

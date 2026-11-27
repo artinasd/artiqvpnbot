@@ -69,8 +69,9 @@
   var main = document.createElement('div');
   main.className = 'cms-main';
   var topbar = element('header', 'cms-topbar');
+  var brandName = (document.body && document.body.dataset && document.body.dataset.brandName) || 'VPN Shop';
   var topCopy = element('div', 'cms-topbar-copy');
-  topCopy.appendChild(element('div', 'cms-eyebrow', 'ARTIQ  /  CONTROL CENTER'));
+  topCopy.appendChild(element('div', 'cms-eyebrow', brandName.toUpperCase() + '  /  CONTROL CENTER'));
   var topTitle = element('h1', 'cms-page-title', 'نمای کلی');
   topTitle.id = 'cms-current-title';
   topCopy.appendChild(topTitle);
@@ -107,7 +108,7 @@
   var overview = pageMap.overview.querySelector('[data-cms-page-body]');
   var intro = element('section', 'cms-dashboard-intro');
   intro.appendChild(element('div', 'cms-dashboard-kicker', 'YOUR WORKSPACE'));
-  intro.appendChild(element('div', 'cms-dashboard-title', 'به پنل مدیریت آرتیک خوش آمدید'));
+  intro.appendChild(element('div', 'cms-dashboard-title', 'به پنل مدیریت خوش آمدید'));
   intro.appendChild(element('div', 'cms-dashboard-copy', 'ابزارهای اصلی ربات را از یک فضای یکپارچه مدیریت کنید. هر بخش مستقل است و تغییرات از طریق APIهای فعلی ذخیره می‌شوند.'));
   overview.appendChild(intro);
 
@@ -155,9 +156,9 @@
   var layout = element('div', 'cms-layout');
   var sidebar = element('aside', 'cms-sidebar');
   var brand = element('div', 'cms-brand');
-  brand.appendChild(element('div', 'cms-brand-mark', 'A'));
+  brand.appendChild(element('div', 'cms-brand-mark', brandName.charAt(0).toUpperCase() || 'V'));
   var brandText = element('div');
-  brandText.appendChild(element('div', 'cms-brand-name', 'Artiq VPN'));
+  brandText.appendChild(element('div', 'cms-brand-name', brandName));
   brandText.appendChild(element('div', 'cms-brand-subtitle', 'ADMIN CONSOLE'));
   brand.appendChild(brandText);
   sidebar.appendChild(brand);
@@ -187,7 +188,7 @@
   security.appendChild(element('span', 'cms-security-dot'));
   security.appendChild(element('span', '', 'دسترسی مدیر محافظت‌شده'));
   footer.appendChild(security);
-  footer.appendChild(element('div', '', 'Artiq VPN · CMS'));
+  footer.appendChild(element('div', '', brandName + ' · CMS'));
   sidebar.appendChild(footer);
   layout.appendChild(sidebar);
   main.appendChild(host);

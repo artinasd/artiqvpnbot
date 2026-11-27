@@ -21,10 +21,11 @@ const purchaseReport = require('../lib/purchase-report');
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const ADMIN_ID = String(process.env.ADMIN_ID || '');
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || '';
-const PAYMENT_CARD_NUMBER = process.env.PAYMENT_CARD_NUMBER || '6219861947080387';
-const PAYMENT_CARD_HOLDER = process.env.PAYMENT_CARD_HOLDER || 'اسعدی';
+const BOT_BRAND_NAME = process.env.BOT_BRAND_NAME || 'VPN Bot';
+const PAYMENT_CARD_NUMBER = process.env.PAYMENT_CARD_NUMBER || '';
+const PAYMENT_CARD_HOLDER = process.env.PAYMENT_CARD_HOLDER || '';
 const BANK_DETAILS = process.env.BANK_DETAILS || '';
-const SUPPORT_USERNAME = process.env.SUPPORT_USERNAME || 'Your_Personal_ID';
+const SUPPORT_USERNAME = process.env.SUPPORT_USERNAME || '';
 const TEST_TRAFFIC_BYTES = 150 * 1024 * 1024;
 const TEST_DURATION_DAYS = 1;
 const TEST_HWID_LIMIT = Number(process.env.TEST_HWID_LIMIT ?? 0);
@@ -540,7 +541,7 @@ bot.command('failed',async(ctx)=>{if(!isAdmin(ctx))return;const orders=(await st
 bot.command('users',async(ctx)=>{if(!isAdmin(ctx))return;const count=await storage.scard('bot_users');await ctx.reply(`📊 تعداد کاربران ثبت‌شده: ${count}`);});
 
 module.exports=async(req,res)=>{
-  if(req.method!=='POST')return res.status(200).send('ArtiQ VPN Bot is running.');
+  if(req.method!=='POST')return res.status(200).send(`${BOT_BRAND_NAME} is running.`);
   if(WEBHOOK_SECRET&&!secretsEqual(WEBHOOK_SECRET,req.headers['x-telegram-bot-api-secret-token']))return res.status(403).send('Unauthorized');
   if(!req.body||typeof req.body!=='object'||Array.isArray(req.body))return res.status(400).send('Invalid update payload');
   const startedAt=Date.now();

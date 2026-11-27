@@ -630,7 +630,7 @@
     [['menu','منوی انتخاب‌شده']].concat(Object.keys(screenNames).map(function (k) { return [k, screenNames[k]]; })).forEach(function (entry) { var opt = el('option', entry[1]); opt.value = entry[0]; opt.selected = state.previewScreen === entry[0]; select.appendChild(opt); });
     select.addEventListener('change', function () { state.previewScreen = select.value; renderPreview(); });
     chooser.appendChild(select); preview.appendChild(chooser);
-    var title = 'Artiq VPN';
+    var title = (document.body && document.body.dataset && document.body.dataset.brandName) || 'VPN Shop';
     var message = '';
     var rows = [];
     var style = 'default';
@@ -675,7 +675,7 @@
         prompt: botTexts.planPrompt || 'لطفاً بسته مورد نظر را انتخاب کنید:',
         title: sample.title,
         mode: state.previewScreen.indexOf('renew') !== -1 ? 'تمدید' : 'خرید',
-        support_username: state.supportUsername || 'Your_Personal_ID',
+        support_username: state.supportUsername || 'support_id',
         debt: '125,000',
         balance: '125,000',
         price: '200,000',

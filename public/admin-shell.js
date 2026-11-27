@@ -218,15 +218,15 @@
     watchStatsTargets();
   }
   function updateStats() {
-    var panels = document.querySelectorAll('#panel-list > .plan').length;
-    var plans = document.querySelectorAll('#panel-plan-list > .plan').length;
-    var users = document.querySelectorAll('#activeUsersList tbody tr').length;
+    var panels = String(document.querySelectorAll('#panel-list > .plan').length);
+    var plans = String(document.querySelectorAll('#panel-plan-list > .plan').length);
+    var users = String(document.querySelectorAll('#activeUsersList tbody tr').length);
     var p = document.getElementById('cms-stat-panels');
     var pl = document.getElementById('cms-stat-plans');
     var u = document.getElementById('cms-stat-users');
-    if (p) p.textContent = String(panels);
-    if (pl) pl.textContent = String(plans);
-    if (u) u.textContent = String(users);
+    if (p && p.textContent !== panels) p.textContent = panels;
+    if (pl && pl.textContent !== plans) pl.textContent = plans;
+    if (u && u.textContent !== users) u.textContent = users;
   }
   function navigate(id, updateHash) {
     if (!pageMap[id]) id = 'overview';
@@ -260,13 +260,12 @@
         if (node.classList && node.classList.contains('card') && !node.dataset.cmsManagedPage && !node.classList.contains('cms-hidden-legacy')) {
           moveCard(node);
           shouldPlace = true;
-        } else if (node.querySelector && node.querySelector('.card')) {
+        } else if (node.querySelector && node.querySelector('.card:not([data-cms-managed-page]):not(.cms-hidden-legacy)')) {
           shouldPlace = true;
         }
       });
     });
     if (shouldPlace) placeDirectCards();
-    updateStats();
   });
   observer.observe(app, { childList: true, subtree: true });
   var overviewObserver = new MutationObserver(updateStats);

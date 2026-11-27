@@ -257,19 +257,18 @@
   var observer = new MutationObserver(function (mutations) {
     var shouldPlace = false;
     mutations.forEach(function (mutation) {
+      if (mutation.target !== app) return;
       Array.prototype.forEach.call(mutation.addedNodes, function (node) {
         if (node.nodeType !== 1 || node === layout) return;
         if (node.classList && node.classList.contains('card') && !node.dataset.cmsManagedPage && !node.classList.contains('cms-hidden-legacy')) {
           moveCard(node);
-          shouldPlace = true;
-        } else if (node.querySelector && node.querySelector('.card:not([data-cms-managed-page]):not(.cms-hidden-legacy)')) {
           shouldPlace = true;
         }
       });
     });
     if (shouldPlace) placeDirectCards();
   });
-  observer.observe(app, { childList: true, subtree: true });
+  observer.observe(app, { childList: true, subtree: false });
   var overviewObserver = new MutationObserver(updateStats);
   var watchedStatsTargets = [];
   function watchStatsTargets() {

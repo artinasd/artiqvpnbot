@@ -18,7 +18,7 @@
     { id: 'users', label: 'کاربران فعال', description: 'مشاهده کاربران و آخرین وضعیت فعالیت آن‌ها', icon: '♙', group: 'PEOPLE', selectors: ['#activeUsersCmsCard'] },
     { id: 'resellers', label: 'نمایندگان فروش', description: 'مدیریت نمایندگان، نرخ‌ها و اطلاعات حساب آن‌ها', icon: '♧', group: 'PEOPLE', selectors: ['#resellerCmsCard', '#resellerCard'], hidden: true },
     { id: 'wallet', label: 'کیف پول', description: 'مدیریت موجودی کیف پول کاربران', icon: '◈', group: 'PEOPLE', selectors: ['#walletCard'] },
-    { id: 'debts', label: 'بدهی نمایندگان', description: 'ثبت و پیگیری مبالغ پرداخت‌نشده نمایندگان', icon: '≡', group: 'PEOPLE', selectors: ['#debtCard'] },
+    { id: 'debts', label: 'بدهی نمایندگان', description: 'ثبت و پیگیری مبالغ پرداخت‌نشده نمایندگان', icon: '≡', group: 'PEOPLE', selectors: ['#debtCard'], hidden: true },
     { id: 'access', label: 'عضویت اجباری', description: 'تنظیم کانال‌ها و پیام راهنمای عضویت', icon: '✓', group: 'BOT', selectors: ['#forceJoinCard'] }
   ];
 

@@ -178,7 +178,8 @@
       wrap.appendChild(label); wrap.appendChild(input); pricingGrid.appendChild(wrap); return input;
     }
     pricingField('قیمت هر گیگابایت برای مشتری عادی (تومان)', 'pricing-normal-per-gb', '4000', 'مثلاً 4000');
-    pricingField('قیمت هر گیگابایت برای ریسلر (تومان)', 'pricing-reseller-per-gb', '', 'خالی = استفاده از قیمت عادی');
+    var resellerPerGbWrap = pricingField('قیمت هر گیگابایت برای ریسلر (تومان)', 'pricing-reseller-per-gb', '', 'خالی = استفاده از قیمت عادی').parentNode;
+    if (resellerPerGbWrap) resellerPerGbWrap.className = 'hidden';
     pricingBox.appendChild(pricingGrid);
     var pricingActions = node('div', null, 'actions');
     var pricingSave = node('button', 'ذخیره نرخ‌ها'); pricingSave.type = 'button';
@@ -209,7 +210,7 @@
       return input;
     }
     field('شناسه داخلی (فقط برای ویرایش)', 'panel-id', 'برای پنل جدید خالی بگذارید').readOnly = true;
-    field('نام نمایشی', 'panel-name', 'مثلاً Reseller West');
+    field('نام نمایشی', 'panel-name', 'مثلاً پنل اصلی');
     field('آدرس پنل HTTPS', 'panel-url', 'https://panel.example.com');
     var userInput = field('نام کاربری مدیر پنل', 'panel-username', 'username');
     var passInput = field('رمز عبور مدیر پنل', 'panel-password', 'برای پنل جدید یا جایگزینی رمز', 'password');
@@ -291,7 +292,8 @@
     planField('قیمت', 'panel-plan-price', 'قیمت به تومان', 'number');
     planField('حجم گیگابایت (۰ = نامحدود)', 'panel-plan-traffic', '10', 'number');
     planField('مدت روز (۰ = بدون انقضا)', 'panel-plan-duration', '30', 'number');
-    planField('قیمت ریسلر (اختیاری)', 'panel-plan-reseller-price', 'خالی = قیمت اصلی', 'number');
+    var resellerPlanWrap = planField('قیمت ریسلر (اختیاری)', 'panel-plan-reseller-price', 'خالی = قیمت اصلی', 'number').parentNode;
+    if (resellerPlanWrap) resellerPlanWrap.className = 'hidden';
     planField('محدودیت دستگاه', 'panel-plan-hwid', '0', 'number');
     var planTypeWrap = node('div'); planTypeWrap.appendChild(node('label', 'نوع پلن'));
     var planType = node('select'); planType.id = 'panel-plan-type';

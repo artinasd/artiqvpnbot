@@ -61,11 +61,12 @@
         byId('panel-name').value = panel.name;
         byId('panel-url').value = panel.baseUrl;
         byId('panel-type').value = panel.type;
+        byId('panel-type').dispatchEvent(new Event('change'));
 
         byId('panel-username').value = '';
         byId('panel-password').value = '';
-        byId('panel-username').placeholder = 'برای حفظ اطلاعات فعلی خالی بگذارید';
-        byId('panel-password').placeholder = 'برای حفظ رمز فعلی خالی بگذارید';
+        byId('panel-username').placeholder = panel.type === 'artiq_master' ? 'panel_id (اختیاری — خالی = حفظ قبلی)' : 'برای حفظ اطلاعات فعلی خالی بگذارید';
+        byId('panel-password').placeholder = panel.type === 'artiq_master' ? 'برای حفظ توکن فعلی خالی بگذارید' : 'برای حفظ رمز فعلی خالی بگذارید';
         byId('panel-name').focus();
       });
       actions.appendChild(edit);
@@ -210,13 +211,26 @@
     field('شناسه داخلی (فقط برای ویرایش)', 'panel-id', 'برای پنل جدید خالی بگذارید').readOnly = true;
     field('نام نمایشی', 'panel-name', 'مثلاً Reseller West');
     field('آدرس پنل HTTPS', 'panel-url', 'https://panel.example.com');
-    field('نام کاربری مدیر پنل', 'panel-username', 'username');
-    field('رمز عبور مدیر پنل', 'panel-password', 'برای پنل جدید یا جایگزینی رمز', 'password');
+    var userInput = field('نام کاربری مدیر پنل', 'panel-username', 'username');
+    var passInput = field('رمز عبور مدیر پنل', 'panel-password', 'برای پنل جدید یا جایگزینی رمز', 'password');
+    var userLabel = userInput.previousElementSibling;
+    var passLabel = passInput.previousElementSibling;
     var typeWrap = node('div');
     typeWrap.appendChild(node('label', 'نوع پنل'));
     var typeSelect = node('select');
     typeSelect.id = 'panel-type';
-    [['pasarguard','PasarGuard']].forEach(function (entry) { var option = node('option', entry[1]); option.value = entry[0]; typeSelect.appendChild(option); });
+    [['pasarguard','PasarGuard'],['artiq_master','ArtiqMasterپنل هوشمند']].forEach(function (entry) { var option = node('option', entry[1]); option.value = entry[0]; typeSelect.appendChild(option); });
+    function syncPanelTypeFields() {
+      var isMirza = typeSelect.value === 'artiq_master';
+      if (userLabel) userLabel.textContent = isMirza ? 'شناسه پنل مقصد در Mirza (اختیاری)' : 'نام کاربری مدیر پنل';
+      if (passLabel) passLabel.textContent = isMirza ? 'توکن API ربات (Bearer Token)' : 'رمز عبور مدیر پنل';
+      byId('panel-url').placeholder = isMirza ? 'https://panel.example.com/api/bot/mirza' : 'https://panel.example.com';
+      if (!byId('panel-id').value) {
+        userInput.placeholder = isMirza ? 'panel_id (اختیاری)' : 'username';
+        passInput.placeholder = isMirza ? 'BOT_API_TOKEN' : 'برای پنل جدید یا جایگزینی رمز';
+      }
+    }
+    typeSelect.addEventListener('change', syncPanelTypeFields);
     typeWrap.appendChild(typeSelect); form.appendChild(typeWrap);
     card.appendChild(form);
     var actions = node('div', null, 'actions');
@@ -225,12 +239,18 @@
     save.addEventListener('click', async function () {
       save.disabled = true;
       try {
+        var selectedType = byId('panel-type').value;
+        var uVal = byId('panel-username').value.trim();
+        var pVal = byId('panel-password').value;
+        var creds = selectedType === 'artiq_master'
+          ? (pVal ? Object.assign({ token: pVal }, uVal ? { panelId: uVal } : {}) : undefined)
+          : ((uVal && pVal) ? { username: uVal, password: pVal } : undefined);
         var payload = {
           id: byId('panel-id').value.trim() || undefined,
           name: byId('panel-name').value.trim(),
           baseUrl: byId('panel-url').value.trim(),
-          type: byId('panel-type').value,
-          credentials: ((byId('panel-username').value.trim() && byId('panel-password').value) ? { username: byId('panel-username').value.trim(), password: byId('panel-password').value } : undefined),
+          type: selectedType,
+          credentials: creds,
         };
         var result = await api('save', { panel: payload });
         byId('panel-password').value = '';

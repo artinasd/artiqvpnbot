@@ -1,6 +1,6 @@
 const { isAuthorizedAdmin, sendJson } = require('../lib/cms-auth');
 const registry = require('../lib/panel-registry');
-const { testPasarGuardConnection } = require('../lib/panel-connection');
+const { testPanelConnection } = require('../lib/panel-connection');
 const planStore = require('../lib/plan-store');
 const { getConfig, saveConfig } = require('../lib/bot-config');
 
@@ -54,7 +54,7 @@ module.exports = async function panelsApi(req, res) {
       if (panel.status === 'disabled') return sendJson(res, 400, { error: 'PANEL_DISABLED' });
       const credentials = await registry.getCredentials(id);
       try {
-        const result = await testPasarGuardConnection({ ...panel, credentials });
+        const result = await testPanelConnection({ ...panel, credentials });
         const updated = await registry.setStatus(id, 'active');
         return sendJson(res, 200, { panel: updated, connection: { ok: true, groupCount: result.groupCount, checkedAt: result.checkedAt } });
       } catch (error) {

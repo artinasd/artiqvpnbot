@@ -4,18 +4,19 @@
   var app = document.getElementById('app');
   if (!app || app.dataset.cmsShellReady === '1') return;
 
-  var masterScript = document.createElement('script');
-  masterScript.src = '/master-panels-cms.js'; masterScript.async = true; document.head.appendChild(masterScript);
+  // Master Panels retired from active CMS UI for now (kept in repo for future use).
+  // var masterScript = document.createElement('script');
+  // masterScript.src = '/master-panels-cms.js'; masterScript.async = true; document.head.appendChild(masterScript);
 
   var definitions = [
     { id: 'overview', label: 'نمای کلی', description: 'نمایی سریع از وضعیت پنل‌ها و ابزارهای مدیریتی', icon: '◫', group: 'MAIN' },
     { id: 'menus', label: 'سازنده منو', description: 'طراحی منوها، چیدمان دکمه‌ها و اتصال به عملیات ثبت‌شده ربات', icon: '⌘', group: 'BOT', selectors: ['#menuBuilderCard'] },
     { id: 'panels', label: 'پنل‌ها و پلن‌ها', description: 'اتصال پنل‌ها، مدیریت پلن‌ها و قیمت‌گذاری اختصاصی', icon: '▦', group: 'OPERATIONS', selectors: ['#panels-cms-card'] },
-    { id: 'master-panels', label: 'Master Panels', description: 'مدیریت مستقل پنل‌های ترکیبی و پلن‌های آن‌ها', icon: '🔗', group: 'OPERATIONS', selectors: ['#master-panels-cms-card'] },
+    { id: 'master-panels', label: 'Master Panels', description: 'مدیریت مستقل پنل‌های ترکیبی و پلن‌های آن‌ها', icon: '🔗', group: 'OPERATIONS', selectors: ['#master-panels-cms-card'], hidden: true },
     { id: 'settings', label: 'تنظیمات ربات', description: 'تنظیمات پرداخت، محدودیت‌ها و رفتار ربات', icon: '⚙', group: 'BOT', selectors: ['#cardNumber', '#tunnelName', '#button_test'] },
     { id: 'messages', label: 'متن‌های ربات', description: 'مدیریت پیام‌ها، متن‌های نمایشی و متغیرهای قابل استفاده', icon: '☷', group: 'BOT', selectors: ['#message_start'] },
     { id: 'users', label: 'کاربران فعال', description: 'مشاهده کاربران و آخرین وضعیت فعالیت آن‌ها', icon: '♙', group: 'PEOPLE', selectors: ['#activeUsersCmsCard'] },
-    { id: 'resellers', label: 'نمایندگان فروش', description: 'مدیریت نمایندگان، نرخ‌ها و اطلاعات حساب آن‌ها', icon: '♧', group: 'PEOPLE', selectors: ['#resellerCmsCard'] },
+    { id: 'resellers', label: 'نمایندگان فروش', description: 'مدیریت نمایندگان، نرخ‌ها و اطلاعات حساب آن‌ها', icon: '♧', group: 'PEOPLE', selectors: ['#resellerCmsCard', '#resellerCard'], hidden: true },
     { id: 'wallet', label: 'کیف پول', description: 'مدیریت موجودی کیف پول کاربران', icon: '◈', group: 'PEOPLE', selectors: ['#walletCard'] },
     { id: 'debts', label: 'بدهی نمایندگان', description: 'ثبت و پیگیری مبالغ پرداخت‌نشده نمایندگان', icon: '≡', group: 'PEOPLE', selectors: ['#debtCard'] },
     { id: 'access', label: 'عضویت اجباری', description: 'تنظیم کانال‌ها و پیام راهنمای عضویت', icon: '✓', group: 'BOT', selectors: ['#forceJoinCard'] }
@@ -115,7 +116,7 @@
     { id: 'panels', label: 'پنل‌های ثبت‌شده', note: 'از بخش پنل‌ها و پلن‌ها', value: '—' },
     { id: 'plans', label: 'پلن‌های فعال', note: 'در پنل‌های ثبت‌شده', value: '—' },
     { id: 'users', label: 'کاربران نمایش‌داده‌شده', note: 'در فهرست کاربران فعال', value: '—' },
-    { id: 'sections', label: 'بخش‌های مدیریتی', note: 'در دسترس در این CMS', value: String(definitions.length - 1) }
+    { id: 'sections', label: 'بخش‌های مدیریتی', note: 'در دسترس در این CMS', value: String(definitions.filter(function (d) { return !d.hidden; }).length - 1) }
   ];
   statDefinitions.forEach(function (stat) {
     var card = element('div', 'cms-stat');
@@ -164,7 +165,7 @@
   nav.setAttribute('aria-label', 'بخش‌های مدیریت');
   var groups = ['MAIN', 'OPERATIONS', 'BOT', 'PEOPLE'];
   groups.forEach(function (group) {
-    var groupDefs = definitions.filter(function (def) { return def.group === group; });
+    var groupDefs = definitions.filter(function (def) { return def.group === group && !def.hidden; });
     if (!groupDefs.length) return;
     var groupWrap = element('div', 'cms-nav-group');
     groupWrap.appendChild(element('div', 'cms-nav-group-label', group === 'MAIN' ? 'داشبورد' : group === 'OPERATIONS' ? 'عملیات' : group === 'BOT' ? 'تنظیمات ربات' : 'مدیریت کاربران'));
@@ -200,7 +201,8 @@
   function moveCard(card) {
     if (!card || card === layout || card.classList.contains('cms-shell-card')) return;
     var pageId = pageForCard(card);
-    if (pageId === 'legacy') {
+    var def = definitions.filter(function (d) { return d.id === pageId; })[0];
+    if (pageId === 'legacy' || (def && def.hidden)) {
       card.classList.add('cms-hidden-legacy');
       return;
     }

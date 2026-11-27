@@ -1,6 +1,7 @@
 const { isAuthorizedAdmin, sendJson } = require('../lib/cms-auth');
 const storage = require('../lib/storage');
-const { getConfig } = require('../lib/bot-config');
+const botConfigModule = require('../lib/bot-config');
+const { getConfig } = botConfigModule;
 const { getConfiguredServicesWithPanels } = require('../lib/services');
 
 const KEY = 'cms:menu-builder';
@@ -30,7 +31,18 @@ const DEFAULT_DOCUMENT = {
     account_remove: { columns: 2, messageTemplate: '', confirmLabel: '🗑️ بله، حذف اشتراک', cancelLabel: '↩️ انصراف', buttonControls: {}, buttons: [] },
     wallet: { columns: 1, messageTemplate: '', homeButton: true, buttonControls: {}, buttons: [] },
     support: { columns: 1, messageTemplate: '', homeButton: true, buttonControls: {}, buttons: [] },
+    subscription_name: { columns: 1, messageTemplate: '', homeButton: false, buttonControls: {}, buttons: [] },
+    wallet_checkout: { columns: 1, messageTemplate: '', homeButton: true, buttonControls: {}, buttons: [] },
+    wallet_topup: { columns: 1, messageTemplate: '', homeButton: true, buttonControls: {}, buttons: [] },
+    subscription_delivery: { columns: 1, messageTemplate: '', homeButton: true, buttonControls: {}, buttons: [] },
+    renewal_delivery: { columns: 1, messageTemplate: '', homeButton: true, buttonControls: {}, buttons: [] },
+    copy_sub: { columns: 1, messageTemplate: '', homeButton: false, buttonControls: {}, buttons: [] },
+    account_empty: { columns: 1, messageTemplate: '', homeButton: true, buttonControls: {}, buttons: [] },
+    custom_traffic: { columns: 1, messageTemplate: '', homeButton: true, buttonControls: {}, buttons: [] },
+    custom_duration: { columns: 1, messageTemplate: '', homeButton: true, buttonControls: {}, buttons: [] },
+    force_join: { columns: 1, messageTemplate: '', homeButton: true, buttonControls: {}, buttons: [] },
   },
+  systemMessages: {},
   menus: [{
     id: 'main',
     name: 'Main menu',
@@ -65,7 +77,34 @@ async function validateDocumentWithPanels(document) {
   })));
 }
 function clone(value) { return JSON.parse(JSON.stringify(value)); }
-const BUILTIN_SCREEN_IDS = ['service_test', 'service_buy', 'service_renew', 'plans_buy', 'plans_renew', 'account_list', 'account_detail', 'account_remove', 'wallet', 'support'];
+const BUILTIN_SCREEN_IDS = [
+  'service_test', 'service_buy', 'service_renew', 'plans_buy', 'plans_renew',
+  'account_list', 'account_detail', 'account_remove', 'wallet', 'support',
+  'subscription_name', 'wallet_checkout', 'wallet_topup', 'subscription_delivery',
+  'renewal_delivery', 'copy_sub', 'account_empty', 'custom_traffic', 'custom_duration', 'force_join',
+];
+const SCREEN_ALLOWED_ROLES = {
+  service_test: ['services', 'home'],
+  service_buy: ['services', 'home'],
+  service_renew: ['services', 'home'],
+  plans_buy: ['plans', 'custom_plan', 'home'],
+  plans_renew: ['plans', 'home'],
+  account_list: ['subscription_detail', 'subscription_renew', 'subscription_remove', 'home'],
+  account_detail: ['open_link', 'copy_link', 'renew_subscription', 'back_to_list', 'home'],
+  account_remove: ['confirm_remove', 'cancel_remove'],
+  wallet: ['home'],
+  support: ['home'],
+  subscription_name: ['auto_name', 'home'],
+  wallet_checkout: ['charge', 'home'],
+  wallet_topup: ['copy_card', 'home'],
+  subscription_delivery: ['copy_sub', 'open_sub', 'home'],
+  renewal_delivery: ['copy_sub', 'open_sub', 'home'],
+  copy_sub: ['copy_link', 'back_to_detail'],
+  account_empty: ['home'],
+  custom_traffic: ['home'],
+  custom_duration: ['home'],
+  force_join: ['join_channel', 'check_join', 'home'],
+};
 function isNavigationTarget(target, menuIds) {
   const value = String(target || '');
   return menuIds.has(value) || (value.startsWith('screen_') && BUILTIN_SCREEN_IDS.includes(value.slice('screen_'.length)));
@@ -91,11 +130,11 @@ function validateDocument(input, panelCatalog = null) {
   let buttonCount = 0;
   if (input.screens !== undefined && (!input.screens || typeof input.screens !== 'object' || Array.isArray(input.screens))) errors.push('Screen settings must be an object.');
   for (const [screenId, screen] of Object.entries(input.screens || {})) {
-    if (!['service_test', 'service_buy', 'service_renew', 'plans_buy', 'plans_renew', 'account_list', 'account_detail', 'account_remove', 'wallet', 'support'].includes(screenId)) errors.push('Unknown dynamic screen: ' + screenId);
+    if (!BUILTIN_SCREEN_IDS.includes(screenId)) errors.push('Unknown dynamic screen: ' + screenId);
     if (!screen || typeof screen !== 'object' || Array.isArray(screen)) { errors.push('Invalid settings for screen: ' + screenId); continue; }
     if (!Number.isInteger(Number(screen.columns || 1)) || Number(screen.columns || 1) < 1 || Number(screen.columns || 1) > 4) errors.push('Screen columns must be between 1 and 4: ' + screenId);
     if (screen.rowLayout !== undefined && (!Array.isArray(screen.rowLayout) || screen.rowLayout.length > 30 || screen.rowLayout.some((width) => !Number.isInteger(Number(width)) || Number(width) < 1 || Number(width) > 4))) errors.push('Screen row layout must contain up to 30 row widths between 1 and 4: ' + screenId);
-    const allowedRowRoles = { service_test: ['services', 'home'], service_buy: ['services', 'home'], service_renew: ['services', 'home'], plans_buy: ['plans', 'custom_plan', 'home'], plans_renew: ['plans', 'home'], account_list: ['subscription_detail', 'subscription_renew', 'subscription_remove', 'home'], account_detail: ['open_link', 'copy_link', 'renew_subscription', 'back_to_list', 'home'], account_remove: ['confirm_remove', 'cancel_remove'], wallet: ['home'], support: ['home'] }[screenId] || [];
+    const allowedRowRoles = SCREEN_ALLOWED_ROLES[screenId] || [];
     if (screen.buttonRows !== undefined) {
       if (!Array.isArray(screen.buttonRows) || screen.buttonRows.length > 30) errors.push('Button rows must be an array with at most 30 rows: ' + screenId);
       else {
@@ -103,7 +142,7 @@ function validateDocument(input, panelCatalog = null) {
         for (const row of screen.buttonRows) {
           if (!row || typeof row !== 'object' || !/^[a-zA-Z0-9_-]{1,80}$/.test(String(row.id || '')) || !Array.isArray(row.roles) || row.roles.length > 8) { errors.push('Invalid managed button row: ' + screenId); continue; }
           for (const role of row.roles) {
-            const isPanelRole = ['service_test', 'service_buy'].includes(screenId) && /^(?:panel|master)_[a-zA-Z0-9_-]{1,48}$/.test(String(role));
+            const isPanelRole = ['service_test', 'service_buy', 'service_renew'].includes(screenId) && /^(?:panel|master)_[a-zA-Z0-9_-]{1,48}$/.test(String(role));
             if (!allowedRowRoles.includes(role) && !isPanelRole) errors.push('Unknown managed button role: ' + screenId + '/' + String(role));
             if (seenRoles.has(role)) errors.push('Duplicate managed button role: ' + screenId + '/' + String(role));
             seenRoles.add(role);
@@ -128,8 +167,8 @@ function validateDocument(input, panelCatalog = null) {
     if (screen.buttonStyle !== undefined && !['default', 'glass', 'primary', 'success', 'danger'].includes(screen.buttonStyle)) errors.push('Unsupported Telegram button style for screen: ' + screenId);
     if (screen.buttonControls !== undefined && (!screen.buttonControls || typeof screen.buttonControls !== 'object' || Array.isArray(screen.buttonControls))) errors.push('Button controls must be an object: ' + screenId);
     for (const [controlId, control] of Object.entries(screen.buttonControls || {})) {
-      const allowedControls = { service_test: ['services', 'home'], service_buy: ['services', 'home'], service_renew: ['services', 'home'], plans_buy: ['plans', 'custom_plan', 'home'], plans_renew: ['plans', 'home'], account_list: ['subscription_detail', 'subscription_renew', 'subscription_remove', 'home'], account_detail: ['open_link', 'copy_link', 'renew_subscription', 'back_to_list', 'home'], account_remove: ['confirm_remove', 'cancel_remove'], wallet: ['home'], support: ['home'] }[screenId] || [];
-      const isPanelControl = ['service_test', 'service_buy'].includes(screenId) && /^(?:panel|master)_[a-zA-Z0-9_-]{1,48}$/.test(String(controlId));
+      const allowedControls = SCREEN_ALLOWED_ROLES[screenId] || [];
+      const isPanelControl = ['service_test', 'service_buy', 'service_renew'].includes(screenId) && /^(?:panel|master)_[a-zA-Z0-9_-]{1,48}$/.test(String(controlId));
       if (!allowedControls.includes(controlId) && !isPanelControl) errors.push('Unknown built-in button control: ' + screenId + '/' + controlId);
       if (!control || typeof control !== 'object' || Array.isArray(control)) { errors.push('Invalid built-in button control: ' + controlId); continue; }
       if (control.enabled !== undefined && typeof control.enabled !== 'boolean') errors.push('Button enabled must be true or false: ' + controlId);
@@ -200,6 +239,16 @@ function validateDocument(input, panelCatalog = null) {
       }
     }
   }
+  if (input.systemMessages !== undefined) {
+    if (!input.systemMessages || typeof input.systemMessages !== 'object' || Array.isArray(input.systemMessages)) {
+      errors.push('System messages must be an object.');
+    } else {
+      for (const [key, val] of Object.entries(input.systemMessages)) {
+        if (!/^[a-zA-Z0-9_]{1,64}$/.test(key)) errors.push('Invalid system message key: ' + key);
+        if (val !== undefined && (typeof val !== 'string' || val.length > 3500)) errors.push('Invalid system message value for: ' + key);
+      }
+    }
+  }
   if (!ids.has('main')) errors.push('A menu with ID "main" is required.');
   return { errors };
 }
@@ -210,7 +259,28 @@ module.exports = async function menuBuilderApi(req, res) {
     if (req.method === 'GET') {
       const botConfig = await getConfig();
       const panels = await getConfiguredServicesWithPanels(botConfig);
-      return sendJson(res, 200, { actions: ACTIONS, draft: state.draft || clone(DEFAULT_DOCUMENT), published: state.published || null, history: (state.history || []).slice(0, 10), botTexts: botConfig.messages || {}, botButtons: botConfig.buttons || {}, panels: panels.map((panel) => ({ id: panel.id, panelId: String(panel.panelId), name: panel.name, testEnabled: panel.testEnabled !== false, purchaseEnabled: panel.purchaseEnabled !== false })) });
+      const rawPlans = await storage.get('cms:plans');
+      const activePlans = (Array.isArray(rawPlans) ? rawPlans : []).filter((p) => p && p.active !== false).map((p) => ({
+        id: String(p.id),
+        name: String(p.name || p.buttonText || ''),
+        buttonText: String(p.buttonText || p.name || ''),
+        price: p.price,
+        panelId: p.panelId ? String(p.panelId) : null,
+        service: p.service || 'tunnel',
+        type: p.type || 'traffic',
+      }));
+      return sendJson(res, 200, {
+        actions: ACTIONS,
+        draft: state.draft || clone(DEFAULT_DOCUMENT),
+        published: state.published || null,
+        history: (state.history || []).slice(0, 10),
+        botTexts: botConfig.messages || {},
+        systemMessageDefaults: botConfigModule.DEFAULTS?.messages || {},
+        botButtons: botConfig.buttons || {},
+        supportUsername: botConfig.payment?.supportUsername || '',
+        plans: activePlans,
+        panels: panels.map((panel) => ({ id: panel.id, panelId: String(panel.panelId), name: panel.name, testEnabled: panel.testEnabled !== false, purchaseEnabled: panel.purchaseEnabled !== false })),
+      });
     }
     if (req.method !== 'POST') return sendJson(res, 405, { error: 'METHOD_NOT_ALLOWED' });
     const body = req.body || {};

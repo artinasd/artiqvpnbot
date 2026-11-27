@@ -235,7 +235,8 @@ async function sendServiceMenu(ctx, mode = 'buy') {
   const screenId = mode === 'test' ? 'service_test' : mode === 'renew' ? 'service_renew' : 'service_buy';
   const title = await formatScreenMessage(screenId, fallbackTitle, { title: fallbackTitle, mode });
   const prefix = mode === 'test' ? 'service_test_' : mode === 'renew' ? 'service_renew_' : 'service_buy_';
-  const buttons = await serviceButtonsWithPanels(prefix, config, mode === 'test' ? 'test' : 'purchase');
+  const buttons = (await serviceButtonsWithPanels(prefix, config, mode === 'test' ? 'test' : 'purchase'))
+    .filter((row) => !row.some((b) => String(b.callback_data || '').startsWith(`${prefix}master_`)));
   if (!buttons.length) return ctx.reply(await formatScreenMessage(screenId, await getMessage('serviceUnavailable', { service_name: '' }), { title: fallbackTitle, mode }), { parse_mode: 'HTML' });
   const rows = await arrangeScreenRows(screenId, buttons);
   await ctx.reply(title, { ...Markup.inlineKeyboard(rows), parse_mode: 'HTML' });

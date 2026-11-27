@@ -279,7 +279,7 @@ module.exports = async function menuBuilderApi(req, res) {
         botButtons: botConfig.buttons || {},
         supportUsername: botConfig.payment?.supportUsername || '',
         plans: activePlans,
-        panels: panels.map((panel) => ({ id: panel.id, panelId: String(panel.panelId), name: panel.name, testEnabled: panel.testEnabled !== false, purchaseEnabled: panel.purchaseEnabled !== false })),
+        panels: panels.filter((panel) => !String(panel.id).startsWith('master_')).map((panel) => ({ id: panel.id, panelId: String(panel.panelId), name: panel.name, testEnabled: panel.testEnabled !== false, purchaseEnabled: panel.purchaseEnabled !== false })),
       });
     }
     if (req.method !== 'POST') return sendJson(res, 405, { error: 'METHOD_NOT_ALLOWED' });

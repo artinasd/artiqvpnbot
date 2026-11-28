@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+process.env.MASTER_PANEL_API_URL = 'https://artiq-network.vercel.app/api/bot/subscriptions';
 const { validMasterUrl, postMaster } = require('../lib/master-panel-fulfillment');
 const storage = require('../lib/storage');
 

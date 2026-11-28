@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 process.env.ADMIN_CMS_PASSWORD = 'branding-test-password';
+process.env.MASTER_PANEL_API_URL = 'https://artiq-network.vercel.app/api/bot/subscriptions';
 const storage = require('../lib/storage');
 const handler = require('../api/admin-resellers');
 
